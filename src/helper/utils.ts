@@ -37,7 +37,7 @@ export const handleMerge = async (
 			reader.onload = async () => {
 				const blob = new Blob([reader.result as ArrayBuffer]);
 				const incoming = await loadProjectInMemory({ blob });
-				// TODO remove workaround for https://github.com/opral/lix-sdk/issues/47
+				// TODO remove workaround for https://github.com/opral/lix/issues/47
 				const opfsRoot = await navigator.storage.getDirectory();
 				const fileHandle = await opfsRoot.getFileHandle(selectedProjectPath!, {
 					create: true,

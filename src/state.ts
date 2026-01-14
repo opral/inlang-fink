@@ -34,7 +34,7 @@ export const forceReloadProjectAtom = atom<ReturnType<typeof Date.now> | undefin
 
 export const projectAtom = atom(async (get) => {
 	// listen to forceReloadProjectAtom to reload the project
-	// workaround for https://github.com/opral/lix-sdk/issues/47
+	// workaround for https://github.com/opral/lix/issues/47
 	get(forceReloadProjectAtom);
 
 	if (safeProjectToOpfsInterval) {
