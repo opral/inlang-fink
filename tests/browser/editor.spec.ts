@@ -29,7 +29,13 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="hello"]')).toBeVisible({ timeout: 90_000 });
   await expect(page.locator('[data-bundle="items"] inlang-variant')).toHaveCount(2);
-  await page.getByRole("button", { name: "Review and push" }).click();
+  await page.locator(".language-filter > summary").click();
+  await page.getByRole("checkbox", { name: /^en/ }).check();
+  await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(1);
+  await page.getByRole("button", { name: "Show all languages" }).click();
+  await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(2);
+  await page.locator(".language-filter > summary").click();
+  await page.getByRole("button", { name: /^Changes/ }).click();
   await expect(page.getByText("No changes to push.")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   const pattern = page.locator('[data-bundle="hello"] inlang-pattern-editor').first().locator('[contenteditable]');
@@ -40,6 +46,10 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await plural.fill("A single item");
   await plural.press("Tab");
   await expect(page.getByRole("status").filter({ hasText: "Draft saved locally" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download project", exact: true }).click();
+  expect((await download).suggestedFilename()).toBe("repo.lix");
   await page.reload();
   await page.getByRole("button", { name: "Find projects" }).click();
   await page.getByRole("button", { name: "Open project" }).click();
@@ -56,6 +66,7 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   expect(item.match["countPlural=one"]).toBe("A single item");
   expect(item.match["countPlural=*"]).toBe("{count} items");
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
   expect(errors).toEqual([]);
 });
 test("creates plural variants for a missing translation using the published selector editor", async ({ page }) => {
@@ -67,6 +78,7 @@ test("creates plural variants for a missing translation using the published sele
   const bundle = page.locator('[data-bundle="items"]');
   await bundle.getByRole("button", { name: "Add translation" }).click();
   const german = bundle.locator("inlang-message").nth(1);
+  await german.locator("inlang-variant").hover();
   await german.getByRole("button", { name: "Add selector / plural" }).click();
   const dialog = page.getByRole("dialog", { name: "Add selector or plural" });
   await dialog.getByRole("combobox").click();

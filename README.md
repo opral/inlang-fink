@@ -4,6 +4,8 @@ A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository
 
 ## Architecture
 
+The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed resource files; downloading exports a Lix snapshot.
+
 The React SPA runs the inlang SDK and the prototype's published message editor components in the browser. Lix stores each repository/branch/project draft in OPFS. Browser reloads restore the draft; editing needs no server database. Clearing browser storage deletes drafts. OPFS requires a supported browser and a secure origin (or localhost).
 
 One Cloudflare Worker serves static assets, handles GitHub App OAuth, and calls GitHub's REST API. There is no git client, git proxy, Render service, or analytics. Tokens stay in encrypted HttpOnly cookies. Login uses PKCE and encrypted state; sessions expire after at most eight hours. The existing **Inlang** GitHub App is reused. Install the App on repositories you want to push to.

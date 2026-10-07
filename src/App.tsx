@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BundleNested } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
+import { LixFloat } from "./LixFloat";
 import { Editor } from "./Editor";
 import { Showcases } from "./Showcases";
 import type { Showcase } from "./showcases";
@@ -26,6 +27,11 @@ export default function App() {
   const [changes, setChanges] = useState<Record<string, string>>();
   const [message, setMessage] = useState("Update translations with Fink");
   const [newId, setNewId] = useState("");
+  const [view, setView] = useState<"edit" | "settings">("edit");
+  const [projectMenu, setProjectMenu] = useState(false);
+  const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
+  const [dirtyCount, setDirtyCount] = useState(0);
+  const [showNewMessage, setShowNewMessage] = useState(false);
   const [saving, setSaving] = useState(false);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const localRef = useRef<LocalProject | undefined>(undefined);
@@ -50,7 +56,13 @@ export default function App() {
     const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
-  useEffect(() => setPage(0), [search, missing]);
+  useEffect(() => setPage(0), [search, missing, selectedLocales]);
+  useEffect(() => {
+    if (!local || saving) return;
+    let cancelled = false;
+    const timer = setTimeout(() => { void exportChanges(local).then(files => { if (!cancelled) setDirtyCount(Object.keys(files).length); }).catch(error => { if (!cancelled) report(error); }); }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [local, bundles, saving]);
   const enqueue = (task: () => Promise<void>) => {
     pending.current++;
     setSaving(true);
@@ -71,7 +83,7 @@ export default function App() {
     const next = await openRepositoryProject(repository, nextTree, projectPath);
     localRef.current = next; setLocal(next); await refresh(next);
     await navigator.storage.persist();
-    setPage(0);
+    setPage(0); setView("edit"); setChanges(undefined); setSelectedLocales([]); setProjectMenu(false); setDirtyCount(0);
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     if (next.context.head !== nextTree.head) setNotice("Restored your local draft. The remote branch has advanced; pushing will ask you to reconcile first.");
   };
@@ -135,7 +147,7 @@ export default function App() {
     const id = newId.trim();
     enqueue(async () => {
       await local.project.db.insertInto("bundle").values({ id, declarations: [] }).execute();
-      await refresh(local); setNewId("");
+      await refresh(local); setNewId(""); setShowNewMessage(false);
     });
   };
   const review = () => run(async () => { if (!local) return; await queue.current; if (failure.current) throw new Error("A local save failed. Reload the page to inspect the persisted state before pushing."); setChanges(await exportChanges(local)); });
@@ -145,32 +157,50 @@ export default function App() {
     const result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: local.context.owner, repo: local.context.name, branch: local.context.branch, projectPath: local.context.projectPath, head: local.context.head, files: changes, message });
     local.context.head = result.head; local.context.tree = result.tree;
     Object.assign(local.context.original, changes); local.context.baseline = await exportResources(local);
-    await saveContext(local); setChanges(undefined); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
+    await saveContext(local); setChanges(undefined); setDirtyCount(0); setView("edit"); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
   });
   const visible = bundles.filter(bundle => (!search || JSON.stringify(bundle).toLowerCase().includes(search.toLowerCase())) && (!missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale))));
   const totalPages = Math.max(1, Math.ceil(visible.length / 25));
   const currentPage = Math.min(page, totalPages - 1);
+  const download = () => void run(async () => {
+    if (!local) return;
+    await queue.current;
+    if (failure.current) throw new Error("Resolve the failed save before downloading.");
+    const blob = await new Response(local.project.lix.exportSnapshot()).blob();
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a"); anchor.href = href; anchor.download = `${local.context.name}.lix`; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+  });
+  const reviewPanel = changes && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{Object.keys(changes).length}</span></h2><button onClick={() => setChanges(undefined)}>Close</button></header>{Object.entries(changes).map(([path, content]) => <details key={path} open><summary>{path}</summary><pre>{content}</pre></details>)}{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} files to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
   return <>
-    <header className="topbar"><a href="/" className="brand">🐦 Fink</a><span>Localization editor</span><div className="account">{user ? <><span>{user.login}</span><button onClick={() => run(async () => { await api("auth/logout", {}); setUser(null); })}>Sign out</button></> : <a className="button" href="/api/auth/login">Sign in with GitHub</a>}</div></header>
-    <main>
-      <section className="launcher"><h1>{local ? `${local.context.owner}/${local.context.name}` : "Open a repository. Make yourself understood."}</h1><p>Translate messages, variables, and plurals. Drafts stay in this browser until you push.</p>
+    <header className="app-header"><div className="header-grid"><div className="menu-bar">
+      <div className="project-identity"><button className="brand" onClick={() => setProjectMenu(!projectMenu)}>Fink <span className="chevron">⌄</span></button><span className="separator">/</span><button className="project-switch" onClick={() => setProjectMenu(!projectMenu)}>{local ? local.context.name : "no project"}<span className="chevron">⌄</span></button>{local && <span className="branch-badge">⑂ {local.context.branch}</span>}</div>
+      <div className="account"><a href="https://github.com/opral/inlang-fink" className="help-link">Help</a>{user ? <><span>{user.login}</span><button onClick={() => run(async () => { await api("auth/logout", {}); setUser(null); })}>Sign out</button></> : <a className="button" href="/api/auth/login">Sign in with GitHub</a>}</div>
+    </div>{local && <nav className="subnav" aria-label="Project navigation"><button className={!changes && view === "edit" ? "active" : ""} onClick={() => { setChanges(undefined); setView("edit"); }}>Edit</button><button className={changes ? "active" : ""} disabled={busy || saving} onClick={() => void review()}>Changes <span className={dirtyCount ? "badge changed" : "badge"}>{dirtyCount}</span></button><button className={!changes && view === "settings" ? "active" : ""} onClick={() => { setChanges(undefined); setView("settings"); }}>Settings</button><span role="status" className="save-status">{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span></nav>}</div></header>
+    <main className={local ? "workspace" : "welcome"}>
+      {(!local || projectMenu) && <div className={local ? "project-popover" : ""}>
+      <section className="launcher"><h1>{local ? "Open a repository" : "Make yourself understood."}</h1><p>Translate messages, variables, and plurals. Drafts stay in this browser until you push.</p>
+        {local && <button className="launcher-close" aria-label="Close project menu" onClick={() => setProjectMenu(false)}>×</button>}
         <form onSubmit={event => { event.preventDefault(); void discover(); }} className="repo-form"><label>GitHub repository<input value={url} onChange={event => { setUrl(event.target.value); setRepo(undefined); setTree(undefined); setBranch(""); }} placeholder="https://github.com/owner/repository" required /></label><button disabled={busy}>Find projects</button></form>
         {tree && <div className="project-form"><label>Branch<select value={branch} onChange={event => setBranch(event.target.value)}>{branches.map(branch => <option key={branch}>{branch}</option>)}</select></label><label>Project<select value={path} onChange={event => setPath(event.target.value)}>{tree.projects.map(path => <option key={path}>{path}</option>)}</select></label><button disabled={busy} onClick={() => void open()}>Open project</button></div>}
       </section>
+      </div>}
       {error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
       {notice && <p role="status" className="notice">{notice}</p>}
       {busy && <p role="status">Working…</p>}
       {!local && <Showcases open={openShowcase} busy={busy} />}
       {local && <>
-        <nav className="editor-toolbar"><label className="search">Search messages<input aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Message ID or translation" /></label><label className="checkbox"><input type="checkbox" checked={missing} onChange={event => setMissing(event.target.checked)} />Missing translations</label><span role="status">{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span><button className="primary" disabled={busy || saving} onClick={() => void review()}>Review and push</button></nav>
-        <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" /><button>Add message</button></form>
-        <p className="count">{visible.length} messages · {local.context.settings.locales.join(", ")} · {local.context.branch}</p>
-        {visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
+        {reviewPanel || (view === "settings" ? <section className="settings-page"><h2>Project settings</h2><dl><dt>Repository</dt><dd><a href={`https://github.com/${local.context.owner}/${local.context.name}`}>{local.context.owner}/{local.context.name}</a></dd><dt>Project</dt><dd>{local.context.projectPath}</dd><dt>Branch</dt><dd>{local.context.branch}</dd><dt>Reference language</dt><dd>{local.context.settings.baseLocale}</dd><dt>Languages</dt><dd>{local.context.settings.locales.join(", ")}</dd></dl><button onClick={() => setProjectMenu(true)}>Switch project</button><button onClick={download} disabled={busy || saving}>Download project</button></section> : <>
+        <div className="filter-section"><div className="filter-buttons"><details className="language-filter"><summary>Filter languages <span className="chevron">⌄</span>{selectedLocales.length > 0 && <span className="badge">{selectedLocales.length}</span>}</summary><div className="language-options">{local.context.settings.locales.map(locale => <label key={locale}><input type="checkbox" checked={selectedLocales.includes(locale)} onChange={event => setSelectedLocales(event.target.checked ? [...selectedLocales, locale] : selectedLocales.filter(value => value !== locale))} />{locale}{locale === local.context.settings.baseLocale && <span className="reference-tag">ref</span>}</label>)}<button onClick={() => setSelectedLocales([])}>Show all languages</button></div></details><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search…" /></div>
+        <div className="table-header"><span>{visible.length} Bundles</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
+        {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button>Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
+        <div className="message-table">{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         {!visible.length && <p className="empty">No messages match. Add a message to get started.</p>}
+        </>)}
+        {!changes && <LixFloat count={dirtyCount} review={() => void review()} download={download} disabled={busy || saving} />}
       </>}
     </main>
-    {changes && <div className="dialog-backdrop"><section className="dialog review" role="dialog" aria-modal="true" aria-label="Review changes"><header><h2>Review changes</h2><button onClick={() => setChanges(undefined)}>Close</button></header>{error && <p role="alert" className="error">{error}</p>}{Object.entries(changes).map(([path, content]) => <details key={path} open><summary>{path}</summary><pre>{content}</pre></details>)}{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} files to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section></div>}
     <footer>Fink · Open source · <a href="https://github.com/opral/inlang-fink">GitHub</a> · <a href="https://github.com/apps/inlang/installations/new">Grant repository access</a></footer>
   </>;
 }
