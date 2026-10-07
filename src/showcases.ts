@@ -1,4 +1,3 @@
-export const SHOWCASES_CHECKED = "2026-10-07";
 export const showcases = [
   {
     "name": "Pocket ID",
@@ -10,7 +9,8 @@ export const showcases = [
     "contributors": 104,
     "locales": 26,
     "commits30d": 82,
-    "example": false
+    "example": false,
+    "icon": "https://avatars.githubusercontent.com/u/197418917?v=4&s=80"
   },
   {
     "name": "Clash Nyanpasu",
@@ -22,7 +22,8 @@ export const showcases = [
     "contributors": 60,
     "locales": 5,
     "commits30d": 100,
-    "example": false
+    "example": false,
+    "icon": "https://avatars.githubusercontent.com/u/159686715?v=4&s=80"
   },
   {
     "name": "Arcane",
@@ -34,7 +35,8 @@ export const showcases = [
     "contributors": 89,
     "locales": 23,
     "commits30d": 100,
-    "example": false
+    "example": false,
+    "icon": "https://avatars.githubusercontent.com/u/236685631?v=4&s=80"
   },
   {
     "name": "UpSnap",
@@ -46,7 +48,8 @@ export const showcases = [
     "contributors": 41,
     "locales": 23,
     "commits30d": 14,
-    "example": false
+    "example": false,
+    "icon": "https://avatars.githubusercontent.com/u/23456686?v=4&s=80"
   },
   {
     "name": "JetKVM",
@@ -58,7 +61,8 @@ export const showcases = [
     "contributors": 68,
     "locales": 15,
     "commits30d": 79,
-    "example": false
+    "example": false,
+    "icon": "https://avatars.githubusercontent.com/u/183740260?v=4&s=80"
   },
   {
     "name": "TanStack Router",
@@ -70,7 +74,8 @@ export const showcases = [
     "contributors": 463,
     "locales": 2,
     "commits30d": 100,
-    "example": true
+    "example": true,
+    "icon": "https://avatars.githubusercontent.com/u/72518640?v=4&s=80"
   }
 ] as const;
 export type Showcase = (typeof showcases)[number];
