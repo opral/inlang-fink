@@ -1,27 +1,28 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-
-// https://vitejs.dev/config/
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { gzipSync } from "node:zlib";
+// Lix's current engine exceeds Workers' per-asset limit. Serve a gzip asset and
+// decompress explicitly in the SDK's compiler; do not rely on CDN re-encoding.
+function compressedLixWasm(): Plugin {
+  return {
+    name: "fink-compressed-lix-wasm",
+    apply: "build",
+    transform(source, id) {
+      if (!id.includes("@lix-js") || !id.endsWith("/wasm-init.js")) return;
+      if (!source.includes('new URL("./wasm/lix_js_sdk_bg.wasm", import.meta.url)') || !source.includes('async function compileWasmResponse(response) {')) throw new Error("Lix WASM loader changed; update the compressed asset adapter before deploying.");
+      const file = this.emitFile({ type: "asset", name: "lix-engine.wasm.gz", source: gzipSync(readFileSync(join(dirname(id), "wasm/lix_js_sdk_bg.wasm")), { level: 9 }) });
+      return source.replace('new URL("./wasm/lix_js_sdk_bg.wasm", import.meta.url)', `new URL(import.meta.ROLLUP_FILE_URL_${file}, import.meta.url)`)
+        .replace('async function compileWasmResponse(response) {', 'async function compileWasmResponse(response) { response = new Response(response.clone().body.pipeThrough(new DecompressionStream("gzip")), { headers: { "Content-Type": "application/wasm" } });');
+    },
+  };
+}
 export default defineConfig({
-	plugins: [react(), tailwindcss()],
-	envPrefix: "PUBLIC_",
-	server: {
-		headers: {
-			"Cross-Origin-Opener-Policy": "*",
-			"Cross-Origin-Embedder-Policy": "*",
-		},
-	},
-	optimizeDeps: {
-		exclude: [
-			"@inlang/sdk",
-			"@sqlite.org/sqlite-wasm",
-			"@eliaspourquoi/sqlite-node-wasm",
-		],
-	},
-	build: {
-		// target is es2022 to support top level await
-		// https://caniuse.com/?search=top%20level%20await
-		target: "es2022",
-	},
+  plugins: [react(), compressedLixWasm()],
+  resolve: { alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
+  worker: { format: "es", plugins: () => [compressedLixWasm()] },
+  build: { target: "es2022" },
+  optimizeDeps: { exclude: ["@inlang/sdk", "@lix-js/sdk", "@lix-js/storage-opfs"] },
+  server: { proxy: { "/api": "http://localhost:8787" } },
 });

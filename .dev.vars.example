@@ -1,0 +1,5 @@
+GITHUB_CLIENT_SECRET=
+# Generate at least 32 random bytes; store as a Worker secret.
+SESSION_SECRET=
+# Local development override; requires a corresponding GitHub App callback.
+GITHUB_CALLBACK_ORIGIN=http://localhost:8787
