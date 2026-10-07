@@ -72,3 +72,14 @@ test("push accepts core settings and new locale resources together, rejects plug
   await expect(push({ ...input, files: { "project.inlang/settings.json": JSON.stringify({ ...after, modules: [] }) } }, "test-token")).rejects.toMatchObject({ status: 400 });
   expect(mock).toHaveBeenCalledTimes(2);
 });
+test("history lists branch commits scoped to the project without exposing upstream fields", async () => {
+  const env = { SESSION_SECRET: "a secure test secret with at least 32 characters" } as Env;
+  const mock = vi.fn().mockResolvedValue(Response.json([{ sha: "a".repeat(40), html_url: "https://github.com/example/repo/commit/aaa", author: { login: "translator", avatar_url: "https://avatars.githubusercontent.com/u/1" }, commit: { message: "Update translations", author: { name: "T", date: "2026-10-01T00:00:00Z", email: "private@example.com" } } }]));
+  vi.stubGlobal("fetch", mock);
+  const response = await worker.fetch(new Request("https://fink.test/api/github/commits?owner=example&repo=repo&branch=feature%2Fi18n&path=frontend"), env);
+  expect(await response.json()).toEqual([{ sha: "a".repeat(40), url: "https://github.com/example/repo/commit/aaa", message: "Update translations", author: "translator", avatar: "https://avatars.githubusercontent.com/u/1", date: "2026-10-01T00:00:00Z" }]);
+  const requested = new URL(mock.mock.calls[0][0]);
+  expect(requested.pathname).toBe("/repos/example/repo/commits");
+  expect(Object.fromEntries(requested.searchParams)).toEqual({ sha: "feature/i18n", per_page: "30", path: "frontend" });
+  expect((await worker.fetch(new Request("https://fink.test/api/github/commits?owner=example&repo=repo&branch=main&path=../x"), env)).status).toBe(400);
+});

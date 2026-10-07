@@ -80,6 +80,12 @@ export default {
         const paths = tree.tree.filter(entry => entry.type === "blob" && entry.mode !== "120000").map(entry => entry.path);
         return json({ branch, head: commit.sha, tree: commit.commit.tree.sha, paths, projects: paths.filter(path => path.endsWith(".inlang/settings.json")).map(path => path.slice(0, -14)) });
       }
+      if (url.pathname === "/api/github/commits") {
+        const branch = url.searchParams.get("branch") ?? "", path = url.searchParams.get("path") ?? "";
+        if (!branch || branch.length > 255 || (path && !validPath(path))) throw new HttpError(400, "Invalid history request.");
+        const commits = await github<{ sha: string; html_url: string; author: { login: string; avatar_url: string } | null; commit: { message: string; author: { name: string; date: string } | null } }[]>(`${base}/commits?${new URLSearchParams({ sha: branch, per_page: "30", ...(path ? { path } : {}) })}`, token);
+        return json(commits.map(commit => ({ sha: commit.sha, url: commit.html_url, message: commit.commit.message.slice(0, 1000), author: commit.author?.login ?? commit.commit.author?.name ?? "Unknown", avatar: commit.author?.avatar_url, date: commit.commit.author?.date })));
+      }
       if (url.pathname === "/api/github/file") {
         const path = url.searchParams.get("path") ?? "";
         if (!validPath(path) || !path.endsWith(".json")) throw new HttpError(400, "Only JSON project files can be read.");

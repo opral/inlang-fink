@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { outputPath, parseRepository, resolveResourcePath } from "../src/repository";
+import { outputPath, parseRepository, projectScope, resolveResourcePath } from "../src/repository";
 import type { ProjectSettings } from "@inlang/sdk/browser";
 describe("repository file mapping", () => {
   test("restricts URLs and preserves project-relative resource paths", () => {
@@ -16,4 +16,9 @@ describe("repository file mapping", () => {
     expect(outputPath(settings, "plugin.inlang.i18next", { locale: "en", name: "en.json", content: new Uint8Array(), metadata: { namespace: "checkout" } })).toBe("./locales/en/checkout.json");
     expect(() => outputPath(settings, "plugin.inlang.i18next", { locale: "en", name: "en.json", content: new Uint8Array() })).toThrow();
   });
+});
+test("history scope is the deepest directory shared by settings and resources", () => {
+  expect(projectScope({ projectPath: "frontend/project.inlang", original: { "frontend/project.inlang/settings.json": "{}", "frontend/messages/en.json": "{}", "frontend/messages/de.json": "{}" } })).toBe("frontend");
+  expect(projectScope({ projectPath: "project.inlang", original: { "project.inlang/settings.json": "{}", "messages/en.json": "{}" } })).toBe("");
+  expect(projectScope({ projectPath: "ui/l10n/app.inlang", original: { "ui/l10n/app.inlang/settings.json": "{}", "ui/l10n/messages/en.json": "{}" } })).toBe("ui/l10n");
 });

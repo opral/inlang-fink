@@ -10,8 +10,9 @@ async function stubApi(page: import("@playwright/test").Page, files = resources)
     const url = new URL(route.request().url());
     let data: unknown;
     if (url.pathname === "/api/user") data = { login: "translator" };
-    else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: Object.keys(files), projects: ["project.inlang"] };
-    else if (url.pathname === "/api/github/branches") data = ["main"];
+    else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: url.searchParams.get("branch") || "main", paths: Object.keys(files), projects: ["project.inlang"] };
+    else if (url.pathname === "/api/github/branches") data = ["main", "translations"];
+    else if (url.pathname === "/api/github/commits") data = [{ sha: "a".repeat(40), url: "https://github.com/example/repo/commit/aaa", message: "Add German copy\n\nReviewed", author: "translator", date: "2026-10-01T00:00:00Z" }];
     else if (url.pathname === "/api/github/file") data = { content: files[url.searchParams.get("path")!] };
     else if (url.pathname === "/api/github/push") data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" };
     else throw new Error(`Unexpected request ${url}`);
@@ -35,8 +36,8 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await stubApi(page);
   await page.goto("/");
   await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
+  // Repositories with one project open directly.
+  await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator('[data-bundle="hello"]')).toBeVisible({ timeout: 90_000 });
   await expect(page.locator('[data-bundle="items"] inlang-variant')).toHaveCount(2);
   await page.locator('.language-filter [part="combobox"]').click();
@@ -47,7 +48,7 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(2);
   await page.getByRole("button", { name: /^Changes/ }).click();
   await expect(page.getByText("No changes to push.")).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Back to editor" }).first().click();
   await page.locator('[data-bundle="items"] inlang-pattern-editor').first().evaluate(element => {
     const node = element as HTMLElement & { variant: unknown; originalVariantForTest?: unknown };
     node.originalVariantForTest = node.variant;
@@ -70,15 +71,15 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.getByRole("status").filter({ hasText: "Draft saved locally" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Pending changes" })).toBeVisible();
   const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Fink", exact: true }).click();
   await page.getByRole("button", { name: "Download project", exact: true }).click();
   expect((await download).suggestedFilename()).toBe("repo.lix");
+  // The URL keeps repository, branch, and project; reload reopens the local draft.
   await page.reload();
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from Fink", { timeout: 60_000 });
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
   const requestsBeforeReview = await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests);
-  await page.getByRole("button", { name: "Review and push" }).click();
+  await page.getByRole("button", { name: "Review changes" }).click();
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="before"]')).toContainText("Hello");
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("Hello from Fink");
   await expect(page.locator('[data-diff-message="items"]')).toContainText("A single item");
@@ -89,7 +90,7 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-pattern-editor').first()).toContainText("One item");
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-pattern-editor').first()).toContainText("A single item");
   expect(await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests)).toBe(requestsBeforeReview);
-  await page.getByRole("button", { name: "Push changes to main" }).click();
+  await page.getByRole("button", { name: "Commit and push to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/en.json"]);
   expect(payload.head).toBe("a".repeat(40));
@@ -106,8 +107,8 @@ test("creates plural variants for a missing translation using the published sele
   await stubApi(page);
   await page.goto("/");
   await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
+  // Repositories with one project open directly.
+  await page.getByRole("button", { name: "Open", exact: true }).click();
   const bundle = page.locator('[data-bundle="items"]');
   await bundle.getByRole("button", { name: "Add translation" }).click();
   const german = bundle.locator("inlang-message").nth(1);
@@ -119,7 +120,7 @@ test("creates plural variants for a missing translation using the published sele
   await dialog.getByRole("button", { name: "Add selector", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(german.locator("inlang-variant")).toHaveCount(3);
-  await page.getByRole("button", { name: "Review and push" }).click();
+  await page.getByRole("button", { name: "Review changes" }).click();
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-message')).toHaveCount(2);
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-message')).toHaveCount(1);
   await expect(page.locator('[data-diff-message="items"] .highlight-selector-green')).toHaveCount(1);
@@ -156,8 +157,8 @@ test("offers typed plural matches, preserves custom text, and rejects invalid ca
   await stubApi(page, files);
   await page.goto("/");
   await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
+  // Repositories with one project open directly.
+  await page.getByRole("button", { name: "Open", exact: true }).click();
   const english = page.locator('[data-bundle="items"] inlang-message').first();
   await expect(english.locator(".selector-type")).toHaveText("Cardinal plural", { timeout: 90_000 });
   const variant = english.locator("inlang-variant").first();
@@ -192,9 +193,8 @@ test("offers typed plural matches, preserves custom text, and rejects invalid ca
   await page.keyboard.press("Escape");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  // The URL keeps repository, branch, and project; reload reopens the local draft.
   await page.reload();
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="gender"] inlang-variant').first().getByRole("textbox", { name: "Match gender" })).toHaveValue("nonbinary", { timeout: 60_000 });
 });
 
@@ -202,8 +202,8 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await stubApi(page);
   await page.goto("/");
   await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
+  // Repositories with one project open directly.
+  await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator('[data-bundle="hello"]')).toBeVisible({ timeout: 90_000 });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const form = page.locator("inlang-settings");
@@ -224,9 +224,8 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("1");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(3);
+  // The URL keeps repository, branch, and project; reload reopens the local draft.
   await page.reload();
-  await page.getByRole("button", { name: "Find projects" }).click();
-  await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(3, { timeout: 60_000 });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(form.locator("string-input input")).toHaveValue("de");
@@ -238,10 +237,37 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await expect(page.locator('[data-settings-side="after"]').first()).toContainText("de");
   await expect(page.locator('[data-settings-side="after"]').nth(1)).toContainText("en, de, fr");
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
-  await page.getByRole("button", { name: "Push changes to main" }).click();
+  await page.getByRole("button", { name: "Commit and push to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["project.inlang/settings.json"]);
   expect(JSON.parse(payload.files["project.inlang/settings.json"])).toEqual({ ...settings, baseLocale: "de", locales: ["en", "de", "fr"], experimental: { exampleFeature: true } });
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("0");
+});
+
+test("branch menu keeps a separate draft per branch and history marks the draft base", async ({ page }) => {
+  await stubApi(page);
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const pattern = page.locator('[data-bundle="hello"] inlang-pattern-editor').first().locator('[contenteditable]');
+  await expect(pattern).toBeVisible({ timeout: 90_000 });
+  await pattern.fill("Hello from main"); await pattern.press("Tab");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("1 change on main");
+  await page.getByRole("button", { name: "main", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "translations" }).click();
+  await expect(page).toHaveURL(/branch=translations/, { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello", { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).not.toContainText("from main");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
+  await page.getByRole("button", { name: "translations", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "main" }).click();
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from main", { timeout: 90_000 });
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  await expect(page.getByText("Add German copy")).toBeVisible();
+  await expect(page.getByText("Draft base")).toBeVisible();
+  await expect(page.getByText("1 unpushed change saved in this browser")).toBeVisible();
+  await page.getByRole("button", { name: "Fink", exact: true }).click();
+  await page.getByRole("button", { name: "Open another repository…" }).click();
+  await expect(page.getByRole("button", { name: "Open example/repo" }).first()).toContainText("1 unpushed");
 });

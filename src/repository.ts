@@ -45,3 +45,12 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   return result as T;
 }
 export function repoQuery(repo: Repo): string { return new URLSearchParams({ owner: repo.owner, repo: repo.name, ...(repo.branch ? { branch: repo.branch } : {}) }).toString(); }
+/** The deepest directory containing the project's settings and resource files. */
+export function projectScope(context: Pick<RepoContext, "original" | "projectPath">): string {
+  const directories = [context.projectPath, ...Object.keys(context.original)].map(path => path.split("/").slice(0, -1));
+  return directories.reduce((prefix, parts) => {
+    let length = 0;
+    while (length < prefix.length && prefix[length] === parts[length]) length++;
+    return prefix.slice(0, length);
+  }).join("/");
+}
