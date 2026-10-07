@@ -1,6 +1,7 @@
 // Restores the rich two-column prototype from opral/inlang/packages/fink.
 // SDK v3 uses persisted semantic baselines instead of the prototype's old change tables.
 import { useMemo } from "react";
+import SlDetails from "@shoelace-style/shoelace/dist/react/details/index.js";
 import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
 import SingleDiffBundle from "./SingleDiffBundle";
 import { bundleSignature } from "./project";
@@ -56,7 +57,7 @@ export default function DiffBundleView({ id, before, after, settings }: { id: st
     }
   }
   return <section className="rich-diff-bundle" data-diff-message={id}>
-    <header className="rich-diff-heading"><h3>{id}</h3><details><summary>{changes.length} {changes.length === 1 ? "change" : "changes"}</summary><ul>{changes.map(change => <li key={change}>{change}</li>)}</ul></details></header>
+    <header className="rich-diff-heading"><h3>{id}</h3><SlDetails summary={`${changes.length} ${changes.length === 1 ? "change" : "changes"}`}><ul>{changes.map(change => <li key={change}>{change}</li>)}</ul></SlDetails></header>
     <div className="rich-diff-columns">
       <div className="rich-diff-side" data-diff-side="before"><h4>Before</h4><SingleDiffBundle bundle={before} other={after} settings={settings} side="before" /></div>
       <div className="rich-diff-side" data-diff-side="after"><h4>After</h4><SingleDiffBundle bundle={after} other={before} settings={settings} side="after" /></div>

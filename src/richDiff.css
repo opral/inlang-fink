@@ -3,8 +3,9 @@
 .rich-diff-bundle { padding: 16px; }
 .rich-diff-bundle + .rich-diff-bundle { border-top: 1px solid #e4e4e7; }
 .rich-diff-heading h3 { margin: 0 0 12px; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
-.rich-diff-heading details { border: 1px solid #e4e4e7; border-radius: 4px; margin-bottom: 16px; }
-.rich-diff-heading summary { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.rich-diff-heading sl-details { display: block; margin-bottom: 16px; font-size: 13px; }
+.rich-diff-heading sl-details::part(header) { padding: 8px 12px; }
+.rich-diff-heading sl-details::part(content) { padding: 0; }
 .rich-diff-heading ul { list-style: none; padding: 0 12px; margin: 0 0 8px; font-size: 13px; }
 .rich-diff-heading li { padding: 6px 0; }
 .rich-diff-heading li + li { border-top: 1px solid #e4e4e7; }
