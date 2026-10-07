@@ -4,7 +4,9 @@ A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository
 
 ## Architecture
 
-The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed resource files; downloading exports a Lix snapshot.
+The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed bundles; review shows only changed translations and plural conditions in a before/after diff. Downloading exports a Lix snapshot.
+
+Edits update one bundle and compare persisted semantic baselines in memory; unchanged editors retain their properties. Full catalog exports run when reviewing or pushing, rather than after every edit. See [design and performance QA](docs/design-qa.md) for measurements and verification.
 
 The React SPA runs the inlang SDK and the prototype's published message editor components in the browser. Lix stores each repository/branch/project draft in OPFS. Browser reloads restore the draft; editing needs no server database. Clearing browser storage deletes drafts. OPFS requires a supported browser and a secure origin (or localhost).
 

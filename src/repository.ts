@@ -2,7 +2,7 @@ import type { ExportFile, ProjectSettings } from "@inlang/sdk/browser";
 
 export type Repo = { owner: string; name: string; branch?: string; projectPath?: string };
 export type RepoTree = { head: string; tree: string; branch: string; paths: string[]; projects: string[] };
-export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string> };
+export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string> };
 export function parseRepository(input: string): Repo {
   const url = new URL(input.includes("://") ? input : `https://github.com/${input}`);
   if (url.protocol !== "https:" || url.hostname !== "github.com" || url.username || url.password) throw new Error("Use a github.com repository URL.");

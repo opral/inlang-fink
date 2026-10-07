@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BundleNested } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
+import { LanguageFilter } from "./LanguageFilter";
+import { ResourceDiff } from "./ResourceDiff";
 import { LixFloat } from "./LixFloat";
 import { Editor } from "./Editor";
 import { Showcases } from "./Showcases";
 import type { Showcase } from "./showcases";
-import { exportChanges, exportResources, openRepositoryProject, readBundles, saveContext, type LocalProject } from "./project";
+import { exportChanges, exportResources, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, type LocalProject } from "./project";
 import { api, parseRepository, repoQuery, type Repo, type RepoTree } from "./repository";
 
 export default function App() {
@@ -21,6 +23,7 @@ export default function App() {
   const [missing, setMissing] = useState(false);
   const [page, setPage] = useState(0);
   const [user, setUser] = useState<{ login: string } | null>(null);
+  const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -37,9 +40,45 @@ export default function App() {
   const localRef = useRef<LocalProject | undefined>(undefined);
   const failure = useRef(false);
   const pending = useRef(0);
-  const refresh = async (current: LocalProject) => setBundles(await readBundles(current.project));
-  const report = (error: unknown) => { setError(error instanceof Error ? error.message : String(error)); };
-  const run = async (task: () => Promise<void>) => { setBusy(true); setError(""); setNotice(""); try { await task(); } catch (error) { report(error); } finally { setBusy(false); } };
+  const bundleIndex = useRef(new Map<string, BundleNested>());
+  const owners = useRef(new Map<string, string>());
+  const baseline = useRef<Record<string, string>>({});
+  const dirty = useRef(new Set<string>());
+  const searchIndex = useRef(new WeakMap<BundleNested, string>());
+  const indexBundle = useCallback((id: string, bundle?: BundleNested) => {
+    const previous = bundleIndex.current.get(id);
+    owners.current.delete(`bundle:${id}`);
+    for (const message of previous?.messages ?? []) {
+      owners.current.delete(`message:${message.id}`);
+      for (const variant of message.variants) owners.current.delete(`variant:${variant.id}`);
+    }
+    if (bundle) {
+      bundleIndex.current.set(id, bundle); owners.current.set(`bundle:${id}`, id);
+      for (const message of bundle.messages) {
+        owners.current.set(`message:${message.id}`, id);
+        for (const variant of message.variants) owners.current.set(`variant:${variant.id}`, id);
+      }
+    } else bundleIndex.current.delete(id);
+    if ((bundle ? bundleSignature(bundle) : undefined) === baseline.current[id]) dirty.current.delete(id);
+    else dirty.current.add(id);
+  }, []);
+  const refresh = useCallback(async (current: LocalProject, id?: string) => {
+    if (id !== undefined) {
+      const bundle = await readBundle(current.project, id);
+      indexBundle(id, bundle);
+      setBundles(previous => bundle ? previous.some(value => value.id === id) ? previous.map(value => value.id === id ? bundle : value) : [...previous, bundle] : previous.filter(value => value.id !== id));
+    } else {
+      const all = await readBundles(current.project);
+      baseline.current = await getBaselineSignatures(current);
+      bundleIndex.current.clear(); owners.current.clear(); dirty.current.clear();
+      for (const bundle of all) indexBundle(bundle.id, bundle);
+      for (const id of Object.keys(baseline.current)) if (!bundleIndex.current.has(id)) dirty.current.add(id);
+      setBundles(all);
+    }
+    setDirtyCount(dirty.current.size);
+  }, [indexBundle]);
+  const report = useCallback((error: unknown) => { setError(error instanceof Error ? error.message : String(error)); }, []);
+  const run = useCallback(async (task: () => Promise<void>) => { setBusy(true); setProgress(""); setError(""); setNotice(""); try { await task(); } catch (error) { report(error); } finally { setBusy(false); } }, [report]);
   useEffect(() => {
     void (async () => {
       try {
@@ -57,17 +96,11 @@ export default function App() {
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   useEffect(() => setPage(0), [search, missing, selectedLocales]);
-  useEffect(() => {
-    if (!local || saving) return;
-    let cancelled = false;
-    const timer = setTimeout(() => { void exportChanges(local).then(files => { if (!cancelled) setDirtyCount(Object.keys(files).length); }).catch(error => { if (!cancelled) report(error); }); }, 300);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [local, bundles, saving]);
-  const enqueue = (task: () => Promise<void>) => {
+  const enqueue = useCallback((task: () => Promise<void>) => {
     pending.current++;
     setSaving(true);
     queue.current = queue.current.then(task).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0); });
-  };
+  }, [report]);
   const discover = () => run(async () => {
     const parsed = parseRepository(url); parsed.branch = branch || undefined;
     const next = await api<RepoTree>(`github/tree?${repoQuery(parsed)}`);
@@ -79,11 +112,11 @@ export default function App() {
     await queue.current;
     if (failure.current) throw new Error("Resolve the failed save before switching projects. Your current draft remains open.");
     if (!nextTree.projects.includes(projectPath)) throw new Error("This project does not exist on the selected branch.");
-    if (localRef.current) { await localRef.current.close(); localRef.current = undefined; setLocal(undefined); }
-    const next = await openRepositoryProject(repository, nextTree, projectPath);
-    localRef.current = next; setLocal(next); await refresh(next);
+    if (localRef.current) { await localRef.current.close(); localRef.current = undefined; setLocal(undefined); setBundles([]); }
+    const next = await openRepositoryProject(repository, nextTree, projectPath, setProgress);
+    localRef.current = next; await refresh(next); setLocal(next);
     await navigator.storage.persist();
-    setPage(0); setView("edit"); setChanges(undefined); setSelectedLocales([]); setProjectMenu(false); setDirtyCount(0);
+    setPage(0); setView("edit"); setChanges(undefined); setSelectedLocales([]); setProjectMenu(false);
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     if (next.context.head !== nextTree.head) setNotice("Restored your local draft. The remote branch has advanced; pushing will ask you to reconcile first.");
   };
@@ -99,10 +132,13 @@ export default function App() {
     setUrl(repositoryUrl); setRepo(repository); setTree(nextTree); setBranch(nextTree.branch); setBranches([nextTree.branch]); setPath(showcase.projectPath);
     await loadProject(repository, nextTree, showcase.projectPath, repositoryUrl);
   });
-  const change = (detail: ChangeEventDetail) => {
+  const change = useCallback((detail: ChangeEventDetail) => {
+    const local = localRef.current;
     if (!local) return;
     enqueue(async () => {
       const data = detail.newData;
+      const bundleId = detail.entity === "bundle" ? detail.entityId : owners.current.get(`${detail.entity}:${detail.entityId}`) ?? (detail.entity === "message" && data ? (data as BundleNested["messages"][number]).bundleId : detail.entity === "variant" && data ? owners.current.get(`message:${(data as BundleNested["messages"][number]["variants"][number]).messageId}`) : undefined);
+      if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
       if (data) {
         // Strip nested UI data; the SDK stores three separate tables.
         if (detail.entity === "bundle") {
@@ -116,10 +152,11 @@ export default function App() {
           await local.project.db.insertInto("variant").values(value).onConflict(oc => oc.column("id").doUpdateSet({ pattern: value.pattern, matches: value.matches })).execute();
         }
       } else await local.project.db.deleteFrom(detail.entity).where("id", "=", detail.entityId).execute();
-      await refresh(local);
+      await refresh(local, bundleId);
     });
-  };
-  const addLocale = (bundle: BundleNested, locale: string) => {
+  }, [enqueue, refresh]);
+  const addLocale = useCallback((bundle: BundleNested, locale: string) => {
+    const local = localRef.current;
     if (!local) return;
     enqueue(async () => {
       const id = crypto.randomUUID();
@@ -127,10 +164,11 @@ export default function App() {
         await tx.insertInto("message").values({ id, bundleId: bundle.id, locale, selectors: [] }).execute();
         await tx.insertInto("variant").values({ id: crypto.randomUUID(), messageId: id, matches: [], pattern: [] }).execute();
       });
-      await refresh(local);
+      await refresh(local, bundle.id);
     });
-  };
-  const removeBundle = (id: string) => {
+  }, [enqueue, refresh]);
+  const removeBundle = useCallback((id: string) => {
+    const local = localRef.current;
     if (!local || !confirm(`Delete message ${id} in every locale?`)) return;
     enqueue(async () => {
       await local.project.db.transaction().execute(async tx => {
@@ -139,27 +177,37 @@ export default function App() {
         await tx.deleteFrom("message").where("bundleId", "=", id).execute();
         await tx.deleteFrom("bundle").where("id", "=", id).execute();
       });
-      await refresh(local);
+      await refresh(local, id);
     });
-  };
+  }, [enqueue, refresh]);
   const create = () => {
     if (!local || !newId.trim()) return;
     const id = newId.trim();
     enqueue(async () => {
       await local.project.db.insertInto("bundle").values({ id, declarations: [] }).execute();
-      await refresh(local); setNewId(""); setShowNewMessage(false);
+      await refresh(local, id); setNewId(""); setShowNewMessage(false);
     });
   };
-  const review = () => run(async () => { if (!local) return; await queue.current; if (failure.current) throw new Error("A local save failed. Reload the page to inspect the persisted state before pushing."); setChanges(await exportChanges(local)); });
+  const review = () => run(async () => { if (!local) return; setProgress("Preparing changes…"); await queue.current; if (failure.current) throw new Error("A local save failed. Reload the page to inspect the persisted state before pushing."); setChanges(await exportChanges(local)); });
   const publish = () => run(async () => {
     if (!local || !changes || !Object.keys(changes).length) return;
+    setProgress("Pushing changes…");
     await queue.current;
     const result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: local.context.owner, repo: local.context.name, branch: local.context.branch, projectPath: local.context.projectPath, head: local.context.head, files: changes, message });
     local.context.head = result.head; local.context.tree = result.tree;
     Object.assign(local.context.original, changes); local.context.baseline = await exportResources(local);
+    local.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
+    baseline.current = local.context.bundleBaseline; dirty.current.clear();
     await saveContext(local); setChanges(undefined); setDirtyCount(0); setView("edit"); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
   });
-  const visible = bundles.filter(bundle => (!search || JSON.stringify(bundle).toLowerCase().includes(search.toLowerCase())) && (!missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale))));
+  const visible = useMemo(() => bundles.filter(bundle => {
+    if (search) {
+      let text = searchIndex.current.get(bundle);
+      if (text === undefined) { text = JSON.stringify(bundle).toLowerCase(); searchIndex.current.set(bundle, text); }
+      if (!text.includes(search.toLowerCase())) return false;
+    }
+    return !missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale));
+  }), [bundles, search, missing, local]);
   const totalPages = Math.max(1, Math.ceil(visible.length / 25));
   const currentPage = Math.min(page, totalPages - 1);
   const download = () => void run(async () => {
@@ -171,7 +219,7 @@ export default function App() {
     const anchor = document.createElement("a"); anchor.href = href; anchor.download = `${local.context.name}.lix`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   });
-  const reviewPanel = changes && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{Object.keys(changes).length}</span></h2><button onClick={() => setChanges(undefined)}>Close</button></header>{Object.entries(changes).map(([path, content]) => <details key={path} open><summary>{path}</summary><pre>{content}</pre></details>)}{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} files to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
+  const reviewPanel = changes && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{dirtyCount}</span></h2><button onClick={() => setChanges(undefined)}>Close</button></header><ResourceDiff before={local?.context.baseline ?? {}} after={changes} />{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} {Object.keys(changes).length === 1 ? "file" : "files"} to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
   return <>
     <header className="app-header"><div className="header-grid"><div className="menu-bar">
       <div className="project-identity"><button className="brand" onClick={() => setProjectMenu(!projectMenu)}>Fink <span className="chevron">⌄</span></button><span className="separator">/</span><button className="project-switch" onClick={() => setProjectMenu(!projectMenu)}>{local ? local.context.name : "no project"}<span className="chevron">⌄</span></button>{local && <span className="branch-badge">⑂ {local.context.branch}</span>}</div>
@@ -187,14 +235,14 @@ export default function App() {
       </div>}
       {error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
       {notice && <p role="status" className="notice">{notice}</p>}
-      {busy && <p role="status">Working…</p>}
+      {busy && <p role="status" className="loading-status">{progress || "Working…"}</p>}
       {!local && <Showcases open={openShowcase} busy={busy} />}
       {local && <>
         {reviewPanel || (view === "settings" ? <section className="settings-page"><h2>Project settings</h2><dl><dt>Repository</dt><dd><a href={`https://github.com/${local.context.owner}/${local.context.name}`}>{local.context.owner}/{local.context.name}</a></dd><dt>Project</dt><dd>{local.context.projectPath}</dd><dt>Branch</dt><dd>{local.context.branch}</dd><dt>Reference language</dt><dd>{local.context.settings.baseLocale}</dd><dt>Languages</dt><dd>{local.context.settings.locales.join(", ")}</dd></dl><button onClick={() => setProjectMenu(true)}>Switch project</button><button onClick={download} disabled={busy || saving}>Download project</button></section> : <>
-        <div className="filter-section"><div className="filter-buttons"><details className="language-filter"><summary>Filter languages <span className="chevron">⌄</span>{selectedLocales.length > 0 && <span className="badge">{selectedLocales.length}</span>}</summary><div className="language-options">{local.context.settings.locales.map(locale => <label key={locale}><input type="checkbox" checked={selectedLocales.includes(locale)} onChange={event => setSelectedLocales(event.target.checked ? [...selectedLocales, locale] : selectedLocales.filter(value => value !== locale))} />{locale}{locale === local.context.settings.baseLocale && <span className="reference-tag">ref</span>}</label>)}<button onClick={() => setSelectedLocales([])}>Show all languages</button></div></details><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search…" /></div>
+        <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={local.context.settings.locales} baseLocale={local.context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search…" /></div>
         <div className="table-header"><span>{visible.length} Bundles</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button>Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table">{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}</div>
+        <div className="message-table" inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         {!visible.length && <p className="empty">No messages match. Add a message to get started.</p>}
         </>)}

@@ -118,11 +118,12 @@ input,select{padding:7px 10px}
 .launcher-close{position:absolute;right:0;top:0}
 .filter-section{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:24px 0}
 .filter-buttons{display:flex;gap:8px}
-.language-filter{position:relative}
-.language-filter>summary{list-style:none;background:white;border:1px solid #d4d4d8;border-radius:4px;padding:6px 10px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:12px;min-width:160px}
-.language-filter>summary::-webkit-details-marker{display:none}
-.language-options{position:absolute;top:calc(100% + 6px);left:0;z-index:35;background:#fff;border:1px solid #d4d4d8;border-radius:5px;box-shadow:0 10px 25px #0002;padding:8px;max-height:360px;overflow:auto;min-width:200px}
-.language-options label{flex-direction:row;align-items:center;padding:7px;font-weight:400;cursor:pointer}
+.language-filter{width:220px;min-width:160px;max-width:100%;--sl-input-height-small:32px;--sl-input-border-radius-small:4px;--sl-input-font-size-small:14px;--sl-input-background-color:#fff;--sl-input-border-color:#d4d4d8;--sl-input-border-color-hover:#a1a1aa;--sl-input-border-color-focus:#2563eb;--sl-panel-border-color:#e4e4e7;--sl-panel-border-width:1px}
+.language-filter::part(listbox){max-height:280px;padding:4px 0;overscroll-behavior:contain}
+.language-filter::part(combobox){box-shadow:none}
+.language-filter::part(form-control-label){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.language-filter sl-option::part(base){font-size:14px;padding:7px 10px;min-height:34px}
+.language-reference-tag{display:inline-block;margin-left:8px;background:#a1a1aa;color:white;font-size:11px;line-height:16px;border-radius:3px;padding:0 4px;vertical-align:1px}
 .reference-tag{background:#a1a1aa;color:#fff;font-size:11px;border-radius:3px;padding:1px 5px}
 .filter-active{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
 .search-input{width:240px;font-size:14px}
@@ -173,6 +174,7 @@ to{opacity:1;translate:0 0}
 .filter-section{flex-wrap:wrap}
 .search-input{width:100%}
 .filter-buttons{width:100%}
+.language-filter{width:50%;min-width:0}
 .filter-buttons>button{flex:1}
 .lixfloat{bottom:16px;width:min(300px,calc(100% - 32px))}
 .settings-page dl{grid-template-columns:1fr;gap:8px}

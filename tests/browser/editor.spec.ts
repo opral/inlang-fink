@@ -29,19 +29,31 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="hello"]')).toBeVisible({ timeout: 90_000 });
   await expect(page.locator('[data-bundle="items"] inlang-variant')).toHaveCount(2);
-  await page.locator(".language-filter > summary").click();
-  await page.getByRole("checkbox", { name: /^en/ }).check();
+  await page.locator('.language-filter [part="combobox"]').click();
+  await page.getByRole("option", { name: "en ref", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(1);
-  await page.getByRole("button", { name: "Show all languages" }).click();
+  await page.getByRole("button", { name: /Clear (entry|selection)/ }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-message')).toHaveCount(2);
-  await page.locator(".language-filter > summary").click();
   await page.getByRole("button", { name: /^Changes/ }).click();
   await expect(page.getByText("No changes to push.")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.locator('[data-bundle="items"] inlang-pattern-editor').first().evaluate(element => {
+    const node = element as HTMLElement & { variant: unknown; originalVariantForTest?: unknown };
+    node.originalVariantForTest = node.variant;
+  });
   const pattern = page.locator('[data-bundle="hello"] inlang-pattern-editor').first().locator('[contenteditable]');
   await pattern.fill("Hello from Fink");
   await pattern.press("Tab");
   await expect(page.getByRole("status").filter({ hasText: "Draft saved locally" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toBeVisible();
+  expect(await page.locator('[data-bundle="items"] inlang-pattern-editor').first().evaluate(element => {
+    const node = element as HTMLElement & { variant: unknown; originalVariantForTest?: unknown };
+    return node.variant === node.originalVariantForTest;
+  })).toBe(true);
+  await pattern.fill("Hello"); await pattern.press("Tab");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
+  await pattern.fill("Hello from Fink"); await pattern.press("Tab");
   const plural = page.locator('[data-bundle="items"] inlang-pattern-editor').first().locator('[contenteditable]');
   await plural.fill("A single item");
   await plural.press("Tab");
@@ -56,7 +68,11 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from Fink", { timeout: 60_000 });
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
   await page.getByRole("button", { name: "Review and push" }).click();
-  await page.getByRole("button", { name: "Push 1 files to main" }).click();
+  await expect(page.locator('[data-diff-message="hello"] .diff-before')).toContainText("Hello");
+  await expect(page.locator('[data-diff-message="hello"] .diff-after')).toContainText("Hello from Fink");
+  await expect(page.locator('[data-diff-message="items"]')).toContainText("A single item");
+  await expect(page.locator('[data-diff-message="items"]')).not.toContainText("{count} items");
+  await page.getByRole("button", { name: "Push 1 file to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/en.json"]);
   expect(payload.head).toBe("a".repeat(40));
