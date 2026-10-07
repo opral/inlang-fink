@@ -77,3 +77,25 @@ test("creates plural variants for a missing translation using the published sele
   await page.getByRole("button", { name: "Review and push" }).click();
   await expect(page.getByRole("dialog").getByText("messages/de.json", { exact: true })).toBeVisible();
 });
+test("opens the selected showcase directly and pages large catalogs without losing search results", async ({ page }) => {
+  const catalog = Object.fromEntries(Array.from({ length: 26 }, (_, index) => [`demo${index.toString().padStart(2, "0")}`, `Message ${index}`]));
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/user") return route.fulfill({ json: null });
+    expect(url.searchParams.get("owner")).toBe("pocket-id");
+    expect(url.searchParams.get("repo")).toBe("pocket-id");
+    if (url.pathname === "/api/github/tree") return route.fulfill({ json: { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: ["frontend/project.inlang/settings.json", "frontend/messages/en.json"], projects: ["frontend/project.inlang"] } });
+    const path = url.searchParams.get("path");
+    expect(["frontend/project.inlang/settings.json", "frontend/messages/en.json"]).toContain(path);
+    return route.fulfill({ json: { content: JSON.stringify(path?.endsWith("settings.json") ? { ...settings, locales: ["en"] } : catalog) } });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Explore community projects" })).toBeVisible();
+  await page.getByRole("button", { name: "Open Pocket ID", exact: true }).click();
+  await expect(page.locator("[data-bundle]")).toHaveCount(25);
+  await expect(page).toHaveURL(/project=frontend%2Fproject.inlang/);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.locator("[data-bundle]")).toHaveCount(1);
+  await page.getByLabel("Search messages", { exact: true }).fill("demo00");
+  await expect(page.locator('[data-bundle="demo00"]')).toBeVisible();
+});

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { BundleNested } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
 import { Editor } from "./Editor";
+import { Showcases } from "./Showcases";
+import type { Showcase } from "./showcases";
 import { exportChanges, exportResources, openRepositoryProject, readBundles, saveContext, type LocalProject } from "./project";
 import { api, parseRepository, repoQuery, type Repo, type RepoTree } from "./repository";
 
@@ -16,6 +18,7 @@ export default function App() {
   const [bundles, setBundles] = useState<BundleNested[]>([]);
   const [search, setSearch] = useState("");
   const [missing, setMissing] = useState(false);
+  const [page, setPage] = useState(0);
   const [user, setUser] = useState<{ login: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +50,7 @@ export default function App() {
     const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
+  useEffect(() => setPage(0), [search, missing]);
   const enqueue = (task: () => Promise<void>) => {
     pending.current++;
     setSaving(true);
@@ -59,18 +63,29 @@ export default function App() {
     if (!next.projects.length) throw new Error("No unpacked project.inlang/settings.json found in this repository.");
     setRepo(parsed); setTree(next); setBranches(available); setBranch(next.branch); setPath(next.projects.includes(path) ? path : next.projects[0]);
   });
-  const open = () => run(async () => {
-    if (!repo || !path) return;
+  const loadProject = async (repository: Repo, nextTree: RepoTree, projectPath: string, repositoryUrl: string) => {
     await queue.current;
     if (failure.current) throw new Error("Resolve the failed save before switching projects. Your current draft remains open.");
-    const nextTree = tree?.branch === branch ? tree : await api<RepoTree>(`github/tree?${repoQuery({ ...repo, branch })}`);
-    if (!nextTree.projects.includes(path)) throw new Error("This project does not exist on the selected branch.");
+    if (!nextTree.projects.includes(projectPath)) throw new Error("This project does not exist on the selected branch.");
     if (localRef.current) { await localRef.current.close(); localRef.current = undefined; setLocal(undefined); }
-    const next = await openRepositoryProject(repo, nextTree, path);
+    const next = await openRepositoryProject(repository, nextTree, projectPath);
     localRef.current = next; setLocal(next); await refresh(next);
     await navigator.storage.persist();
-    history.replaceState(null, "", `/?${new URLSearchParams({ repo: url, branch, project: path })}`);
+    setPage(0);
+    history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     if (next.context.head !== nextTree.head) setNotice("Restored your local draft. The remote branch has advanced; pushing will ask you to reconcile first.");
+  };
+  const open = () => run(async () => {
+    if (!repo || !path) return;
+    const nextTree = tree?.branch === branch ? tree : await api<RepoTree>(`github/tree?${repoQuery({ ...repo, branch })}`);
+    await loadProject(repo, nextTree, path, url);
+  });
+  const openShowcase = (showcase: Showcase) => void run(async () => {
+    const repositoryUrl = `https://github.com/${showcase.repository}`;
+    const repository = { ...parseRepository(repositoryUrl), branch: showcase.branch };
+    const nextTree = await api<RepoTree>(`github/tree?${repoQuery(repository)}`);
+    setUrl(repositoryUrl); setRepo(repository); setTree(nextTree); setBranch(nextTree.branch); setBranches([nextTree.branch]); setPath(showcase.projectPath);
+    await loadProject(repository, nextTree, showcase.projectPath, repositoryUrl);
   });
   const change = (detail: ChangeEventDetail) => {
     if (!local) return;
@@ -133,6 +148,8 @@ export default function App() {
     await saveContext(local); setChanges(undefined); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
   });
   const visible = bundles.filter(bundle => (!search || JSON.stringify(bundle).toLowerCase().includes(search.toLowerCase())) && (!missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale))));
+  const totalPages = Math.max(1, Math.ceil(visible.length / 25));
+  const currentPage = Math.min(page, totalPages - 1);
   return <>
     <header className="topbar"><a href="/" className="brand">🐦 Fink</a><span>Localization editor</span><div className="account">{user ? <><span>{user.login}</span><button onClick={() => run(async () => { await api("auth/logout", {}); setUser(null); })}>Sign out</button></> : <a className="button" href="/api/auth/login">Sign in with GitHub</a>}</div></header>
     <main>
@@ -143,11 +160,13 @@ export default function App() {
       {error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
       {notice && <p role="status" className="notice">{notice}</p>}
       {busy && <p role="status">Working…</p>}
+      {!local && <Showcases open={openShowcase} busy={busy} />}
       {local && <>
         <nav className="editor-toolbar"><label className="search">Search messages<input aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Message ID or translation" /></label><label className="checkbox"><input type="checkbox" checked={missing} onChange={event => setMissing(event.target.checked)} />Missing translations</label><span role="status">{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span><button className="primary" disabled={busy || saving} onClick={() => void review()}>Review and push</button></nav>
         <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" /><button>Add message</button></form>
         <p className="count">{visible.length} messages · {local.context.settings.locales.join(", ")} · {local.context.branch}</p>
-        {visible.map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
+        {visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={local.context.settings} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
+        {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         {!visible.length && <p className="empty">No messages match. Add a message to get started.</p>}
       </>}
     </main>
