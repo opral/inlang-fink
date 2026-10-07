@@ -10,8 +10,8 @@ export default function App() {
   const [repo, setRepo] = useState<Repo>();
   const [tree, setTree] = useState<RepoTree>();
   const [branches, setBranches] = useState<string[]>([]);
-  const [branch, setBranch] = useState("");
-  const [path, setPath] = useState("");
+  const [branch, setBranch] = useState(() => new URLSearchParams(location.search).get("branch") ?? "");
+  const [path, setPath] = useState(() => new URLSearchParams(location.search).get("project") ?? "");
   const [local, setLocal] = useState<LocalProject>();
   const [bundles, setBundles] = useState<BundleNested[]>([]);
   const [search, setSearch] = useState("");
@@ -57,7 +57,7 @@ export default function App() {
     const next = await api<RepoTree>(`github/tree?${repoQuery(parsed)}`);
     const available = await api<string[]>(`github/branches?${repoQuery(parsed)}`);
     if (!next.projects.length) throw new Error("No unpacked project.inlang/settings.json found in this repository.");
-    setRepo(parsed); setTree(next); setBranches(available); setBranch(next.branch); setPath(next.projects[0]);
+    setRepo(parsed); setTree(next); setBranches(available); setBranch(next.branch); setPath(next.projects.includes(path) ? path : next.projects[0]);
   });
   const open = () => run(async () => {
     if (!repo || !path) return;
