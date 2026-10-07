@@ -6,7 +6,7 @@ The language dropdown, editor update path, and changes review were audited indep
 
 - The custom checkbox popup did not match the v2 controls. Restored the v2 Shoelace multi-select, with a compact trigger, attached positioning, bounded scrolling, reference-language badge, keyboard navigation, Escape, clear selection, and outside-click dismissal.
 - Every edit previously read the entire nested catalog, recreated all visible Lit editor properties, and scheduled a full plugin export to count changed files. Edits now reread one affected bundle, preserve the other editor objects and properties, and compare semantic baseline signatures in memory. Full resource exports run when reviewing or pushing changes.
-- Review previously displayed complete JSON files. The prototype-inspired diff now shows only changed message keys, side-by-side before/after values, red/green word highlights, variable chips, and changed plural conditions. Additions and deletions are explicit. i18next plural suffixes remain individual resource keys.
+- Review restores `DiffBundleView` and `SingleDiffBundle` from `opral/inlang/packages/fink`, using the same rich editor components on both sides. SDK v3 saved semantic baselines replace the original prototype’s legacy change-table queries. Variables, selector chips, match conditions, and patterns retain their native UI, changed patterns use the original red/green highlights, and unchanged variants are dimmed. Added/deleted bundles and locales appear on their corresponding side. The prior file/field/JSON diff replacement has been removed.
 
 The counter represents changed bundles. The push button separately reports the number of changed files. Reverting a bundle to its baseline clears its pending change.
 
@@ -33,4 +33,4 @@ Semantic baselines persist with the project. Existing drafts missing this metada
 - Legacy draft upgrade with actual production SDK/OPFS: plain and plural edits preserved, baselines recovered exactly, revert cleared changes, and subsequent reopen reused stored signatures.
 - Realistic 27-language dropdown: last option can be scrolled into view and selected; keyboard, Escape, outside click, and clear selection checked.
 - Desktop and 390-pixel mobile: attached dropdown, readable diff, stacked mobile before/after columns, and no horizontal overflow.
-- Diff units cover changed text, nested i18next keys, variables/selectors, plural conditions, additions/deletions, formatting equivalence, and bounded word comparison.
+- Browser checks cover rich component rendering on both sides, pattern highlights, dimmed unchanged variants, and added locale/selector rendering.

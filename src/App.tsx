@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BundleNested } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
 import { LanguageFilter } from "./LanguageFilter";
-import { ResourceDiff } from "./ResourceDiff";
+import { RichDiff } from "./DiffBundleView";
 import { LixFloat } from "./LixFloat";
 import { Editor } from "./Editor";
 import { Showcases } from "./Showcases";
@@ -219,7 +219,7 @@ export default function App() {
     const anchor = document.createElement("a"); anchor.href = href; anchor.download = `${local.context.name}.lix`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   });
-  const reviewPanel = changes && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{dirtyCount}</span></h2><button onClick={() => setChanges(undefined)}>Close</button></header><ResourceDiff before={local?.context.baseline ?? {}} after={changes} />{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} {Object.keys(changes).length === 1 ? "file" : "files"} to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
+  const reviewPanel = changes && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{dirtyCount}</span></h2><button onClick={() => setChanges(undefined)}>Close</button></header><RichDiff baseline={baseline.current} bundles={bundles} settings={local!.context.settings} />{Object.keys(changes).length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push {Object.keys(changes).length} {Object.keys(changes).length === 1 ? "file" : "files"} to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
   return <>
     <header className="app-header"><div className="header-grid"><div className="menu-bar">
       <div className="project-identity"><button className="brand" onClick={() => setProjectMenu(!projectMenu)}>Fink <span className="chevron">⌄</span></button><span className="separator">/</span><button className="project-switch" onClick={() => setProjectMenu(!projectMenu)}>{local ? local.context.name : "no project"}<span className="chevron">⌄</span></button>{local && <span className="branch-badge">⑂ {local.context.branch}</span>}</div>

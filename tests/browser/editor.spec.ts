@@ -68,10 +68,15 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from Fink", { timeout: 60_000 });
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
   await page.getByRole("button", { name: "Review and push" }).click();
-  await expect(page.locator('[data-diff-message="hello"] .diff-before')).toContainText("Hello");
-  await expect(page.locator('[data-diff-message="hello"] .diff-after')).toContainText("Hello from Fink");
+  await expect(page.locator('[data-diff-message="hello"] [data-diff-side="before"]')).toContainText("Hello");
+  await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("Hello from Fink");
   await expect(page.locator('[data-diff-message="items"]')).toContainText("A single item");
-  await expect(page.locator('[data-diff-message="items"]')).not.toContainText("{count} items");
+  await expect(page.locator('[data-diff-message="items"] .diff-unchanged').first()).toHaveCSS("opacity", "0.3");
+  await expect(page.locator('[data-diff-message="items"] inlang-bundle')).toHaveCount(2);
+  await expect(page.locator('[data-diff-message="items"] .highlight-red').first()).toContainText("One item");
+  await expect(page.locator('[data-diff-message="items"] .highlight-green').first()).toContainText("A single item");
+  await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-pattern-editor').first()).toContainText("One item");
+  await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-pattern-editor').first()).toContainText("A single item");
   await page.getByRole("button", { name: "Push 1 file to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/en.json"]);
@@ -103,7 +108,9 @@ test("creates plural variants for a missing translation using the published sele
   await expect(dialog).not.toBeVisible();
   await expect(german.locator("inlang-variant")).toHaveCount(3);
   await page.getByRole("button", { name: "Review and push" }).click();
-  await expect(page.getByRole("dialog").getByText("messages/de.json", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-message')).toHaveCount(2);
+  await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-message')).toHaveCount(1);
+  await expect(page.locator('[data-diff-message="items"] .highlight-selector-green')).toHaveCount(1);
 });
 test("opens the selected showcase directly and pages large catalogs without losing search results", async ({ page }) => {
   const catalog = Object.fromEntries(Array.from({ length: 26 }, (_, index) => [`demo${index.toString().padStart(2, "0")}`, `Message ${index}`]));
