@@ -56,7 +56,7 @@ The Opral account is configured in the workflow. Set these **GitHub repository s
 
 Add `https://fink-migration-preview.opral.workers.dev/api/auth/callback` to the existing App's callback URLs, preserving its live callback. Deploy that stable callback Worker with the same two secrets used for previews. `wrangler.jsonc` sets this origin and the `opral` Workers subdomain. PR Workers use this stable callback and relay the sealed session to the originating preview. Credentials are never sent in browser-readable JSON. Only `fink-pr-<number>.opral.workers.dev` preview origins are accepted.
 
-The workflow builds, tests, and deploys same-repository PRs to `fink-pr-<number>.opral.workers.dev`, registers a GitHub environment URL, and deletes the Worker when the PR closes. Fork PRs run checks without receiving secrets. Merges to `main` deploy the `fink` Worker. A workflow dispatch also deploys production. Deployment fails with a setup message when required secrets are missing.
+The workflow builds, tests, and deploys same-repository PRs to `fink-pr-<number>.opral.workers.dev`, registers a GitHub environment URL, and deletes the Worker when the PR closes. Fork PRs run checks without receiving secrets. Merges to `main` deploy both the `fink` Worker and the stable callback Worker. A workflow dispatch also deploys production. Deployment fails with a setup message when required secrets are missing.
 
 For manual deployment, authenticate Wrangler and configure Worker secrets:
 

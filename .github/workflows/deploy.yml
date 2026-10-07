@@ -46,6 +46,9 @@ jobs:
           node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(".worker-secrets.json", JSON.stringify({ GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET, SESSION_SECRET: process.env.SESSION_SECRET }));'
           trap 'rm -f .worker-secrets.json' EXIT
           pnpm exec wrangler deploy --name "$WORKER_NAME" --secrets-file .worker-secrets.json
+          if [ "$WORKER_NAME" = fink ]; then
+            pnpm exec wrangler deploy --name fink-migration-preview --secrets-file .worker-secrets.json
+          fi
           echo "url=https://${WORKER_NAME}.opral.workers.dev" >> "$GITHUB_OUTPUT"
           echo "Preview: https://${WORKER_NAME}.opral.workers.dev" >> "$GITHUB_STEP_SUMMARY"
   cleanup:
