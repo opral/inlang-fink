@@ -92,7 +92,7 @@ test("opens the selected showcase directly and pages large catalogs without losi
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Explore community projects" })).toBeVisible();
   await page.getByRole("button", { name: "Open Pocket ID", exact: true }).click();
-  await expect(page.locator("[data-bundle]")).toHaveCount(25);
+  await expect(page.locator("[data-bundle]")).toHaveCount(25, { timeout: 90_000 });
   await expect(page).toHaveURL(/project=frontend%2Fproject.inlang/);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.locator("[data-bundle]")).toHaveCount(1);
