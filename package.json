@@ -28,7 +28,8 @@
     "@lit/react": "^1.0.8",
     "@shoelace-style/shoelace": "2.20.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@inlang/settings-component": "5.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",

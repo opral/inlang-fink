@@ -21,7 +21,7 @@ Commits preserve the existing Git tree and update the branch without force. Fink
 - Message variables, expressions, selectors, plural variants, match conditions, missing translations, and adding/deleting messages and variants through the published editor components.
 - JSON resources up to 1 MiB per file; up to 100 changed resource files and 5 MiB per push. GitHub truncated repository trees are rejected.
 
-File formatting follows the resource plugin on changed files. Untouched files are excluded from commits. Plugin configuration and locale settings are read from the repository rather than edited in Fink. The read API uses GitHub's anonymous quota until sign-in.
+File formatting follows the resource plugin on changed files. Untouched files are excluded from commits. The shared settings form edits reference locale, locales, and experimental flags. Settings are saved in the OPFS draft, reviewed, and pushed alongside translations. Plugin configuration remains defined in the repository. The read API uses GitHub's anonymous quota until sign-in.
 
 ## Development
 

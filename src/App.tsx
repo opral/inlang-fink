@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BundleNested } from "@inlang/sdk/browser";
+import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
 import { LanguageFilter } from "./LanguageFilter";
 import { RichDiff } from "./DiffBundleView";
+import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
+import { validateSettingsEdit } from "./settingsData";
 import { LixFloat } from "./LixFloat";
 import { Editor } from "./Editor";
 import { Showcases } from "./Showcases";
 import type { Showcase } from "./showcases";
-import { preparePush, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, type LocalProject } from "./project";
+import { preparePush, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, repoQuery, type Repo, type RepoTree } from "./repository";
 
 export default function App() {
@@ -27,13 +29,16 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [reviewState, setReviewState] = useState<{ ids: string[]; bundles: BundleNested[] }>();
+  const [reviewState, setReviewState] = useState<{ ids: string[]; bundles: BundleNested[]; settings?: SettingsChange }>();
   const [message, setMessage] = useState("Update translations with Fink");
   const [newId, setNewId] = useState("");
   const [view, setView] = useState<"edit" | "settings">("edit");
   const [projectMenu, setProjectMenu] = useState(false);
   const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsRevision, setSettingsRevision] = useState(0);
   const [dirtyCount, setDirtyCount] = useState(0);
+  const pendingCount = dirtyCount + Number(settingsDirty);
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [saving, setSaving] = useState(false);
   const queue = useRef<Promise<void>>(Promise.resolve());
@@ -76,6 +81,7 @@ export default function App() {
       setBundles(all);
     }
     setDirtyCount(dirty.current.size);
+    setSettingsDirty(!!settingsChanges(current));
   }, [indexBundle]);
   const report = useCallback((error: unknown) => { setError(error instanceof Error ? error.message : String(error)); }, []);
   const run = useCallback(async (task: () => Promise<void>) => { setBusy(true); setProgress(""); setError(""); setNotice(""); try { await task(); } catch (error) { report(error); } finally { setBusy(false); } }, [report]);
@@ -189,6 +195,23 @@ export default function App() {
       await refresh(local, id); setNewId(""); setShowNewMessage(false);
     });
   };
+  const saveSettings = (settings: ProjectSettings) => {
+    const current = localRef.current;
+    if (!current) return;
+    try { validateSettingsEdit(current.context.settings, settings); }
+    catch (error) { report(error); setSettingsRevision(value => value + 1); return; }
+    setError("");
+    enqueue(async () => {
+      try {
+        await current.project.settings.set({ ...settings, modules: [] });
+        current.context.settings = settings;
+        await saveContext(current);
+        setSettingsDirty(!!settingsChanges(current));
+        setLocal({ ...current });
+        setSelectedLocales(previous => previous.filter(locale => settings.locales.includes(locale)));
+      } finally { setSettingsRevision(value => value + 1); }
+    });
+  };
   const review = async () => {
     if (!local) return;
     setError("");
@@ -198,14 +221,14 @@ export default function App() {
       const ids = [...dirty.current];
       // These immutable bundles already came from Lix through the SDK. Review
       // needs no resource export or full-catalog query.
-      setReviewState({ ids, bundles: ids.flatMap(id => {
+      setReviewState({ ids, settings: settingsChanges(local), bundles: ids.flatMap(id => {
         const bundle = bundleIndex.current.get(id);
         return bundle ? [bundle] : [];
       }) });
     } catch (error) { report(error); }
   };
   const publish = () => run(async () => {
-    if (!local || !reviewState?.ids.length) return;
+    if (!local || (!reviewState || (!reviewState.ids.length && !reviewState.settings))) return;
     await queue.current;
     if (failure.current) throw new Error("A local save failed. Reload the page before pushing.");
     setProgress("Preparing files for GitHub…");
@@ -217,7 +240,7 @@ export default function App() {
     Object.assign(local.context.original, files); local.context.baseline = resources;
     local.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
     baseline.current = local.context.bundleBaseline; dirty.current.clear();
-    await saveContext(local); setReviewState(undefined); setDirtyCount(0); setView("edit"); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
+    await saveContext(local); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
   });
   const visible = useMemo(() => bundles.filter(bundle => {
     if (search) {
@@ -238,12 +261,12 @@ export default function App() {
     const anchor = document.createElement("a"); anchor.href = href; anchor.download = `${local.context.name}.lix`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   });
-  const reviewPanel = reviewState && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{dirtyCount}</span></h2><button onClick={() => setReviewState(undefined)}>Close</button></header><RichDiff baseline={baseline.current} bundles={reviewState.bundles} bundleIds={reviewState.ids} settings={local!.context.settings} />{reviewState.ids.length ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push changes to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
+  const reviewPanel = reviewState && <section className="review-page review" role="dialog" aria-label="Review changes"><header><h2>Changes <span className="badge">{pendingCount}</span></h2><button onClick={() => setReviewState(undefined)}>Close</button></header><RichDiff baseline={baseline.current} bundles={reviewState.bundles} bundleIds={reviewState.ids} settings={local!.context.settings} />{reviewState.settings && <SettingsDiff change={reviewState.settings} />}{reviewState.ids.length || reviewState.settings ? <><label>Commit message<input value={message} onChange={event => setMessage(event.target.value)} /></label><button className="primary" disabled={busy || !user || !message.trim()} onClick={() => void publish()}>Push changes to {local?.context.branch}</button>{!user && <p>Sign in with GitHub to push. Your draft is saved locally.</p>}</> : <p>No changes to push.</p>}</section>;
   return <>
     <header className="app-header"><div className="header-grid"><div className="menu-bar">
       <div className="project-identity"><button className="brand" onClick={() => setProjectMenu(!projectMenu)}>Fink <span className="chevron">⌄</span></button><span className="separator">/</span><button className="project-switch" onClick={() => setProjectMenu(!projectMenu)}>{local ? local.context.name : "no project"}<span className="chevron">⌄</span></button>{local && <span className="branch-badge">⑂ {local.context.branch}</span>}</div>
       <div className="account"><a href="https://github.com/opral/inlang-fink" className="help-link">Help</a>{user ? <><span>{user.login}</span><button onClick={() => run(async () => { await api("auth/logout", {}); setUser(null); })}>Sign out</button></> : <a className="button" href="/api/auth/login">Sign in with GitHub</a>}</div>
-    </div>{local && <nav className="subnav" aria-label="Project navigation"><button className={!reviewState && view === "edit" ? "active" : ""} onClick={() => { setReviewState(undefined); setView("edit"); }}>Edit</button><button className={reviewState ? "active" : ""} disabled={busy || saving} onClick={() => void review()}>Changes <span className={dirtyCount ? "badge changed" : "badge"}>{dirtyCount}</span></button><button className={!reviewState && view === "settings" ? "active" : ""} onClick={() => { setReviewState(undefined); setView("settings"); }}>Settings</button><span role="status" className="save-status">{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span></nav>}</div></header>
+    </div>{local && <nav className="subnav" aria-label="Project navigation"><button className={!reviewState && view === "edit" ? "active" : ""} onClick={() => { setReviewState(undefined); setView("edit"); }}>Edit</button><button className={reviewState ? "active" : ""} disabled={busy || saving} onClick={() => void review()}>Changes <span className={pendingCount ? "badge changed" : "badge"}>{pendingCount}</span></button><button className={!reviewState && view === "settings" ? "active" : ""} onClick={() => { setReviewState(undefined); setView("settings"); }}>Settings</button><span role="status" className="save-status">{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span></nav>}</div></header>
     <main className={local ? "workspace" : "welcome"}>
       {(!local || projectMenu) && <div className={local ? "project-popover" : ""}>
       <section className="launcher"><h1>{local ? "Open a repository" : "Make yourself understood."}</h1><p>Translate messages, variables, and plurals. Drafts stay in this browser until you push.</p>
@@ -257,7 +280,7 @@ export default function App() {
       {busy && <p role="status" className="loading-status">{progress || "Working…"}</p>}
       {!local && <Showcases open={openShowcase} busy={busy} />}
       {local && <>
-        {reviewPanel || (view === "settings" ? <section className="settings-page"><h2>Project settings</h2><dl><dt>Repository</dt><dd><a href={`https://github.com/${local.context.owner}/${local.context.name}`}>{local.context.owner}/{local.context.name}</a></dd><dt>Project</dt><dd>{local.context.projectPath}</dd><dt>Branch</dt><dd>{local.context.branch}</dd><dt>Reference language</dt><dd>{local.context.settings.baseLocale}</dd><dt>Languages</dt><dd>{local.context.settings.locales.join(", ")}</dd></dl><button onClick={() => setProjectMenu(true)}>Switch project</button><button onClick={download} disabled={busy || saving}>Download project</button></section> : <>
+        {reviewPanel || (view === "settings" ? <section className="settings-page"><h2>Project settings</h2><p className="settings-context"><a href={`https://github.com/${local.context.owner}/${local.context.name}`}>{local.context.owner}/{local.context.name}</a> / {local.context.projectPath} · {local.context.branch}</p><div className="settings-form" inert={busy || saving}><Settings settings={local.context.settings} revision={settingsRevision} save={saveSettings} /></div><div className="settings-actions"><button onClick={() => setProjectMenu(true)}>Switch project</button><button onClick={download} disabled={busy || saving}>Download project</button></div></section> : <>
         <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={local.context.settings.locales} baseLocale={local.context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search…" /></div>
         <div className="table-header"><span>{visible.length} Bundles</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button>Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
@@ -265,7 +288,7 @@ export default function App() {
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         {!visible.length && <p className="empty">No messages match. Add a message to get started.</p>}
         </>)}
-        {!reviewState && <LixFloat count={dirtyCount} review={() => void review()} download={download} disabled={busy || saving} />}
+        {!reviewState && <LixFloat count={pendingCount} review={() => void review()} download={download} disabled={busy || saving} />}
       </>}
     </main>
     <footer>Fink · Open source · <a href="https://github.com/opral/inlang-fink">GitHub</a> · <a href="https://github.com/apps/inlang/installations/new">Grant repository access</a></footer>

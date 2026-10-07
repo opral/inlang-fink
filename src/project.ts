@@ -5,6 +5,8 @@ import i18next from "@inlang/plugin-i18next";
 import messageFormat from "@inlang/plugin-message-format";
 import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type Repo, type RepoTree } from "./repository";
 
+import { settingsSignature } from "./settingsData";
+
 const supported: InlangPlugin<any>[] = [i18next, messageFormat];
 export type LocalProject = { project: InlangProject; context: RepoContext; close: () => Promise<void> };
 export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
@@ -130,11 +132,16 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
   }
   return files;
 }
+export function settingsChanges(local: Pick<LocalProject, "context">) {
+  const before: ProjectSettings = JSON.parse(local.context.original[`${local.context.projectPath}/settings.json`]!);
+  return settingsSignature(before) === settingsSignature(local.context.settings) ? undefined : { before, after: structuredClone(local.context.settings) };
+}
 export async function preparePush(local: LocalProject): Promise<{ files: Record<string, string>; resources: Record<string, string> }> {
   const changes: Record<string, string> = {};
   const resources = await exportResources(local);
   for (const [path, content] of Object.entries(resources)) {
     if (content !== local.context.baseline[path]) changes[path] = content;
   }
+  if (settingsChanges(local)) changes[`${local.context.projectPath}/settings.json`] = JSON.stringify(local.context.settings, null, 2) + "\n";
   return { files: changes, resources };
 }

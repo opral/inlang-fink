@@ -21,7 +21,7 @@ test("stale branch heads are rejected before creating any Git objects", async ()
   expect(mock).toHaveBeenCalledTimes(1);
 });
 test("push preserves the base tree, commits against the expected head, and never force-updates", async () => {
-  const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify({ locales: ["en", "de"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) };
+  const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify({ baseLocale: "en", locales: ["en", "de"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) };
   const responses = [{ object: { sha: input.head } }, settingsFile, { tree: { sha: "b".repeat(40) } }, { sha: "c".repeat(40) }, { sha: "d".repeat(40), html_url: "https://github.com/example/repo/commit/ddd" }, {}];
   const mock = vi.fn().mockImplementation(async () => Response.json(responses.shift())); vi.stubGlobal("fetch", mock);
   await expect(push(input, "test-token")).resolves.toMatchObject({ head: "d".repeat(40) });
@@ -34,7 +34,7 @@ test("push rejects traversal, workflows, non-JSON files and empty commits", asyn
   for (const files of cases) await expect(push({ ...input, files }, "test-token")).rejects.toMatchObject({ status: 400 });
 });
 test("push rejects JSON files outside the project's configured resource paths", async () => {
-  const mock = vi.fn().mockResolvedValueOnce(Response.json({ object: { sha: input.head } })).mockResolvedValueOnce(Response.json({ encoding: "base64", size: 100, content: btoa(JSON.stringify({ locales: ["en"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) }));
+  const mock = vi.fn().mockResolvedValueOnce(Response.json({ object: { sha: input.head } })).mockResolvedValueOnce(Response.json({ encoding: "base64", size: 100, content: btoa(JSON.stringify({ baseLocale: "en", locales: ["en"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) }));
   vi.stubGlobal("fetch", mock);
   await expect(push({ ...input, files: { "package.json": "{}" } }, "test-token")).rejects.toMatchObject({ status: 400 });
   expect(mock).toHaveBeenCalledTimes(2);
@@ -59,4 +59,16 @@ test("OAuth uses PKCE and relays sessions only to the preview that initiated log
   expect(completed.headers.get("Set-Cookie")).toContain("HttpOnly");
   const rejected = await worker.fetch(new Request(`${origin}/api/auth/complete`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: "fink_oauth=wrong-nonce" }, body }), env);
   expect(rejected.status).toBe(403);
+});
+test("push accepts core settings and new locale resources together, rejects plugin path edits", async () => {
+  const before = { baseLocale: "en", locales: ["en"], modules: ["https://example.com/plugin.js"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } };
+  const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify(before)) };
+  const after = { ...before, locales: ["en", "fr"] };
+  const responses = [{ object: { sha: input.head } }, settingsFile, { tree: { sha: "b".repeat(40) } }, { sha: "c".repeat(40) }, { sha: "d".repeat(40) }, {}];
+  const mock = vi.fn().mockImplementation(async () => Response.json(responses.shift())); vi.stubGlobal("fetch", mock);
+  await expect(push({ ...input, files: { "project.inlang/settings.json": JSON.stringify(after), "messages/fr.json": '{"hello":"Salut"}' } }, "test-token")).resolves.toMatchObject({ head: "d".repeat(40) });
+  expect(JSON.parse(mock.mock.calls[3][1].body).tree.map((file: { path: string }) => file.path)).toEqual(["project.inlang/settings.json", "messages/fr.json"]);
+  mock.mockImplementation(async () => Response.json(mock.mock.calls.length === 1 ? { object: { sha: input.head } } : settingsFile)); mock.mockClear();
+  await expect(push({ ...input, files: { "project.inlang/settings.json": JSON.stringify({ ...after, modules: [] }) } }, "test-token")).rejects.toMatchObject({ status: 400 });
+  expect(mock).toHaveBeenCalledTimes(2);
 });

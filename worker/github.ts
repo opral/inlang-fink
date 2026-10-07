@@ -1,3 +1,4 @@
+import { validateSettingsEdit } from "../src/settingsData";
 import { HttpError } from "./auth";
 import { resolveResourcePath } from "../src/repository";
 export const MAX_BODY = 5 * 1024 * 1024;
@@ -40,11 +41,14 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
   const settingsFile = await github<{ encoding: string; content: string; size: number }>(`${base}/contents/${input.projectPath.split("/").map(encodeURIComponent).join("/")}/settings.json?ref=${input.head}`, token);
   if (settingsFile.encoding !== "base64" || settingsFile.size > 1024 * 1024) throw new HttpError(400, "Invalid project settings.");
   const settings = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(settingsFile.content.replace(/\s/g, "")), char => char.charCodeAt(0))));
-  const allowed = new Set<string>();
+  const settingsPath = `${input.projectPath}/settings.json`;
+  const nextSettings = input.files[settingsPath] ? JSON.parse(input.files[settingsPath]) : settings;
+  try { validateSettingsEdit(settings, nextSettings); } catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid settings edit."); }
+  const allowed = new Set<string>([settingsPath]);
   for (const key of ["plugin.inlang.i18next", "plugin.inlang.messageFormat"]) {
     const configured = settings[key]?.pathPattern;
     const patterns = typeof configured === "string" ? [configured] : Array.isArray(configured) ? configured : configured && typeof configured === "object" ? Object.values(configured) : [];
-    for (const pattern of patterns) for (const locale of settings.locales ?? []) {
+    for (const pattern of patterns) for (const locale of [...new Set([...settings.locales, ...nextSettings.locales])]) {
       if (typeof pattern === "string" && typeof locale === "string") allowed.add(resolveResourcePath(input.projectPath, pattern.replace(/\{(?:locale|languageTag)\}/g, locale)));
     }
   }

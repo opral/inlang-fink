@@ -25,6 +25,9 @@ importers:
       '@inlang/sdk':
         specifier: 3.1.0
         version: 3.1.0
+      '@inlang/settings-component':
+        specifier: 5.0.0
+        version: 5.0.0(@inlang/sdk@3.1.0)(@types/react@19.3.0)
       '@lit/react':
         specifier: ^1.0.8
         version: 1.0.8(@types/react@19.3.0)
@@ -609,6 +612,11 @@ packages:
   '@inlang/sdk@3.1.0':
     resolution: {integrity: sha512-l8LqeyqLfe00cmDvKY7J6YuCkfWVfgzaNWlB8IAHxWOWqkUAwyG4AhuMYUiBbeA0wM6zdVphPCG2lay/OzTdFg==}
     engines: {node: '>=20.0.0'}
+
+  '@inlang/settings-component@5.0.0':
+    resolution: {integrity: sha512-Kr0FrUFIhoHNU07HiEQk3z7gSBv1XLUrmKVagX7EcRb0nUov5BTXbcCl4GJQuErN9JAcKasUJwsK9Rr3RZJoWg==}
+    peerDependencies:
+      '@inlang/sdk': '*'
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1967,6 +1975,17 @@ snapshots:
       '@sinclair/typebox': 0.31.30
       kysely: 0.28.17
       uuid: 14.0.2
+
+  '@inlang/settings-component@5.0.0(@inlang/sdk@3.1.0)(@types/react@19.3.0)':
+    dependencies:
+      '@inlang/sdk': 3.1.0
+      '@lit/task': 1.0.3
+      '@shoelace-style/shoelace': 2.14.0(@types/react@19.3.0)
+      '@sinclair/typebox': 0.31.28
+      chroma-js: 2.6.0
+      lit: 3.3.3
+    transitivePeerDependencies:
+      - '@types/react'
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
