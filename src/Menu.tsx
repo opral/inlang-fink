@@ -13,9 +13,9 @@ export function Dropdown({ label, title, className, panelClassName, align = "sta
     document.addEventListener("pointerdown", pointer); document.addEventListener("keydown", key);
     return () => { document.removeEventListener("pointerdown", pointer); document.removeEventListener("keydown", key); };
   }, [open]);
-  return <div className="dropdown" ref={root}>
-    <button ref={trigger} type="button" className={className} title={title} aria-haspopup="true" aria-expanded={open} onClick={() => { if (!open) onOpen?.(); setOpen(!open); }}>{label}</button>
-    {open && <div className={`dropdown-panel ${align === "end" ? "align-end" : ""} ${panelClassName ?? ""}`}>{children(close)}</div>}
+  return <div className="dropdown" ref={root} onBlur={event => { if (open && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}>
+    <button ref={trigger} type="button" className={className} title={title} aria-expanded={open} onClick={() => { if (!open) onOpen?.(); setOpen(!open); }}>{label}</button>
+    {open && <div tabIndex={-1} className={`dropdown-panel ${align === "end" ? "align-end" : ""} ${panelClassName ?? ""}`}>{children(close)}</div>}
   </div>;
 }
 

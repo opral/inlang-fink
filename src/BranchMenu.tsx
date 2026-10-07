@@ -12,9 +12,9 @@ export function BranchMenu({ branch, loadBranches, switchBranch, disabled }: { b
     {close => <>
       <div className="dropdown-heading">Switch branch</div>
       <input className="branch-filter" aria-label="Find a branch" placeholder="Find a branch…" value={filter} onChange={event => setFilter(event.target.value)} autoFocus />
-      <div className="branch-list" role="menu" aria-label="Branches">
+      <div className="branch-list" role="group" aria-label="Branches">
         {error ? <p className="dropdown-empty">{error}</p> : !branches ? <p className="dropdown-empty">Loading branches…</p> : !shown.length ? <p className="dropdown-empty">No branch matches.</p> : shown.slice(0, 100).map(name =>
-          <button key={name} role="menuitemradio" aria-checked={name === branch} className="menu-item" disabled={disabled} onClick={() => { close(); if (name !== branch) switchBranch(name); }}>
+          <button key={name} title={name} aria-current={name === branch ? "true" : undefined} className="menu-item" disabled={disabled} onClick={() => { close(); if (name !== branch) switchBranch(name); }}>
             <span className="menu-check">{name === branch && <CheckIcon />}</span><span className="branch-name">{name}</span>
           </button>)}
       </div>

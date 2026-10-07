@@ -17,7 +17,7 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
       <form className="repo-cta" onSubmit={onSubmit}>
         <label className="visually-hidden" htmlFor="repository-url">GitHub repository</label>
         <GitHubIcon size={20} />
-        <input id="repository-url" value={url} onChange={event => setUrl(event.target.value)} placeholder="Paste your repository URL, e.g. github.com/owner/repo" autoComplete="off" spellCheck={false} required />
+        <input id="repository-url" value={url} onChange={event => setUrl(event.target.value)} placeholder="Paste a repository URL, e.g. github.com/owner/repo" inputMode="url" autoCapitalize="off" autoComplete="off" spellCheck={false} required />
         <button className="primary" disabled={busy}>Open</button>
       </form>
       {picker && <div className="project-picker" role="group" aria-label="Choose a project">
@@ -51,11 +51,11 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
       <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No setup and no lock-in. Your repository stays the source of truth.</p></div></header>
       <ol className="steps">
         <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next and inlang message format.</p>
-          <div className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
+          <div aria-hidden="true" className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
         <li><span className="step-number">2</span><h3>Translate side by side</h3><p>Every locale of a message in one place, including variables, selectors and plurals. Filter for missing translations.</p>
-          <div className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>
+          <div aria-hidden="true" className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>
         <li><span className="step-number">3</span><h3>Review and push</h3><p>See a before/after diff of every change, write a commit message, and push straight to your branch.</p>
-          <div className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Commit and push</span></div></div></li>
+          <div aria-hidden="true" className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Commit and push</span></div></div></li>
       </ol>
     </section>
 

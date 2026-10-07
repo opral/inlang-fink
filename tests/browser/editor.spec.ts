@@ -79,7 +79,7 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from Fink", { timeout: 60_000 });
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
   const requestsBeforeReview = await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests);
-  await page.getByRole("button", { name: "Review changes" }).click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="before"]')).toContainText("Hello");
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("Hello from Fink");
   await expect(page.locator('[data-diff-message="items"]')).toContainText("A single item");
@@ -90,9 +90,11 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-pattern-editor').first()).toContainText("One item");
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-pattern-editor').first()).toContainText("A single item");
   expect(await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests)).toBe(requestsBeforeReview);
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
   await page.getByRole("button", { name: "Commit and push to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/en.json"]);
+  expect(payload.message).toBe("Update hello and items");
   expect(payload.head).toBe("a".repeat(40));
   expect(JSON.parse(payload.files["messages/en.json"]).hello).toBe("Hello from Fink");
   const item = JSON.parse(payload.files["messages/en.json"]).items[0];
@@ -120,7 +122,7 @@ test("creates plural variants for a missing translation using the published sele
   await dialog.getByRole("button", { name: "Add selector", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(german.locator("inlang-variant")).toHaveCount(3);
-  await page.getByRole("button", { name: "Review changes" }).click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-message')).toHaveCount(2);
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-message')).toHaveCount(1);
   await expect(page.locator('[data-diff-message="items"] .highlight-selector-green')).toHaveCount(1);
@@ -146,6 +148,12 @@ test("opens the selected showcase directly and pages large catalogs without losi
   await expect(page.locator("[data-bundle]")).toHaveCount(1);
   await page.getByLabel("Search messages", { exact: true }).fill("demo00");
   await expect(page.locator('[data-bundle="demo00"]')).toBeVisible();
+  await expect(page.locator("[data-bundle]")).toHaveCount(1);
+  // Every term must match; matches in message text are highlighted.
+  await page.getByLabel("Search messages", { exact: true }).fill("25 message");
+  await expect(page.locator('[data-bundle="demo25"]')).toBeVisible();
+  await expect(page.locator("[data-bundle]")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => CSS.highlights.get("fink-search")?.size ?? 0)).toBe(2);
 });
 
 test("offers typed plural matches, preserves custom text, and rejects invalid categories", async ({ page }) => {
@@ -237,9 +245,11 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await expect(page.locator('[data-settings-side="after"]').first()).toContainText("de");
   await expect(page.locator('[data-settings-side="after"]').nth(1)).toContainText("en, de, fr");
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
   await page.getByRole("button", { name: "Commit and push to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["project.inlang/settings.json"]);
+  expect(payload.message).toBe("Update project settings");
   expect(JSON.parse(payload.files["project.inlang/settings.json"])).toEqual({ ...settings, baseLocale: "de", locales: ["en", "de", "fr"], experimental: { exampleFeature: true } });
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("0");
@@ -255,13 +265,13 @@ test("branch menu keeps a separate draft per branch and history marks the draft 
   await pattern.fill("Hello from main"); await pattern.press("Tab");
   await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("1 change on main");
   await page.getByRole("button", { name: "main", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "translations" }).click();
+  await page.getByRole("group", { name: "Branches" }).getByRole("button", { name: "translations" }).click();
   await expect(page).toHaveURL(/branch=translations/, { timeout: 90_000 });
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello", { timeout: 90_000 });
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).not.toContainText("from main");
   await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
   await page.getByRole("button", { name: "translations", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "main" }).click();
+  await page.getByRole("group", { name: "Branches" }).getByRole("button", { name: "main" }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from main", { timeout: 90_000 });
   await page.getByRole("button", { name: "History", exact: true }).click();
   await expect(page.getByText("Add German copy")).toBeVisible();

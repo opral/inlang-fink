@@ -10,12 +10,14 @@ import { Editor } from "./Editor";
 import { Landing } from "./Landing";
 import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
-import { Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
+import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcases";
+import { highlightMatches, searchTerms, searchText } from "./search";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { preparePush, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, repoQuery, type Repo, type RepoTree } from "./repository";
 
+const DEFAULT_MESSAGE = "Update translations with Fink";
 export default function App() {
   const [url, setUrl] = useState(() => new URLSearchParams(location.search).get("repo") ?? "");
   const [repo, setRepo] = useState<Repo>();
@@ -25,6 +27,7 @@ export default function App() {
   const [path, setPath] = useState(() => new URLSearchParams(location.search).get("project") ?? "");
   const [local, setLocal] = useState<LocalProject>();
   const [bundles, setBundles] = useState<BundleNested[]>([]);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [missing, setMissing] = useState(false);
   const [page, setPage] = useState(0);
@@ -34,8 +37,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reviewState, setReviewState] = useState<{ ids: string[]; bundles: BundleNested[]; settings?: SettingsChange }>();
-  const [message, setMessage] = useState("Update translations with Fink");
-  const [description, setDescription] = useState("");
+  const [message, setMessage] = useState(DEFAULT_MESSAGE);
+  const [projects, setProjects] = useState<string[]>([]);
+  const [initializing, setInitializing] = useState(() => { const params = new URLSearchParams(location.search); return !!params.get("repo") && !!params.get("project"); });
+  const messageTouched = useRef(false);
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
   const [newId, setNewId] = useState("");
   const [view, setView] = useState<"edit" | "settings" | "history">("edit");
@@ -49,12 +54,14 @@ export default function App() {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const localRef = useRef<LocalProject | undefined>(undefined);
   const failure = useRef(false);
+  const loading = useRef(false);
   const pending = useRef(0);
   const bundleIndex = useRef(new Map<string, BundleNested>());
   const owners = useRef(new Map<string, string>());
   const baseline = useRef<Record<string, string>>({});
   const dirty = useRef(new Set<string>());
   const searchIndex = useRef(new WeakMap<BundleNested, string>());
+  const table = useRef<HTMLDivElement>(null);
   const branchCache = useRef(new Map<string, Promise<string[]>>());
   const indexBundle = useCallback((id: string, bundle?: BundleNested) => {
     const previous = bundleIndex.current.get(id);
@@ -105,6 +112,7 @@ export default function App() {
       } catch (error) { report(error); }
       const params = new URLSearchParams(location.search);
       const repository = params.get("repo"), project = params.get("project");
+      setInitializing(false);
       if (repository && project) void openLocation(repository, params.get("branch") ?? "", project);
     })();
     return () => { void queue.current.then(() => localRef.current?.close()).catch(report); };
@@ -114,6 +122,8 @@ export default function App() {
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   useEffect(() => setPage(0), [search, missing, selectedLocales]);
+  // Filtering re-renders up to 25 editor web components; wait until typing pauses.
+  useEffect(() => { const timer = setTimeout(() => setSearch(searchInput.trim()), 150); return () => clearTimeout(timer); }, [searchInput]);
   const enqueue = useCallback((task: () => Promise<void>) => {
     pending.current++;
     setSaving(true);
@@ -140,12 +150,22 @@ export default function App() {
     await queue.current;
     if (failure.current) throw new Error("Resolve the failed save before switching projects. Your current draft remains open.");
     if (!nextTree.projects.includes(projectPath)) throw new Error("This project does not exist on the selected branch.");
-    setReviewState(undefined);
-    if (localRef.current) { await localRef.current.close(); localRef.current = undefined; setLocal(undefined); setBundles([]); }
-    const next = await openRepositoryProject(repository, nextTree, projectPath, setProgress);
-    localRef.current = next; await refresh(next); setLocal(next);
+    if (loading.current) throw new Error("Another project is still opening.");
+    loading.current = true;
+    try {
+      const previous = localRef.current;
+      // Different projects use different OPFS databases, so open the next one first:
+      // the current editor stays on screen (inert while busy) and survives a failed open.
+      const same = previous && previous.context.owner === repository.owner && previous.context.name === repository.name && previous.context.branch === nextTree.branch && previous.context.projectPath === projectPath;
+      if (previous && same) { localRef.current = undefined; setLocal(undefined); setBundles([]); await previous.close(); }
+      const next = await openRepositoryProject(repository, nextTree, projectPath, setProgress);
+      if (previous && !same) { localRef.current = undefined; await previous.close(); }
+      localRef.current = next; await refresh(next); setLocal(next);
+    } finally { loading.current = false; }
+    const next = localRef.current!;
     await navigator.storage.persist();
-    setPage(0); setView("edit"); setReviewState(undefined); setSelectedLocales([]); setTree(undefined);
+    setPage(0); setView("edit"); setReviewState(undefined); setSelectedLocales([]); setTree(undefined); setProjects(nextTree.projects);
+    setSearchInput(""); setSearch(""); setMissing(false); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
     if (next.context.head !== nextTree.head) setNotice("Restored your local draft. The remote branch has advanced; pushing will ask you to reconcile first.");
@@ -158,7 +178,7 @@ export default function App() {
   const openLocation = (repositoryUrl: string, branchName: string, projectPath: string) => run(async () => {
     const repository = { ...parseRepository(repositoryUrl), branch: branchName || undefined };
     const nextTree = await api<RepoTree>(`github/tree?${repoQuery(repository)}`);
-    setUrl(repositoryUrl); setRepo(repository); setBranch(nextTree.branch); setPath(projectPath);
+    setUrl(repositoryUrl); setRepo(repository); setBranch(nextTree.branch); setPath(projectPath); setTree(undefined);
     await loadProject(repository, nextTree, projectPath, repositoryUrl);
   });
   const openShowcase = (showcase: Showcase) => void openLocation(`https://github.com/${showcase.repository}`, showcase.branch, showcase.projectPath);
@@ -171,12 +191,15 @@ export default function App() {
     if (!nextTree.projects.includes(current.context.projectPath)) throw new Error(`${current.context.projectPath} does not exist on ${name}. Your draft on ${current.context.branch} is unchanged.`);
     setBranch(nextTree.branch);
     await loadProject(repository, nextTree, current.context.projectPath, `https://github.com/${repository.owner}/${repository.name}`);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".branch-trigger")?.focus());
   });
   const goHome = () => void run(async () => {
+    if (loading.current) return;
     await queue.current;
     if (failure.current) throw new Error("Resolve the failed save before closing the project. Your current draft remains open.");
     const current = localRef.current;
     localRef.current = undefined; setLocal(undefined); setBundles([]); setReviewState(undefined); setTree(undefined); setView("edit");
+    setRepo(undefined); setBranch(""); setPath(""); setProjects([]);
     await current?.close();
     setRecent(readRecent()); history.replaceState(null, "", "/");
   });
@@ -270,29 +293,45 @@ export default function App() {
     } catch (error) { report(error); }
   };
   const publish = () => run(async () => {
-    if (!local || (!reviewState || (!reviewState.ids.length && !reviewState.settings))) return;
+    if (!local || (!dirty.current.size && !settingsChanges(local))) return;
     await queue.current;
     if (failure.current) throw new Error("A local save failed. Reload the page before pushing.");
     setProgress("Preparing files for GitHub…");
     const { files, resources } = await preparePush(local);
     if (!Object.keys(files).length) { setNotice("No resource changes to push."); return; }
     setProgress("Pushing changes…");
-    const commitMessage = description.trim() ? `${message.trim()}\n\n${description.trim()}` : message.trim();
-    const result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: local.context.owner, repo: local.context.name, branch: local.context.branch, projectPath: local.context.projectPath, head: local.context.head, files, message: commitMessage });
+    const result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: local.context.owner, repo: local.context.name, branch: local.context.branch, projectPath: local.context.projectPath, head: local.context.head, files, message: message.trim() });
     local.context.head = result.head; local.context.tree = result.tree;
     Object.assign(local.context.original, files); local.context.baseline = resources;
     local.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
     baseline.current = local.context.bundleBaseline; dirty.current.clear();
-    await saveContext(local); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); setDescription(""); setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
+    await saveContext(local); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); messageTouched.current = false; setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
   });
+  // Pre-fill the commit message from what changed, until the user edits it.
+  const suggestMessage = () => {
+    if (!local || messageTouched.current) return;
+    const ids = [...dirty.current], settings = !!settingsChanges(local);
+    const messages = ids.length === 0 ? "" : ids.length <= 2 ? ids.join(" and ") : `${ids.length} messages`;
+    setMessage(messages && settings ? `Update ${messages} and project settings` : messages ? `Update ${messages}` : settings ? "Update project settings" : DEFAULT_MESSAGE);
+  };
+  const terms = useMemo(() => searchTerms(search), [search]);
   const visible = useMemo(() => bundles.filter(bundle => {
-    if (search) {
+    if (terms.length) {
       let text = searchIndex.current.get(bundle);
-      if (text === undefined) { text = JSON.stringify(bundle).toLowerCase(); searchIndex.current.set(bundle, text); }
-      if (!text.includes(search.toLowerCase())) return false;
+      if (text === undefined) { text = searchText(bundle); searchIndex.current.set(bundle, text); }
+      if (!terms.every(term => text.includes(term))) return false;
     }
     return !missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale));
-  }), [bundles, search, missing, local]);
+  }), [bundles, terms, missing, local]);
+  useEffect(() => {
+    const root = table.current;
+    highlightMatches(root, terms);
+    if (!root || !terms.length) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => highlightMatches(root, terms)); });
+    observer.observe(root, { subtree: true, childList: true, characterData: true });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); highlightMatches(null, []); };
+  }, [terms, visible, page, view, reviewState, local]);
   const totalPages = Math.max(1, Math.ceil(visible.length / 25));
   const currentPage = Math.min(page, totalPages - 1);
   const download = () => void run(async () => {
@@ -311,19 +350,10 @@ export default function App() {
   const signIn = <a className="button" href="/api/auth/login" onClick={() => { try { sessionStorage.setItem("fink:return", location.search); } catch { /* optional */ } }}><GitHubIcon /> Sign in with GitHub</a>;
   const hasChanges = !!reviewState && (!!reviewState.ids.length || !!reviewState.settings);
   const reviewPanel = reviewState && context && <section className="review-page" aria-labelledby="changes-title">
-    <header className="page-header"><div><h2 id="changes-title">Changes <span className={pendingCount ? "badge changed" : "badge"}>{pendingCount}</span></h2><p>Your local draft compared with <span className="inline-branch"><BranchIcon />{context.branch}</span> at {commitLink}</p></div><button onClick={showEditor}>Back to editor</button></header>
+    <header className="page-header"><div><h2 id="changes-title">Changes {pendingCount > 0 && <span className="badge changed">{pendingCount}</span>}</h2><p>Your local draft compared with <span className="inline-branch"><BranchIcon />{context.branch}</span> at {commitLink}</p></div></header>
     {reviewState.ids.length > 0 && <RichDiff baseline={baseline.current} bundles={reviewState.bundles} bundleIds={reviewState.ids} settings={context.settings} />}
     {reviewState.settings && <SettingsDiff change={reviewState.settings} />}
-    {hasChanges ? <form className="commit-box" aria-labelledby="commit-title" onSubmit={event => { event.preventDefault(); void publish(); }}>
-      <h3 id="commit-title">Commit your changes</h3>
-      <label>Commit message<input value={message} maxLength={200} onChange={event => setMessage(event.target.value)} required /></label>
-      <label><span className="label-row">Description <span className="optional">optional</span></span><textarea value={description} maxLength={700} rows={3} placeholder="Explain why these translations changed" onChange={event => setDescription(event.target.value)} /></label>
-      <div className="commit-footer">
-        <span className="commit-target"><RepoIcon />{context.owner}/{context.name}<BranchIcon />{context.branch}</span>
-        {user ? <button className="commit" disabled={busy || !message.trim()}>Commit and push to {context.branch}</button> : signIn}
-      </div>
-      {!user && <p className="commit-hint">Sign in with GitHub to push. Your draft stays saved in this browser.</p>}
-    </form> : <div className="empty-state"><h3>No changes to push.</h3><p>Edit a translation or the project settings, and the diff shows up here.</p><button onClick={showEditor}>Back to editor</button></div>}
+    {!hasChanges && <div className="empty-state"><h3>No changes to push.</h3><p>Edit a translation or the project settings, and the diff shows up here.</p><button className="primary" onClick={showEditor}>Back to editor</button></div>}
   </section>;
   const others = recent.filter(project => !context || recentKey(project) !== recentKey(context)).slice(0, 5);
   const account = <div className="account">
@@ -339,15 +369,16 @@ export default function App() {
         {context ? <div className="project-identity">
           <Dropdown className="brand" title="Fink menu" label={<><img src="/🐦.png" alt="" width="20" height="20" />Fink<Chevron /></>}>
             {close => <>
-              <button className="menu-item" onClick={() => { close(); goHome(); }}>Open another repository…</button>
-              {others.length > 0 && <><div className="dropdown-heading">Recent projects</div>{others.map(project => <button key={recentKey(project)} className="menu-item" disabled={busy} onClick={() => { close(); openRecent(project); }}><span className="menu-text">{project.owner}/{project.name}</span><span className="menu-hint">{project.branch}</span></button>)}</>}
+              <button className="menu-item" disabled={busy || saving} onClick={() => { close(); goHome(); }}><RepoIcon />Open another repository…</button>
+              {projects.length > 1 && <><div className="dropdown-heading">Projects in this repository</div>{projects.map(project => <button key={project} className="menu-item" aria-current={project === context.projectPath ? "true" : undefined} disabled={busy || saving || project === context.projectPath} onClick={() => { close(); void openLocation(repositoryUrl!, context.branch, project); }}><span className="menu-check">{project === context.projectPath && <CheckIcon />}</span><span className="menu-text">{project}</span></button>)}</>}
+              {others.length > 0 && <><div className="dropdown-heading">Recent projects</div>{others.map(project => <button key={recentKey(project)} className="menu-item" disabled={busy || saving} onClick={() => { close(); openRecent(project); }}><img className="menu-avatar" src={`https://github.com/${project.owner}.png?size=32`} alt="" width="16" height="16" referrerPolicy="no-referrer" /><span className="menu-text">{project.owner}/{project.name}</span><span className="menu-hint">{project.branch}</span></button>)}</>}
               <hr />
               <button className="menu-item" disabled={busy || saving} onClick={() => { close(); download(); }}><DownloadIcon />Download project</button>
               <a className="menu-item" href={repositoryUrl} target="_blank" rel="noreferrer"><GitHubIcon />View on GitHub</a>
             </>}
           </Dropdown>
           <span className="separator" aria-hidden="true">/</span>
-          <a className="repo-link" href={repositoryUrl} target="_blank" rel="noreferrer" title={`${context.owner}/${context.name} · ${context.projectPath}`}><span className="repo-owner">{context.owner}/</span><strong>{context.name}</strong></a>
+          <a className="repo-link" href={repositoryUrl} target="_blank" rel="noreferrer" aria-label={`${context.owner}/${context.name} on GitHub`} title={`${context.owner}/${context.name} · ${context.projectPath}`}><span className="repo-owner">{context.owner}/</span><strong>{context.name}</strong></a>
           {context.projectPath !== "project.inlang" && <span className="project-path" title={context.projectPath}>{context.projectPath}</span>}
           <span className="separator" aria-hidden="true">/</span>
           <BranchMenu branch={context.branch} loadBranches={() => loadBranches(context)} switchBranch={switchBranch} disabled={busy || saving} />
@@ -363,23 +394,25 @@ export default function App() {
       </nav>}
     </div></header>
     <main className={context ? "workspace" : "welcome"}>
+      {context && <h1 className="visually-hidden">{context.owner}/{context.name} · {reviewState ? "Changes" : view === "history" ? "History" : view === "settings" ? "Settings" : "Edit"}</h1>}
       {context && error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
       {context && notice && <p role="status" className="notice">{notice}</p>}
       {busy && <p role="status" className="loading-status"><span className="spinner" aria-hidden="true" />{progress || "Working…"}</p>}
-      {!context && <Landing url={url} setUrl={value => { setUrl(value); setRepo(undefined); setTree(undefined); setBranch(""); }} submit={() => void discover()} busy={busy}
+      {!context && <Landing url={url} setUrl={value => { setUrl(value); setRepo(undefined); setTree(undefined); setBranch(""); }} submit={() => void discover()} busy={busy || initializing}
         picker={tree && { tree, branches, branch, path, setBranch, setPath, open: () => void open() }}
         recent={recent} openRecent={openRecent} forget={project => setRecent(forgetRecent(project))} openShowcase={openShowcase}
         status={<>{error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{notice && <p role="status" className="notice">{notice}</p>}</>} />}
       {context && <>
         {reviewPanel || (view === "history" ? <History context={context} pending={pendingCount} review={() => void review()} /> : view === "settings" ? <section className="settings-page"><header className="page-header"><div><h2>Project settings</h2><p className="settings-context"><a href={repositoryUrl} target="_blank" rel="noreferrer">{context.owner}/{context.name}</a> · {context.projectPath} · <span className="inline-branch"><BranchIcon />{context.branch}</span></p></div><button onClick={download} disabled={busy || saving}><DownloadIcon />Download project</button></header><div className="settings-form" inert={busy || saving}><Settings settings={context.settings} revision={settingsRevision} save={saveSettings} /></div></section> : <>
-        <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={context.settings.locales} baseLocale={context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" type="search" aria-label="Search messages" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search…" /></div>
+        <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={context.settings.locales} baseLocale={context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" type="search" aria-label="Search messages" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search…" /></div>
         <div className="table-header"><span>{visible.length} {visible.length === 1 ? "Bundle" : "Bundles"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
+        <div className="message-table" ref={table} inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}
-        {!reviewState && <LixFloat count={pendingCount} branch={context.branch} saving={saving} review={() => void review()} disabled={busy || saving} />}
+        <LixFloat count={pendingCount} branch={context.branch} saving={saving} busy={busy} reviewing={!!reviewState} review={() => void review()} edit={showEditor}
+          message={message} setMessage={value => { messageTouched.current = true; setMessage(value); }} suggest={suggestMessage} commit={() => void publish()} signIn={user ? undefined : signIn} />
       </>}
     </main>
     <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source</span><span className="footer-links"><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
