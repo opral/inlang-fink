@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import SlDetails from "@shoelace-style/shoelace/dist/react/details/index.js";
 import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
 import SingleDiffBundle from "./SingleDiffBundle";
-import { bundleSignature } from "./project";
 import "./richDiff.css";
 
 export function baselineBundle(id: string, signature?: string, current?: BundleNested): BundleNested | undefined {
@@ -31,14 +30,11 @@ export function baselineBundle(id: string, signature?: string, current?: BundleN
   }) };
 }
 
-export function RichDiff({ baseline, bundles, settings }: { baseline: Record<string, string>; bundles: BundleNested[]; settings: ProjectSettings }) {
+export function RichDiff({ baseline, bundles, bundleIds, settings }: { baseline: Record<string, string>; bundles: BundleNested[]; bundleIds: string[]; settings: ProjectSettings }) {
   const pairs = useMemo(() => {
     const current = new Map(bundles.map(bundle => [bundle.id, bundle]));
-    return [...new Set([...Object.keys(baseline), ...current.keys()])].filter(id => {
-      const bundle = current.get(id);
-      return (bundle ? bundleSignature(bundle) : undefined) !== baseline[id];
-    }).map(id => ({ id, before: baselineBundle(id, baseline[id], current.get(id)), after: current.get(id) }));
-  }, [baseline, bundles]);
+    return bundleIds.map(id => ({ id, before: baselineBundle(id, baseline[id], current.get(id)), after: current.get(id) }));
+  }, [baseline, bundles, bundleIds]);
   return <div className="rich-diff">{pairs.map(pair => <DiffBundleView key={pair.id} {...pair} settings={settings} />)}</div>;
 }
 

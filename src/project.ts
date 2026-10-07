@@ -130,11 +130,11 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
   }
   return files;
 }
-export async function exportChanges(local: LocalProject): Promise<Record<string, string>> {
+export async function preparePush(local: LocalProject): Promise<{ files: Record<string, string>; resources: Record<string, string> }> {
   const changes: Record<string, string> = {};
   const resources = await exportResources(local);
   for (const [path, content] of Object.entries(resources)) {
     if (content !== local.context.baseline[path]) changes[path] = content;
   }
-  return changes;
+  return { files: changes, resources };
 }

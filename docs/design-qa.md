@@ -5,10 +5,10 @@ The language dropdown, editor update path, and changes review were audited indep
 ## Findings and fixes
 
 - The custom checkbox popup did not match the v2 controls. Restored the v2 Shoelace multi-select, with a compact trigger, attached positioning, bounded scrolling, reference-language badge, keyboard navigation, Escape, clear selection, and outside-click dismissal.
-- Every edit previously read the entire nested catalog, recreated all visible Lit editor properties, and scheduled a full plugin export to count changed files. Edits now reread one affected bundle, preserve the other editor objects and properties, and compare semantic baseline signatures in memory. Full resource exports run when reviewing or pushing changes.
+- Every edit previously read the entire nested catalog, recreated all visible Lit editor properties, and scheduled a full plugin export to count changed files. Edits now reread one affected bundle, preserve the other editor objects and properties, and compare semantic baseline signatures in memory. Opening review uses only the already-loaded changed bundles and persisted baselines; it sends no SDK worker queries or exports. A single full resource export runs when pushing to serialize GitHub files, and its result becomes the new baseline after success.
 - Review restores `DiffBundleView` and `SingleDiffBundle` from `opral/inlang/packages/fink`, using the same rich editor components on both sides. SDK v3 saved semantic baselines replace the original prototype’s legacy change-table queries. Variables, selector chips, match conditions, and patterns retain their native UI, changed patterns use the original red/green highlights, and unchanged variants are dimmed. Added/deleted bundles and locales appear on their corresponding side. The prior file/field/JSON diff replacement has been removed.
 
-The counter represents changed bundles. The push button separately reports the number of changed files. Reverting a bundle to its baseline clears its pending change.
+The counter represents changed bundles. The push button submits the reviewed changes; only changed files are sent to GitHub. Reverting a bundle to its baseline clears its pending change.
 
 ## Storage and measurements
 
@@ -29,7 +29,7 @@ Semantic baselines persist with the project. Existing drafts missing this metada
 
 ## Verification
 
-- Production bundle: plain edits, plural creation, OPFS reload, semantic changed counters and reverts, unchanged editor properties, download, before/after review, and pushing only edited files.
+- Production bundle: plain edits, plural creation, OPFS reload, semantic changed counters and reverts, unchanged editor properties, download, before/after review without any SDK worker requests, and pushing only edited files.
 - Legacy draft upgrade with actual production SDK/OPFS: plain and plural edits preserved, baselines recovered exactly, revert cleared changes, and subsequent reopen reused stored signatures.
 - Realistic 27-language dropdown: last option can be scrolled into view and selected; keyboard, Escape, outside click, and clear selection checked.
 - Desktop and 390-pixel mobile: attached dropdown, readable diff, stacked mobile before/after columns, and no horizontal overflow.

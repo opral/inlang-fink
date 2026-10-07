@@ -22,6 +22,16 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   const errors: string[] = [];
   page.on("pageerror", error => { errors.push(error.message); console.log("PAGE ERROR", error.message); });
   page.on("console", message => { if (message.type() === "error") console.log("CONSOLE", message.text()); });
+  await page.addInitScript(() => {
+    const counters = window as typeof window & { sdkWorkerRequests: number };
+    counters.sdkWorkerRequests = 0;
+    Worker.prototype.postMessage = new Proxy(Worker.prototype.postMessage, {
+      apply(target, worker, args) {
+        counters.sdkWorkerRequests++;
+        return Reflect.apply(target, worker, args);
+      },
+    });
+  });
   await stubApi(page);
   await page.goto("/");
   await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
@@ -67,6 +77,7 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await page.getByRole("button", { name: "Open project" }).click();
   await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello from Fink", { timeout: 60_000 });
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
+  const requestsBeforeReview = await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests);
   await page.getByRole("button", { name: "Review and push" }).click();
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="before"]')).toContainText("Hello");
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("Hello from Fink");
@@ -77,7 +88,8 @@ test("production bundle loads plurals, edits, persists to OPFS, and pushes only 
   await expect(page.locator('[data-diff-message="items"] .highlight-green').first()).toContainText("A single item");
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="before"] inlang-pattern-editor').first()).toContainText("One item");
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-pattern-editor').first()).toContainText("A single item");
-  await page.getByRole("button", { name: "Push 1 file to main" }).click();
+  expect(await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests)).toBe(requestsBeforeReview);
+  await page.getByRole("button", { name: "Push changes to main" }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/en.json"]);
   expect(payload.head).toBe("a".repeat(40));
