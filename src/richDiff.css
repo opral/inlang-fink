@@ -26,3 +26,5 @@
 .highlighted-bundle .highlight-selector-green::part(selector),
 .highlighted-bundle.highlight-variables-green::part(variable) { background-color: #b2f4d4 !important; border: 1px solid #16a34b !important; }
 @media (max-width: 760px) { .rich-diff-columns { grid-template-columns: minmax(0, 1fr); } .rich-diff-bundle { padding: 12px; } }
+
+.highlighted-bundle inlang-variant::part(match-options) { display: none; }

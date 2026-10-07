@@ -4,7 +4,7 @@ A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository
 
 ## Architecture
 
-The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed bundles; review restores the prototype’s rich side-by-side bundle, message, variable, selector, and variant UI. Changed patterns are highlighted and unchanged variants are dimmed. Downloading exports a Lix snapshot.
+The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed bundles; review restores the prototype’s rich side-by-side bundle, message, variable, selector, and variant UI. Changed patterns are highlighted and unchanged variants are dimmed. Downloading exports a Lix snapshot. Selectors show their resolver type and offer locale-aware plural categories with examples, plus custom text matches. See [selector match guidance](docs/selector-matches.md).
 
 Edits update one bundle and compare persisted semantic baselines in memory; unchanged editors retain their properties. Review opens directly from the changed bundles already loaded from Lix, with no worker queries or file exports. A single full catalog export runs when pushing to serialize GitHub files. See [design and performance QA](docs/design-qa.md) for measurements and verification.
 

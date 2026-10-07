@@ -1,0 +1,830 @@
+diff --git a/dist/helper/selectorMatches.d.ts b/dist/helper/selectorMatches.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..207097219970ba3379228aecf52edc2d5de1cf3e
+--- /dev/null
++++ b/dist/helper/selectorMatches.d.ts
+@@ -0,0 +1,13 @@
++import type { Declaration, Variant } from "@inlang/sdk";
++export type MatchSuggestion = {
++    value: string;
++    description: string;
++};
++export type SelectorMatches = {
++    label: string;
++    suggestions: MatchSuggestion[];
++    /** A known plural resolver has a finite result set; untyped inputs do not. */
++    allowed?: string[];
++};
++/** Derive suggestions from declarations, never from a variable's spelling. */
++export declare function selectorMatches(name: string, declarations: Declaration[], locale: string, variants: Variant[]): SelectorMatches;
+diff --git a/dist/helper/selectorMatches.js b/dist/helper/selectorMatches.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f934022974bed7d0023893b6458d71206a9a05f
+--- /dev/null
++++ b/dist/helper/selectorMatches.js
+@@ -0,0 +1,64 @@
++const pluralCache = new Map();
++const categories = ["zero", "one", "two", "few", "many", "other"];
++const fallback = { value: "*", description: "Fallback · matches any remaining value" };
++/** Derive suggestions from declarations, never from a variable's spelling. */
++export function selectorMatches(name, declarations, locale, variants) {
++    const seen = new Set();
++    function annotation(variable) {
++        if (seen.has(variable))
++            return;
++        seen.add(variable);
++        const declaration = declarations.find(value => value.name === variable);
++        if (!declaration)
++            return;
++        if (declaration.type === "input-variable")
++            return declaration.annotation;
++        return declaration.value.annotation ?? (declaration.value.arg.type === "variable-reference" ? annotation(declaration.value.arg.name) : undefined);
++    }
++    const resolver = annotation(name);
++    if (resolver?.name === "plural") {
++        const cacheKey = JSON.stringify([locale, resolver.options]);
++        const cached = pluralCache.get(cacheKey);
++        if (cached)
++            return cached;
++        const option = resolver.options.find(value => value.name === "type");
++        let knownType = !option || option.value.type === "literal" && ["cardinal", "ordinal"].includes(option.value.value);
++        const type = option?.value.type === "literal" && option.value.value === "ordinal" ? "ordinal" : "cardinal";
++        const ruleOptions = { type };
++        const numericOptions = ["minimumIntegerDigits", "minimumFractionDigits", "maximumFractionDigits", "minimumSignificantDigits", "maximumSignificantDigits"];
++        for (const option of resolver.options.filter(value => value.name !== "type")) {
++            if (numericOptions.includes(option.name) && option.value.type === "literal" && option.value.value.trim() && Number.isFinite(Number(option.value.value))) {
++                Object.assign(ruleOptions, { [option.name]: Number(option.value.value) });
++            }
++            else
++                knownType = false;
++        }
++        let rules;
++        try {
++            if (knownType && Intl.PluralRules.supportedLocalesOf(locale).length)
++                rules = new Intl.PluralRules(locale, ruleOptions);
++        }
++        catch { /* Unknown locale: offer categories without guessing an English rule. */ }
++        const values = rules ? rules.resolvedOptions().pluralCategories : categories;
++        const samples = new Map();
++        if (rules)
++            for (const number of [...Array.from({ length: 201 }, (_, index) => index), 0.1, 0.2, 1.5, 2.5, 1000, 1000000]) {
++                const category = rules.select(number);
++                const examples = samples.get(category) ?? [];
++                if (examples.length < 3)
++                    examples.push(number);
++                samples.set(category, examples);
++            }
++        const result = {
++            label: rules ? `${type === "ordinal" ? "Ordinal" : "Cardinal"} plural · ${locale}` : "Plural · runtime rules",
++            allowed: rules ? [...values, "*"] : undefined,
++            suggestions: [...values.map(value => ({ value, description: samples.get(value)?.length ? `e.g. ${samples.get(value).join(", ")}` : "Plural category" })), fallback],
++        };
++        if (pluralCache.size >= 128)
++            pluralCache.delete(pluralCache.keys().next().value);
++        pluralCache.set(cacheKey, result);
++        return result;
++    }
++    const existing = [...new Set(variants.flatMap(variant => variant.matches.flatMap(match => match.key === name && match.type === "literal-match" && match.value ? [match.value] : [])))];
++    return { label: resolver ? `${resolver.name} · custom value` : "Text · custom value", suggestions: [...existing.map(value => ({ value, description: "Used in this message" })), fallback] };
++}
+diff --git a/dist/stories/actions/add-selector/inlang-add-selector.d.ts b/dist/stories/actions/add-selector/inlang-add-selector.d.ts
+index 3e6ec2647851e025b10dc0dbe1a628c640b3114b..d5865fbe453266ae5e6a36d8407d42cd5ed00cfd 100644
+--- a/dist/stories/actions/add-selector/inlang-add-selector.d.ts
++++ b/dist/stories/actions/add-selector/inlang-add-selector.d.ts
+@@ -8,6 +8,7 @@ export default class InlangAddSelector extends LitElement {
+     private _variable;
+     private _matchers;
+     private _oldDeclarations;
++    private _matchError;
+     private _getPluralCategories;
+     private _getAvailablevariables;
+     private _handleAddSelector;
+@@ -24,4 +25,3 @@ declare global {
+         "inlang-add-selector": InlangAddSelector;
+     }
+ }
+-//# sourceMappingURL=inlang-add-selector.d.ts.map
+\ No newline at end of file
+diff --git a/dist/stories/actions/add-selector/inlang-add-selector.js b/dist/stories/actions/add-selector/inlang-add-selector.js
+index afc3fc3e288f5d4c935b36dc8f8d3d9dc25ddb4e..384b625d502fd4ee3f24f24fa042fa348209ad29 100644
+--- a/dist/stories/actions/add-selector/inlang-add-selector.js
++++ b/dist/stories/actions/add-selector/inlang-add-selector.js
+@@ -6,9 +6,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
+ };
+ import { LitElement, css, html } from "lit";
+ import { customElement, property, state } from "lit/decorators.js";
++import { selectorMatches } from "../../../helper/selectorMatches.js";
+ import { createChangeEvent } from "../../../helper/event.js";
+ import { baseStyling } from "../../../styling/base.js";
+-import { Declaration, } from "@inlang/sdk";
+ import { v7 } from "uuid";
+ import SlDropdown from "@shoelace-style/shoelace/dist/components/dropdown/dropdown.component.js";
+ import SlSelect from "@shoelace-style/shoelace/dist/components/select/select.component.js";
+@@ -31,19 +31,16 @@ if (!customElements.get("sl-tooltip"))
+ let InlangAddSelector = class InlangAddSelector extends LitElement {
+     constructor() {
+         super(...arguments);
++        this._matchError = "";
+         this._getPluralCategories = () => {
+-            return this.message?.locale
+-                ? [
+-                    ...new Intl.PluralRules(this.message.locale).resolvedOptions()
+-                        .pluralCategories,
+-                    "*",
+-                ]
+-                : undefined;
++            if (!this._variable || !this.message)
++                return;
++            return selectorMatches(this._variable.name, this.bundle.declarations, this.message.locale, this.variants).allowed;
+         };
+         this._getAvailablevariables = () => {
+             const variables = [];
+             for (const declaration of this.bundle.declarations) {
+-                if (!variables.some((d) => d.name === declaration.name)) {
++                if (!variables.some((d) => d.name === declaration.name) && !this.message?.selectors.some(selector => selector.name === declaration.name)) {
+                     variables.push(declaration);
+                 }
+             }
+@@ -51,6 +48,14 @@ let InlangAddSelector = class InlangAddSelector extends LitElement {
+         };
+         this._handleAddSelector = (newMatchers) => {
+             if (this._variable && this.message) {
++                if (this.message.selectors.some(selector => selector.name === this._variable.name))
++                    return;
++                const allowed = this._getPluralCategories();
++                if (allowed && newMatchers.some(value => !allowed.includes(value))) {
++                    this._matchError = `Choose ${allowed.join(", ")}.`;
++                    return;
++                }
++                this._matchError = "";
+                 // get variant matcher
+                 const message = structuredClone(this.message);
+                 const variants = structuredClone(this.variants);
+@@ -296,8 +301,11 @@ let InlangAddSelector = class InlangAddSelector extends LitElement {
+             this._oldDeclarations = this.bundle.declarations;
+             this._variable = this._getAvailablevariables()?.[0];
+         }
+-        if (changedProperties.has("message")) {
+-            //check if message has changed
++        if (changedProperties.has("message") && this.message?.selectors.some(selector => selector.name === this._variable?.name)) {
++            this._variable = this._getAvailablevariables()[0];
++        }
++        if (changedProperties.has("message") || changedProperties.has("_variable")) {
++            this._matchError = "";
+             this._matchers = this._getPluralCategories() || ["*"];
+         }
+     }
+@@ -308,7 +316,7 @@ let InlangAddSelector = class InlangAddSelector extends LitElement {
+     }
+     render() {
+         return html `
+-			<div class="dropdown-container">
++			<div class="dropdown-container">${this._matchError ? html `<p role="alert" style="color: var(--sl-color-danger-600)">${this._matchError}</p>` : undefined}
+ 				${this._variable && this._variable.name.length > 0
+             ? html `<div class="dropdown-item">
+ 					<div class="dropdown-header">
+@@ -351,10 +359,10 @@ let InlangAddSelector = class InlangAddSelector extends LitElement {
+                   </p>
+                 </div>
+               </div>`}
+-					${this._variable && this._variable.type === "local-variable"
++					${this._variable
+             ? html `<div class="options-container">
+                     <div class="dropdown-header">
+-                      <p class="dropdown-title">Match</p>
++                      <p class="dropdown-title">Match · ${selectorMatches(this._variable.name, this.bundle.declarations, this.message.locale, this.variants).label}</p>
+                       <sl-tooltip content="Add a match to this selector">
+                         <sl-button
+                           class="add-input"
+@@ -443,12 +451,7 @@ let InlangAddSelector = class InlangAddSelector extends LitElement {
+ 						<sl-button
+ 							@click=${() => {
+             if (this._matchers) {
+-                if (this._variable?.type === "local-variable") {
+-                    this._handleAddSelector(this._matchers);
+-                }
+-                else {
+-                    this._handleAddSelector(["*"]);
+-                }
++                this._handleAddSelector(this._matchers);
+             }
+             else {
+                 console.info("No matchers present");
+@@ -482,8 +485,10 @@ __decorate([
+ __decorate([
+     state()
+ ], InlangAddSelector.prototype, "_oldDeclarations", void 0);
++__decorate([
++    state()
++], InlangAddSelector.prototype, "_matchError", void 0);
+ InlangAddSelector = __decorate([
+     customElement("inlang-add-selector")
+ ], InlangAddSelector);
+ export default InlangAddSelector;
+-//# sourceMappingURL=inlang-add-selector.js.map
+\ No newline at end of file
+diff --git a/dist/stories/message/inlang-message.d.ts b/dist/stories/message/inlang-message.d.ts
+index e204bb23a972812563bd696b70617bd6c06f6640..d49e71c89e344f9a4b3f5a4732381c2816049ac6 100644
+--- a/dist/stories/message/inlang-message.d.ts
++++ b/dist/stories/message/inlang-message.d.ts
+@@ -6,6 +6,7 @@ export default class InlangMessage extends LitElement {
+     variants: Variant[];
+     settings: ProjectSettings | undefined;
+     private _refLocale;
++    private _selectorType;
+     render(): import("lit").TemplateResult<1>;
+ }
+ declare global {
+@@ -13,4 +14,3 @@ declare global {
+         "inlang-message": InlangMessage;
+     }
+ }
+-//# sourceMappingURL=inlang-message.d.ts.map
+\ No newline at end of file
+diff --git a/dist/stories/message/inlang-message.js b/dist/stories/message/inlang-message.js
+index 88010d1f9fef02d7f038a5e7f1792fa7376cd837..ffc6b8ccaca72d2fe1437a2c968308da4d3ddfd1 100644
+--- a/dist/stories/message/inlang-message.js
++++ b/dist/stories/message/inlang-message.js
+@@ -8,6 +8,7 @@ import { LitElement, css, html } from "lit";
+ import { v7 as uuidV7 } from "uuid";
+ import { customElement, property } from "lit/decorators.js";
+ import { baseStyling } from "../../styling/base.js";
++import { selectorMatches } from "../../helper/selectorMatches.js";
+ import { createChangeEvent } from "../../helper/event.js";
+ import SlTag from "@shoelace-style/shoelace/dist/components/tag/tag.component.js";
+ import SlDropdown from "@shoelace-style/shoelace/dist/components/dropdown/dropdown.component.js";
+@@ -78,12 +79,15 @@ let InlangMessage = class InlangMessage extends LitElement {
+ 				min-height: 44px;
+ 				display: flex;
+ 			}
++			.selector-type { font-size: 10px; font-weight: 400; color: var(--sl-color-neutral-500); }
+ 			.selector {
+ 				height: 44px;
+ 				width: 120px;
+ 				display: flex;
+-				align-items: center;
+-				padding: 12px;
++				align-items: flex-start;
++				justify-content: center;
++				flex-direction: column;
++				padding: 6px 12px;
+ 				border-right: 1px solid var(--sl-input-border-color);
+ 				font-weight: 500;
+ 				cursor: pointer;
+@@ -175,6 +179,10 @@ let InlangMessage = class InlangMessage extends LitElement {
+ 			}
+ 		`,
+     ]; }
++    _selectorType(name) {
++        const bundle = this.closest("inlang-bundle");
++        return selectorMatches(name, bundle?.bundle?.declarations ?? [], this.message?.locale ?? "", this.variants ?? []).label;
++    }
+     render() {
+         return html `
+ 			<div class="language-container">
+@@ -201,8 +209,9 @@ let InlangMessage = class InlangMessage extends LitElement {
+ 							<div class="selector-container">
+ 								${this.message.selectors.map((selector, index) => html `<sl-dropdown>
+ 											<div class="selector" part="selector" slot="trigger">
+-												${selector.name}
+-											</div>
++												<span>${selector.name}</span>
++                        <span class="selector-type" title=${this._selectorType(selector.name)}>${this._selectorType(selector.name).split(" · ")[0]}</span>
++                      </div>
+ 											<sl-menu>
+ 												<sl-menu-item
+ 													value="delete"
+@@ -316,4 +325,3 @@ InlangMessage = __decorate([
+     customElement("inlang-message")
+ ], InlangMessage);
+ export default InlangMessage;
+-//# sourceMappingURL=inlang-message.js.map
+\ No newline at end of file
+diff --git a/dist/stories/variant/inlang-variant.d.ts b/dist/stories/variant/inlang-variant.d.ts
+index a024574394b0509ce0d17f1e231079c227e370f1..68917626321b88283dd0b7cd31db5bc89223d4d7 100644
+--- a/dist/stories/variant/inlang-variant.d.ts
++++ b/dist/stories/variant/inlang-variant.d.ts
+@@ -1,8 +1,14 @@
+-import { type Variant } from "@inlang/sdk";
++import { type Variant, type Declaration } from "@inlang/sdk";
+ import { LitElement } from "lit";
+ export default class InlangVariant extends LitElement {
+     static styles: import("lit").CSSResult[];
+     variant: Variant;
++    /** Optional context; nested consumers inherit it from their bundle/message. */
++    declarations?: Declaration[];
++    locale?: string;
++    variants?: Variant[];
++    private errors;
++    private _options;
+     private _updateMatch;
+     firstUpdated(): Promise<void>;
+     updated(): void;
+@@ -14,4 +20,3 @@ declare global {
+         "inlang-variant": InlangVariant;
+     }
+ }
+-//# sourceMappingURL=inlang-variant.d.ts.map
+\ No newline at end of file
+diff --git a/dist/stories/variant/inlang-variant.js b/dist/stories/variant/inlang-variant.js
+index 7bc51b23a90ed1195f075f2a60ebb8fc29efec28..ae50032554f8ded329d48ecf32cdfea2e1094499 100644
+--- a/dist/stories/variant/inlang-variant.js
++++ b/dist/stories/variant/inlang-variant.js
+@@ -4,17 +4,26 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
+     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+     return c > 3 && r && Object.defineProperty(target, key, r), r;
+ };
+-import {} from "@inlang/sdk";
+ import { LitElement, css, html } from "lit";
+-import { customElement, property } from "lit/decorators.js";
++import { customElement, property, state } from "lit/decorators.js";
+ import { baseStyling } from "../../styling/base.js";
+ //helpers
+ import overridePrimitiveColors from "../../helper/overridePrimitiveColors.js";
+ import { createChangeEvent } from "../../helper/event.js";
++import { selectorMatches } from "../../helper/selectorMatches.js";
+ //components
+ import SlInput from "@shoelace-style/shoelace/dist/components/input/input.component.js";
+ import SlTooltip from "@shoelace-style/shoelace/dist/components/tooltip/tooltip.component.js";
+ import SlButton from "@shoelace-style/shoelace/dist/components/button/button.component.js";
++import SlDropdown from "@shoelace-style/shoelace/dist/components/dropdown/dropdown.component.js";
++import SlMenu from "@shoelace-style/shoelace/dist/components/menu/menu.component.js";
++import SlMenuItem from "@shoelace-style/shoelace/dist/components/menu-item/menu-item.component.js";
++if (!customElements.get("sl-dropdown"))
++    customElements.define("sl-dropdown", SlDropdown);
++if (!customElements.get("sl-menu"))
++    customElements.define("sl-menu", SlMenu);
++if (!customElements.get("sl-menu-item"))
++    customElements.define("sl-menu-item", SlMenuItem);
+ if (!customElements.get("sl-input"))
+     customElements.define("sl-input", SlInput);
+ if (!customElements.get("sl-tooltip"))
+@@ -24,8 +33,17 @@ if (!customElements.get("sl-button"))
+ let InlangVariant = class InlangVariant extends LitElement {
+     constructor() {
+         super(...arguments);
++        this.errors = {};
+         this._updateMatch = (selectorName, value) => {
+-            //TODO improve this function
++            const options = this._options(selectorName);
++            if (options.allowed && !options.allowed.includes(value)) {
++                this.errors = { ...this.errors, [selectorName]: `Choose ${options.allowed.join(", ")}.` };
++                return;
++            }
++            this.errors = { ...this.errors, [selectorName]: "" };
++            const existing = this.variant?.matches.find(match => match.key === selectorName);
++            if (existing && (existing.type === "catchall-match" ? "*" : existing.value) === value)
++                return;
+             if (this.variant) {
+                 const newVariant = structuredClone(this.variant);
+                 // filter the match if it already exists
+@@ -76,6 +94,14 @@ let InlangVariant = class InlangVariant extends LitElement {
+         display: flex;
+         align-items: stretch;
+       }
++      .match-cell { width: 120px; flex-shrink: 0; position: relative; }
++      .match-cell:focus-within { z-index: 3; }
++      .match-cell .match { width: 100%; }
++      .match-menu { max-height: 280px; max-width: min(360px, calc(100vw - 32px)); overflow-y: auto; }
++      .match-type { padding: 8px 12px; color: var(--sl-color-neutral-500); font-size: 12px; }
++      .match-example { margin-left: 16px; color: var(--sl-color-neutral-500); font-size: 12px; }
++      .match-error { padding: 4px 8px; color: var(--sl-color-danger-600); font-size: 12px; }
++      .suggestion-trigger { border: none; background: transparent; color: inherit; padding: 0 4px; min-height: 24px; cursor: pointer; }
+       .match {
+         min-height: 44px;
+         width: 120px;
+@@ -87,6 +113,7 @@ let InlangVariant = class InlangVariant extends LitElement {
+       .match:focus-within {
+         z-index: 3;
+       }
++      .match::part(form-control-label) { display: none; }
+       .match::part(base) {
+         border: none;
+         border-radius: 0;
+@@ -139,6 +166,9 @@ let InlangVariant = class InlangVariant extends LitElement {
+       }
+     `,
+     ]; }
++    _options(name) {
++        return selectorMatches(name, this.declarations ?? this.closest("inlang-bundle")?.bundle?.declarations ?? [], this.locale ?? this.closest("inlang-message")?.message?.locale ?? "", this.variants ?? this.closest("inlang-message")?.variants ?? []);
++    }
+     //hooks
+     async firstUpdated() {
+         await this.updateComplete;
+@@ -161,12 +191,16 @@ let InlangVariant = class InlangVariant extends LitElement {
+             ? html `<div class="variant">
+           ${this.variant
+                 ? this.variant.matches.map((match) => {
+-                    return html `
++                    const options = this._options(match.key);
++                    return html `<div class="match-cell">
+                   <sl-input
+                     exportparts="input:match"
+                     id="${this.variant.id}-${match.key}"
+                     class="match"
+                     size="small"
++                    label=${`Match ${match.key}`}
++                    title=${options.label}
++                    aria-invalid=${this.errors[match.key] ? "true" : "false"}
+                     dir="auto"
+                     value=${match.type === "literal-match" ? match.value : "*"}
+                     @sl-blur=${(e) => {
+@@ -175,7 +209,21 @@ let InlangVariant = class InlangVariant extends LitElement {
+                             this._updateMatch(match.key, e.target.value);
+                         }
+                     }}
+-                  ></sl-input>
++                  ><sl-dropdown part="match-options" slot="suffix" placement="bottom-start" hoist>
++                    <button slot="trigger" class="suggestion-trigger" type="button" aria-label=${`Match options for ${match.key}`}>⌄</button>
++                    <sl-menu class="match-menu" @sl-select=${(event) => {
++                        const value = event.detail.item.value;
++                        const input = this.shadowRoot?.getElementById(`${this.variant.id}-${match.key}`);
++                        if (input)
++                            input.value = value;
++                        this._updateMatch(match.key, value);
++                    }}>
++                      <div class="match-type">${options.label}</div>
++                      ${options.suggestions.map(option => html `<sl-menu-item value=${option.value}>${option.value}<span slot="suffix" class="match-example">${option.description}</span></sl-menu-item>`)}
++                    </sl-menu>
++                  </sl-dropdown></sl-input>
++                  ${this.errors[match.key] ? html `<div class="match-error" role="alert">${this.errors[match.key]}</div>` : undefined}
++                </div>
+                 `;
+                 })
+                 : undefined}
+@@ -191,8 +239,19 @@ let InlangVariant = class InlangVariant extends LitElement {
+ __decorate([
+     property()
+ ], InlangVariant.prototype, "variant", void 0);
++__decorate([
++    property({ attribute: false })
++], InlangVariant.prototype, "declarations", void 0);
++__decorate([
++    property()
++], InlangVariant.prototype, "locale", void 0);
++__decorate([
++    property({ attribute: false })
++], InlangVariant.prototype, "variants", void 0);
++__decorate([
++    state()
++], InlangVariant.prototype, "errors", void 0);
+ InlangVariant = __decorate([
+     customElement("inlang-variant")
+ ], InlangVariant);
+ export default InlangVariant;
+-//# sourceMappingURL=inlang-variant.js.map
+\ No newline at end of file
+diff --git a/src/helper/selectorMatches.ts b/src/helper/selectorMatches.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd5d0eaf33bc3fd9322725a92b76c13c85f5a3d4
+--- /dev/null
++++ b/src/helper/selectorMatches.ts
+@@ -0,0 +1,63 @@
++import type { Declaration, FunctionReference, Variant } from "@inlang/sdk";
++
++export type MatchSuggestion = { value: string; description: string };
++export type SelectorMatches = {
++  label: string;
++  suggestions: MatchSuggestion[];
++  /** A known plural resolver has a finite result set; untyped inputs do not. */
++  allowed?: string[];
++};
++const pluralCache = new Map<string, SelectorMatches>();
++const categories = ["zero", "one", "two", "few", "many", "other"];
++const fallback: MatchSuggestion = { value: "*", description: "Fallback · matches any remaining value" };
++
++/** Derive suggestions from declarations, never from a variable's spelling. */
++export function selectorMatches(name: string, declarations: Declaration[], locale: string, variants: Variant[]): SelectorMatches {
++  const seen = new Set<string>();
++  function annotation(variable: string): FunctionReference | undefined {
++    if (seen.has(variable)) return;
++    seen.add(variable);
++    const declaration = declarations.find(value => value.name === variable);
++    if (!declaration) return;
++    if (declaration.type === "input-variable") return declaration.annotation;
++    return declaration.value.annotation ?? (declaration.value.arg.type === "variable-reference" ? annotation(declaration.value.arg.name) : undefined);
++  }
++  const resolver = annotation(name);
++  if (resolver?.name === "plural") {
++    const cacheKey = JSON.stringify([locale, resolver.options]);
++    const cached = pluralCache.get(cacheKey);
++    if (cached) return cached;
++    const option = resolver.options.find(value => value.name === "type");
++    let knownType = !option || option.value.type === "literal" && ["cardinal", "ordinal"].includes(option.value.value);
++    const type = option?.value.type === "literal" && option.value.value === "ordinal" ? "ordinal" : "cardinal";
++    const ruleOptions: Intl.PluralRulesOptions = { type };
++    const numericOptions = ["minimumIntegerDigits", "minimumFractionDigits", "maximumFractionDigits", "minimumSignificantDigits", "maximumSignificantDigits"];
++    for (const option of resolver.options.filter(value => value.name !== "type")) {
++      if (numericOptions.includes(option.name) && option.value.type === "literal" && option.value.value.trim() && Number.isFinite(Number(option.value.value))) {
++        Object.assign(ruleOptions, { [option.name]: Number(option.value.value) });
++      } else knownType = false;
++    }
++    let rules: Intl.PluralRules | undefined;
++    try {
++      if (knownType && Intl.PluralRules.supportedLocalesOf(locale).length) rules = new Intl.PluralRules(locale, ruleOptions);
++    } catch { /* Unknown locale: offer categories without guessing an English rule. */ }
++    const values = rules ? rules.resolvedOptions().pluralCategories : categories;
++    const samples = new Map<string, number[]>();
++    if (rules) for (const number of [...Array.from({ length: 201 }, (_, index) => index), 0.1, 0.2, 1.5, 2.5, 1000, 1000000]) {
++      const category = rules.select(number);
++      const examples = samples.get(category) ?? [];
++      if (examples.length < 3) examples.push(number);
++      samples.set(category, examples);
++    }
++    const result: SelectorMatches = {
++      label: rules ? `${type === "ordinal" ? "Ordinal" : "Cardinal"} plural · ${locale}` : "Plural · runtime rules",
++      allowed: rules ? [...values, "*"] : undefined,
++      suggestions: [...values.map(value => ({ value, description: samples.get(value)?.length ? `e.g. ${samples.get(value)!.join(", ")}` : "Plural category" })), fallback],
++    };
++    if (pluralCache.size >= 128) pluralCache.delete(pluralCache.keys().next().value!);
++    pluralCache.set(cacheKey, result);
++    return result;
++  }
++  const existing = [...new Set(variants.flatMap(variant => variant.matches.flatMap(match => match.key === name && match.type === "literal-match" && match.value ? [match.value] : [])))];
++  return { label: resolver ? `${resolver.name} · custom value` : "Text · custom value", suggestions: [...existing.map(value => ({ value, description: "Used in this message" })), fallback] };
++}
+diff --git a/src/stories/actions/add-selector/inlang-add-selector.ts b/src/stories/actions/add-selector/inlang-add-selector.ts
+index ecaeb0ecf74bb8ce3b5c687949010b2e334f4a6c..a71cc3855f3115452cee60af391c42bf491f455d 100644
+--- a/src/stories/actions/add-selector/inlang-add-selector.ts
++++ b/src/stories/actions/add-selector/inlang-add-selector.ts
+@@ -1,5 +1,6 @@
+ import { LitElement, css, html } from "lit";
+ import { customElement, property, state } from "lit/decorators.js";
++import { selectorMatches } from "../../../helper/selectorMatches.js";
+ import { createChangeEvent } from "../../../helper/event.js";
+ import { baseStyling } from "../../../styling/base.js";
+ import {
+@@ -200,20 +201,17 @@ export default class InlangAddSelector extends LitElement {
+   @state()
+   private _oldDeclarations: Declaration[] | undefined;
+ 
++  @state() private _matchError = "";
++
+   private _getPluralCategories = (): string[] | undefined => {
+-    return this.message?.locale
+-      ? [
+-          ...new Intl.PluralRules(this.message.locale).resolvedOptions()
+-            .pluralCategories,
+-          "*",
+-        ]
+-      : undefined;
++    if (!this._variable || !this.message) return;
++    return selectorMatches(this._variable.name, this.bundle.declarations, this.message.locale, this.variants).allowed;
+   };
+ 
+   private _getAvailablevariables = () => {
+     const variables: Declaration[] = [];
+     for (const declaration of this.bundle.declarations) {
+-      if (!variables.some((d) => d.name === declaration.name)) {
++      if (!variables.some((d) => d.name === declaration.name) && !this.message?.selectors.some(selector => selector.name === declaration.name)) {
+         variables.push(declaration);
+       }
+     }
+@@ -222,6 +220,13 @@ export default class InlangAddSelector extends LitElement {
+ 
+   private _handleAddSelector = (newMatchers: string[]) => {
+     if (this._variable && this.message) {
++      if (this.message.selectors.some(selector => selector.name === this._variable!.name)) return;
++      const allowed = this._getPluralCategories();
++      if (allowed && newMatchers.some(value => !allowed.includes(value))) {
++        this._matchError = `Choose ${allowed.join(", ")}.`;
++        return;
++      }
++      this._matchError = "";
+       // get variant matcher
+       const message = structuredClone(this.message);
+       const variants = structuredClone(this.variants);
+@@ -346,8 +351,11 @@ export default class InlangAddSelector extends LitElement {
+       this._oldDeclarations = this.bundle.declarations;
+       this._variable = this._getAvailablevariables()?.[0];
+     }
+-    if (changedProperties.has("message")) {
+-      //check if message has changed
++    if (changedProperties.has("message") && this.message?.selectors.some(selector => selector.name === this._variable?.name)) {
++      this._variable = this._getAvailablevariables()[0];
++    }
++    if (changedProperties.has("message") || changedProperties.has("_variable")) {
++      this._matchError = "";
+       this._matchers = this._getPluralCategories() || ["*"];
+     }
+   }
+@@ -360,7 +368,7 @@ export default class InlangAddSelector extends LitElement {
+ 
+   override render() {
+     return html`
+-			<div class="dropdown-container">
++			<div class="dropdown-container">${this._matchError ? html`<p role="alert" style="color: var(--sl-color-danger-600)">${this._matchError}</p>` : undefined}
+ 				${
+           this._variable && this._variable.name.length > 0
+             ? html`<div class="dropdown-item">
+@@ -410,10 +418,10 @@ export default class InlangAddSelector extends LitElement {
+               </div>`
+         }
+ 					${
+-            this._variable && this._variable.type === "local-variable"
++            this._variable
+               ? html`<div class="options-container">
+                     <div class="dropdown-header">
+-                      <p class="dropdown-title">Match</p>
++                      <p class="dropdown-title">Match · ${selectorMatches(this._variable.name, this.bundle.declarations, this.message.locale, this.variants).label}</p>
+                       <sl-tooltip content="Add a match to this selector">
+                         <sl-button
+                           class="add-input"
+@@ -506,11 +514,7 @@ export default class InlangAddSelector extends LitElement {
+ 						<sl-button
+ 							@click=${() => {
+                 if (this._matchers) {
+-                  if (this._variable?.type === "local-variable") {
+-                    this._handleAddSelector(this._matchers);
+-                  } else {
+-                    this._handleAddSelector(["*"]);
+-                  }
++                  this._handleAddSelector(this._matchers);
+                 } else {
+                   console.info("No matchers present");
+                 }
+diff --git a/src/stories/message/inlang-message.ts b/src/stories/message/inlang-message.ts
+index 6cd47ddf9a776b5e734c5dd7ee085872bcb35d3d..df79dddbfefb59c0f4fe7155cb5c514645aad830 100644
+--- a/src/stories/message/inlang-message.ts
++++ b/src/stories/message/inlang-message.ts
+@@ -1,8 +1,9 @@
+-import type { Message, ProjectSettings, Variant } from "@inlang/sdk";
++import type { Message, ProjectSettings, Variant, Declaration } from "@inlang/sdk";
+ import { LitElement, css, html } from "lit";
+ import { v7 as uuidV7 } from "uuid";
+ import { customElement, property } from "lit/decorators.js";
+ import { baseStyling } from "../../styling/base.js";
++import { selectorMatches } from "../../helper/selectorMatches.js";
+ import { createChangeEvent } from "../../helper/event.js";
+ 
+ import SlTag from "@shoelace-style/shoelace/dist/components/tag/tag.component.js";
+@@ -69,12 +70,15 @@ export default class InlangMessage extends LitElement {
+ 				min-height: 44px;
+ 				display: flex;
+ 			}
++			.selector-type { font-size: 10px; font-weight: 400; color: var(--sl-color-neutral-500); }
+ 			.selector {
+ 				height: 44px;
+ 				width: 120px;
+ 				display: flex;
+-				align-items: center;
+-				padding: 12px;
++				align-items: flex-start;
++				justify-content: center;
++				flex-direction: column;
++				padding: 6px 12px;
+ 				border-right: 1px solid var(--sl-input-border-color);
+ 				font-weight: 500;
+ 				cursor: pointer;
+@@ -180,7 +184,12 @@ export default class InlangMessage extends LitElement {
+ 		return this.settings?.baseLocale;
+ 	};
+ 
+-	override render() {
++	private _selectorType(name: string) {
++    const bundle = this.closest("inlang-bundle") as (HTMLElement & { bundle?: { declarations: Declaration[] } }) | null;
++    return selectorMatches(name, bundle?.bundle?.declarations ?? [], this.message?.locale ?? "", this.variants ?? []).label;
++  }
++
++  override render() {
+ 		return html`
+ 			<div class="language-container">
+ 				<span>${this.message?.locale}</span>
+@@ -208,8 +217,9 @@ export default class InlangMessage extends LitElement {
+ 									(selector, index) =>
+ 										html`<sl-dropdown>
+ 											<div class="selector" part="selector" slot="trigger">
+-												${selector.name}
+-											</div>
++												<span>${selector.name}</span>
++                        <span class="selector-type" title=${this._selectorType(selector.name)}>${this._selectorType(selector.name).split(" · ")[0]}</span>
++                      </div>
+ 											<sl-menu>
+ 												<sl-menu-item
+ 													value="delete"
+diff --git a/src/stories/variant/inlang-variant.ts b/src/stories/variant/inlang-variant.ts
+index ff898c10a429a1b6bc3235fcfd90d632a18ba761..3edabe3184cca738451d8d0b94c29dfc3c38fee5 100644
+--- a/src/stories/variant/inlang-variant.ts
++++ b/src/stories/variant/inlang-variant.ts
+@@ -1,17 +1,26 @@
+-import { type Variant } from "@inlang/sdk";
++import { type Variant, type Declaration } from "@inlang/sdk";
+ import { LitElement, css, html } from "lit";
+-import { customElement, property } from "lit/decorators.js";
++import { customElement, property, state } from "lit/decorators.js";
+ import { baseStyling } from "../../styling/base.js";
+ 
+ //helpers
+ import overridePrimitiveColors from "../../helper/overridePrimitiveColors.js";
+ import { createChangeEvent } from "../../helper/event.js";
+ 
++import { selectorMatches } from "../../helper/selectorMatches.js";
++
+ //components
+ import SlInput from "@shoelace-style/shoelace/dist/components/input/input.component.js";
+ import SlTooltip from "@shoelace-style/shoelace/dist/components/tooltip/tooltip.component.js";
+ import SlButton from "@shoelace-style/shoelace/dist/components/button/button.component.js";
+ 
++import SlDropdown from "@shoelace-style/shoelace/dist/components/dropdown/dropdown.component.js";
++import SlMenu from "@shoelace-style/shoelace/dist/components/menu/menu.component.js";
++import SlMenuItem from "@shoelace-style/shoelace/dist/components/menu-item/menu-item.component.js";
++if (!customElements.get("sl-dropdown")) customElements.define("sl-dropdown", SlDropdown);
++if (!customElements.get("sl-menu")) customElements.define("sl-menu", SlMenu);
++if (!customElements.get("sl-menu-item")) customElements.define("sl-menu-item", SlMenuItem);
++
+ if (!customElements.get("sl-input")) customElements.define("sl-input", SlInput);
+ if (!customElements.get("sl-tooltip"))
+   customElements.define("sl-tooltip", SlTooltip);
+@@ -41,6 +50,14 @@ export default class InlangVariant extends LitElement {
+         display: flex;
+         align-items: stretch;
+       }
++      .match-cell { width: 120px; flex-shrink: 0; position: relative; }
++      .match-cell:focus-within { z-index: 3; }
++      .match-cell .match { width: 100%; }
++      .match-menu { max-height: 280px; max-width: min(360px, calc(100vw - 32px)); overflow-y: auto; }
++      .match-type { padding: 8px 12px; color: var(--sl-color-neutral-500); font-size: 12px; }
++      .match-example { margin-left: 16px; color: var(--sl-color-neutral-500); font-size: 12px; }
++      .match-error { padding: 4px 8px; color: var(--sl-color-danger-600); font-size: 12px; }
++      .suggestion-trigger { border: none; background: transparent; color: inherit; padding: 0 4px; min-height: 24px; cursor: pointer; }
+       .match {
+         min-height: 44px;
+         width: 120px;
+@@ -52,6 +69,7 @@ export default class InlangVariant extends LitElement {
+       .match:focus-within {
+         z-index: 3;
+       }
++      .match::part(form-control-label) { display: none; }
+       .match::part(base) {
+         border: none;
+         border-radius: 0;
+@@ -108,8 +126,28 @@ export default class InlangVariant extends LitElement {
+   @property()
+   variant: Variant;
+ 
++  /** Optional context; nested consumers inherit it from their bundle/message. */
++  @property({ attribute: false }) declarations?: Declaration[];
++  @property() locale?: string;
++  @property({ attribute: false }) variants?: Variant[];
++  @state() private errors: Record<string, string> = {};
++
++  private _options(name: string) {
++    return selectorMatches(name,
++      this.declarations ?? (this.closest("inlang-bundle") as (HTMLElement & { bundle?: { declarations: Declaration[] } }) | null)?.bundle?.declarations ?? [],
++      this.locale ?? (this.closest("inlang-message") as (HTMLElement & { message?: { locale: string } }) | null)?.message?.locale ?? "",
++      this.variants ?? (this.closest("inlang-message") as (HTMLElement & { variants?: Variant[] }) | null)?.variants ?? []);
++  }
++
+   private _updateMatch = (selectorName: string, value: string) => {
+-    //TODO improve this function
++    const options = this._options(selectorName);
++    if (options.allowed && !options.allowed.includes(value)) {
++      this.errors = { ...this.errors, [selectorName]: `Choose ${options.allowed.join(", ")}.` };
++      return;
++    }
++    this.errors = { ...this.errors, [selectorName]: "" };
++    const existing = this.variant?.matches.find(match => match.key === selectorName);
++    if (existing && (existing.type === "catchall-match" ? "*" : existing.value) === value) return;
+     if (this.variant) {
+       const newVariant = structuredClone(this.variant);
+ 
+@@ -173,12 +211,16 @@ export default class InlangVariant extends LitElement {
+       ? html`<div class="variant">
+           ${this.variant
+             ? this.variant.matches.map((match) => {
+-                return html`
++                const options = this._options(match.key);
++                return html`<div class="match-cell">
+                   <sl-input
+                     exportparts="input:match"
+                     id="${this.variant.id}-${match.key}"
+                     class="match"
+                     size="small"
++                    label=${`Match ${match.key}`}
++                    title=${options.label}
++                    aria-invalid=${this.errors[match.key] ? "true" : "false"}
+                     dir="auto"
+                     value=${match.type === "literal-match" ? match.value : "*"}
+                     @sl-blur=${(e: Event) => {
+@@ -192,7 +234,20 @@ export default class InlangVariant extends LitElement {
+                         );
+                       }
+                     }}
+-                  ></sl-input>
++                  ><sl-dropdown part="match-options" slot="suffix" placement="bottom-start" hoist>
++                    <button slot="trigger" class="suggestion-trigger" type="button" aria-label=${`Match options for ${match.key}`}>⌄</button>
++                    <sl-menu class="match-menu" @sl-select=${(event: CustomEvent) => {
++                      const value = event.detail.item.value as string;
++                      const input = this.shadowRoot?.getElementById(`${this.variant.id}-${match.key}`) as SlInput;
++                      if (input) input.value = value;
++                      this._updateMatch(match.key, value);
++                    }}>
++                      <div class="match-type">${options.label}</div>
++                      ${options.suggestions.map(option => html`<sl-menu-item value=${option.value}>${option.value}<span slot="suffix" class="match-example">${option.description}</span></sl-menu-item>`)}
++                    </sl-menu>
++                  </sl-dropdown></sl-input>
++                  ${this.errors[match.key] ? html`<div class="match-error" role="alert">${this.errors[match.key]}</div>` : undefined}
++                </div>
+                 `;
+               })
+             : undefined}

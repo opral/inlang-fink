@@ -5,14 +5,14 @@ const resources: Record<string, string> = {
   "messages/en.json": JSON.stringify({ hello: "Hello", items: [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["countPlural"], match: { "countPlural=one": "One item", "countPlural=*": "{count} items" } }] }),
   "messages/de.json": JSON.stringify({ hello: "Hallo" }),
 };
-async function stubApi(page: import("@playwright/test").Page) {
+async function stubApi(page: import("@playwright/test").Page, files = resources) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     let data: unknown;
     if (url.pathname === "/api/user") data = { login: "translator" };
-    else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: Object.keys(resources), projects: ["project.inlang"] };
+    else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: Object.keys(files), projects: ["project.inlang"] };
     else if (url.pathname === "/api/github/branches") data = ["main"];
-    else if (url.pathname === "/api/github/file") data = { content: resources[url.searchParams.get("path")!] };
+    else if (url.pathname === "/api/github/file") data = { content: files[url.searchParams.get("path")!] };
     else if (url.pathname === "/api/github/push") data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" };
     else throw new Error(`Unexpected request ${url}`);
     await route.fulfill({ json: data });
@@ -145,4 +145,55 @@ test("opens the selected showcase directly and pages large catalogs without losi
   await expect(page.locator("[data-bundle]")).toHaveCount(1);
   await page.getByLabel("Search messages", { exact: true }).fill("demo00");
   await expect(page.locator('[data-bundle="demo00"]')).toBeVisible();
+});
+
+test("offers typed plural matches, preserves custom text, and rejects invalid categories", async ({ page }) => {
+  const files = { ...resources,
+    "project.inlang/settings.json": JSON.stringify({ ...settings, locales: ["en", "de", "ar"] }),
+    "messages/ar.json": resources["messages/en.json"],
+    "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]), gender: [{ declarations: ["input gender"], selectors: ["gender"], match: { "gender=male": "He", "gender=female": "She", "gender=*": "They" } }] }),
+  };
+  await stubApi(page, files);
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Find projects" }).click();
+  await page.getByRole("button", { name: "Open project" }).click();
+  const english = page.locator('[data-bundle="items"] inlang-message').first();
+  await expect(english.locator(".selector-type")).toHaveText("Cardinal plural", { timeout: 90_000 });
+  const variant = english.locator("inlang-variant").first();
+  await variant.getByRole("button", { name: "Match options for countPlural" }).click();
+  await expect(page.getByRole("menuitem", { name: /^one/ })).toContainText("e.g. 1");
+  await expect(page.getByRole("menuitem", { name: /^few/ })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: /^\*/ })).toContainText("Fallback");
+  await page.getByRole("menuitem", { name: /^other/ }).click();
+  const input = variant.getByRole("textbox", { name: "Match countPlural" });
+  await expect(input).toHaveValue("other");
+  await input.fill("few"); await input.press("Tab");
+  await expect(variant.getByRole("alert")).toContainText("Choose one, other, *.");
+  await input.fill("one"); await input.press("Tab");
+  await expect(variant.getByRole("alert")).toHaveCount(0);
+  const arabic = page.locator('[data-bundle="items"] inlang-message').nth(2);
+  await arabic.locator("inlang-variant").first().getByRole("button", { name: "Match options for countPlural" }).click();
+  await expect(page.getByRole("menuitem", { name: /^few/ })).toContainText("3");
+  await expect(page.getByRole("menuitem", { name: /^many/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const textVariant = page.locator('[data-bundle="gender"] inlang-variant').first();
+  await textVariant.getByRole("button", { name: "Match options for gender" }).click();
+  await expect(page.getByRole("menuitem", { name: /^female/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const textInput = textVariant.getByRole("textbox", { name: "Match gender" });
+  await textInput.fill("nonbinary"); await textInput.press("Tab");
+  await expect(textInput).toHaveValue("nonbinary");
+  await english.locator("inlang-variant").first().hover();
+  await english.getByRole("button", { name: "Add selector / plural" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add selector or plural" });
+  await dialog.getByRole("combobox").click();
+  await expect(dialog.getByRole("option", { name: "countPlural", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.reload();
+  await page.getByRole("button", { name: "Find projects" }).click();
+  await page.getByRole("button", { name: "Open project" }).click();
+  await expect(page.locator('[data-bundle="gender"] inlang-variant').first().getByRole("textbox", { name: "Match gender" })).toHaveValue("nonbinary", { timeout: 60_000 });
 });
