@@ -32,8 +32,6 @@ type Props = {
   addMessage: (bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: Variant[] }) => void;
   restructure: (bundleId: string, messageId: string, next: Restructure) => void;
   machineTranslate: (request: MachineTranslationRequest) => void;
-  /** Changes after undo/redo so editors show the restored text. */
-  undoVersion?: number;
 };
 
 /** One status per card, most urgent first. */
@@ -166,7 +164,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   </>;
 }
 
-export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate, undoVersion = 0 }: Props) {
+export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
@@ -205,7 +203,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const othersTodo = others.filter(locale => issues[locale]?.length).length;
   const usage = usages?.[0];
   const editorProps = (pattern: Pattern) => ({ markupOptions, variables: variableSuggestions(source, pattern, bundle.declarations) });
-  const editor = (key: string, variant: Variant, label: string) => <PatternEditor key={`${variant.id}:${undoVersion}`} ref={element => { if (element) editors.current.set(key, element); else editors.current.delete(key); }}
+  const editor = (key: string, variant: Variant, label: string) => <PatternEditor key={variant.id} ref={element => { if (element) editors.current.set(key, element); else editors.current.delete(key); }}
     variant={variants.get(variant.id)} declarations={bundle.declarations} aria-label={label} {...editorProps(variant.pattern)} />;
   const setPattern = (variant: Variant, pattern: Pattern) => change({ entity: "variant", entityId: variant.id, newData: { ...variant, pattern } } as ChangeEventDetail, true);
   const notes = (key: string, variant: Variant, locale: string, exactNumber: boolean) => {
@@ -301,7 +299,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
           onVariantMatch={event => setMatched((event as CustomEvent<{ variantId?: string }>).detail.variantId)} /></div>}
       </>;
     }
-    else cells = <div className="message-cell edit complex"><ComplexTranslation key={undoVersion} bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
+    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
     return <div className="message-row" key={locale}>
       {localeCell(locale, localeIssues.length > 0)}
       <div className="message-target">{cells}</div>

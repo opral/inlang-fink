@@ -7,6 +7,7 @@ import { validateSettingsEdit } from "./settingsData";
 import { LixFloat } from "./LixFloat";
 import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
+import type { InlangPatternEditor } from "@inlang/editor-component";
 import type { Restructure } from "./flows";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
@@ -141,7 +142,7 @@ export default function App() {
     return () => { flushRef.current(); void queue.current.then(() => localRef.current?.close()).catch(report); };
   }, []);
   useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current) { event.preventDefault(); event.returnValue = ""; } };
+    const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current || pendingWrites.current.size) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   useEffect(() => setPage(0), [search, filter, todoKind, focus]);
@@ -150,7 +151,6 @@ export default function App() {
   // Undo and redo use Lix's history (lix_undo/lix_redo), limited to the edits made here: each edit
   // records the commit it produced, and anything else that commits (sync, settings) resets the stack.
   const undoState = useRef({ head: "", undo: 0, redo: 0 });
-  const [undoVersion, setUndoVersion] = useState(0);
   const enqueueNow = useCallback((task: () => Promise<void>, undoable = true) => {
     pending.current++;
     setSaving(true);
@@ -161,7 +161,7 @@ export default function App() {
       if (!project) return;
       state.head = await headCommit(project);
       if (undoable) { state.undo++; state.redo = 0; } else { state.undo = 0; state.redo = 0; }
-    }).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0 || pendingWrites.current.size > 0); });
+    }).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0); });
   }, [report]);
   // Typing is written once it pauses: one commit (and one undo step) per pause, not per keystroke.
   const pendingWrites = useRef(new Map<string, ChangeEventDetail>());
@@ -180,9 +180,9 @@ export default function App() {
       await current.project.lix.execute(`SELECT commit_id FROM lix_${direction}()`);
       state.head = await headCommit(current.project);
       if (direction === "undo") { state.undo--; state.redo++; } else { state.redo--; state.undo++; }
+      // Editors ignore text they typed themselves (echoes of saves); restored text must replace it in place.
+      document.querySelectorAll<InlangPatternEditor>("inlang-pattern-editor").forEach(editor => editor.forgetEdits?.());
       await refresh(current);
-      // Editors ignore patterns they emitted themselves; after undo they must show the restored text.
-      setUndoVersion(value => value + 1);
     }).catch(report);
   }, [refresh, report]);
   useEffect(() => {
@@ -318,10 +318,10 @@ export default function App() {
   const change = useCallback((detail: ChangeEventDetail, immediate = false) => {
     if (!localRef.current) return;
     if (detail.entity === "variant" && detail.newData) {
+      // "Saving…" shows only while writing; the leave warning covers text that is still pending.
       pendingWrites.current.set(detail.entityId, detail);
-      setSaving(true);
       clearTimeout(writeTimer.current);
-      if (immediate) flushWrites(); else writeTimer.current = setTimeout(flushWrites, 700);
+      if (immediate) flushWrites(); else writeTimer.current = setTimeout(flushWrites, 500);
       return;
     }
     const local = localRef.current;
@@ -715,7 +715,7 @@ export default function App() {
           <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} undoVersion={undoVersion} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

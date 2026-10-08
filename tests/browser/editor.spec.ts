@@ -194,12 +194,13 @@ test("undo and redo step through the draft's Lix history", async ({ page }) => {
   await page.keyboard.press("End");
   // Typing is written once it pauses, so the whole word is one undo step.
   for (const key of "xyz") await page.keyboard.press(key);
-  await expect(page.locator(".save-status")).toHaveText("Saving…");
   await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveText("Edited");
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
   await page.keyboard.press("Control+z");
   await expect(translation(page, "hello")).toHaveText("Hallo");
   await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveCount(0);
+  // The field keeps focus and the cursor, so typing continues where it was.
+  await expect(translation(page, "hello")).toBeFocused();
   await page.keyboard.press("Control+Shift+z");
   await expect(translation(page, "hello")).toHaveText("Halloxyz");
   // Nothing before this session's edits is undone.
