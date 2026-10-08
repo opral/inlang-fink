@@ -60,3 +60,25 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
   await github(refPath, token, { sha: next.sha, force: false }, "PATCH");
   return { head: next.sha, tree: tree.sha, url: next.html_url ?? `https://github.com/${input.owner}/${input.repo}/commit/${next.sha}` };
 }
+
+export type ForkInput = { owner: string; repo: string; branch: string };
+/**
+ * Forks a repository for the signed-in user (or finds their existing fork) and waits until the
+ * branch being edited exists there, so Fink can open it right away, as fink.inlang.com did.
+ */
+export async function fork(input: ForkInput, token: string): Promise<{ owner: string; name: string }> {
+  if (!input || typeof input.owner !== "string" || typeof input.repo !== "string" || typeof input.branch !== "string" || !input.branch || input.branch.length > 255) throw new HttpError(400, "Invalid fork request.");
+  const created = await github<{ name: string; owner: { login: string } }>(`${repoBase(input.owner, input.repo)}/forks`, token, { default_branch_only: false });
+  const forkBase = repoBase(created.owner.login, created.name);
+  // GitHub creates forks asynchronously; the branch appears within seconds.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await github(`${forkBase}/branches/${input.branch.split("/").map(encodeURIComponent).join("/")}`, token);
+      return { owner: created.owner.login, name: created.name };
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 404) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  }
+  throw new HttpError(504, "GitHub is still creating the fork. Try again in a minute.");
+}

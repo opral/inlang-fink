@@ -4,7 +4,7 @@ import type { ChangeEventDetail } from "@inlang/editor-component";
 import { RichDiff } from "./DiffBundleView";
 import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
 import { validateSettingsEdit } from "./settingsData";
-import { LixFloat } from "./LixFloat";
+import { LixFloat, type FloatMode } from "./LixFloat";
 import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
 import type { InlangPatternEditor } from "@inlang/editor-component";
@@ -23,11 +23,18 @@ import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, 
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
 import { LocalDrafts } from "./LocalDrafts";
 import { capture, hashId, identify, telemetryEnabled } from "./telemetry";
-import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
+import { preparePush, replaceBundles, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
-const DEFAULT_MESSAGE = "Update translations with Fink";
+/** The commit message fink.inlang.com used for every push; translators don't write commits. */
+const PUSH_MESSAGE = "chore: update translations with Fink 🐦";
 const replacedNotice = (ids: string[]) => `${ids.length === 1 ? `Your edit to ${ids[0]} was` : `${ids.length} of your edits (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""}) were`} replaced by newer changes on GitHub.`;
+/** GitHub's compare page for a fork's branch against the original repository, as fink.inlang.com opened it. */
+function compareUrl(parent: { owner: string; name: string }, owner: string, name: string, branch: string) {
+  const body = `Translations updated with Fink.\n\nPreview: https://fink.inlang.com/?repo=${encodeURIComponent(`https://github.com/${parent.owner}/${parent.name}`)}`;
+  return `https://github.com/${parent.owner}/${parent.name}/compare/${encodeURIComponent(branch)}...${owner}:${name}:${encodeURIComponent(branch)}?${new URLSearchParams({ expand: "1", title: "Update translations", body })}`;
+}
+
 /** The commit the active branch points at, to tell Fink's own edits from other writes. */
 async function headCommit(project: InlangProject): Promise<string> {
   const branch = await project.lix.activeBranchId();
@@ -57,10 +64,12 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reviewState, setReviewState] = useState<{ ids: string[]; bundles: BundleNested[]; settings?: SettingsChange }>();
-  const [message, setMessage] = useState(DEFAULT_MESSAGE);
+  // Write access and fork state, as on fink.inlang.com: collaborators push, everyone else forks.
+  const [access, setAccess] = useState<{ key: string; push: boolean; signedIn: boolean; parent?: { owner: string; name: string } }>();
+  const [forking, setForking] = useState(false);
+  const [pullRequest, setPullRequest] = useState<string>();
   const [projects, setProjects] = useState<string[]>([]);
   const [initializing, setInitializing] = useState(() => { const params = new URLSearchParams(location.search); return !!params.get("repo") && !!params.get("project"); });
-  const messageTouched = useRef(false);
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
   const [newId, setNewId] = useState("");
   const [view, setView] = useState<"edit" | "settings" | "history">("edit");
@@ -249,7 +258,7 @@ export default function App() {
     } finally { loading.current = false; }
     await navigator.storage.persist();
     setPage(0); setView("edit"); setReviewState(undefined); setTree(undefined); setProjects(nextTree.projects);
-    setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
+    setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setPullRequest(undefined);
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
     if (localRef.current) recordDraft({ name: localRef.current.name, owner: repository.owner, repo: repository.name, branch: nextTree.branch, projectPath });
@@ -458,6 +467,44 @@ export default function App() {
     }, false);
   };
   useEffect(() => { if (local) { setRecentPending(local.context, pendingCount); setDraftPending(local.name, pendingCount); } }, [local, pendingCount]);
+  // Whether the signed-in user can push to the open repository, or needs a fork first.
+  const accessKey = local ? `${local.context.owner}/${local.context.name}:${user?.login ?? ""}` : "";
+  useEffect(() => {
+    // Signed out, the float asks to sign in; access only matters once signed in.
+    if (!local || !user) return;
+    let live = true;
+    api<{ push: boolean; signedIn: boolean; parent?: { owner: string; name: string } }>(`github/access?${repoQuery({ owner: local.context.owner, name: local.context.name })}`)
+      .then(result => { if (live) setAccess({ key: accessKey, ...result }); }, () => { if (live) setAccess({ key: accessKey, push: true, signedIn: !!user }); });
+    return () => { live = false; };
+  }, [accessKey]);
+  /**
+   * Forks the repository and continues on the same branch and project there. Unlike fink.inlang.com,
+   * translation edits made before forking move along instead of being dropped.
+   */
+  const forkRepository = () => void run(async () => {
+    const current = localRef.current;
+    if (!current) return;
+    await settle();
+    const { owner, name, branch, projectPath } = current.context;
+    const carried = [...dirty.current].flatMap(id => { const bundle = bundleIndex.current.get(id); return bundle ? [structuredClone(bundle)] : []; });
+    const removed = [...dirty.current].filter(id => !bundleIndex.current.has(id));
+    setForking(true);
+    try {
+      setProgress("Forking the repository on GitHub…");
+      const forked = await api<{ owner: string; name: string }>("github/fork", { owner, repo: name, branch });
+      const repository = { owner: forked.owner, name: forked.name, branch };
+      const nextTree = await api<RepoTree>(`github/tree?${repoQuery(repository)}`);
+      const forkUrl = `https://github.com/${forked.owner}/${forked.name}`;
+      setUrl(forkUrl); setRepo(repository); setBranch(nextTree.branch); setPath(projectPath);
+      await loadProject(repository, nextTree, projectPath, forkUrl);
+      const next = localRef.current;
+      if (next && (carried.length || removed.length)) {
+        await replaceBundles(next.project, carried, removed);
+        await refresh(next);
+      }
+      setNotice(`Forked ${owner}/${name} to ${forked.owner}/${forked.name}.${carried.length + removed.length ? ` Your ${carried.length + removed.length} ${carried.length + removed.length === 1 ? "change moved" : "changes moved"} along.` : ""} Push, then open a pull request.`);
+    } finally { setForking(false); }
+  });
   // Once per visit, when the browser is idle and no project is loading: register drafts made before
   // the registry existed, then delete clean drafts that weren't opened for 30 days.
   const cleaned = useRef(false);
@@ -578,7 +625,7 @@ export default function App() {
       setProgress("Pushing changes…");
       let result: { head: string; tree: string; url: string };
       try {
-        result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: current.context.owner, repo: current.context.name, branch: current.context.branch, projectPath: current.context.projectPath, head: current.context.head, files, message: message.trim() });
+        result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: current.context.owner, repo: current.context.name, branch: current.context.branch, projectPath: current.context.projectPath, head: current.context.head, files, message: PUSH_MESSAGE });
       } catch (error) {
         if ((error as { status?: number }).status === 409 && attempt < 2) continue;
         throw error;
@@ -589,17 +636,12 @@ export default function App() {
       if (current.context.shas) Object.assign(current.context.shas, Object.fromEntries(await Promise.all(Object.entries(files).map(async ([path, content]) => [path, await gitBlobSha(content)]))));
       current.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
       baseline.current = current.context.bundleBaseline; dirty.current.clear();
-      await saveContext(current); setLocal({ ...current }); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); messageTouched.current = false; setNotice(withReplaced(`Pushed to ${current.context.branch}. Commit: ${result.url}`));
+      await saveContext(current); setLocal({ ...current }); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); setNotice(withReplaced(`Pushed to ${current.context.branch}. Commit: ${result.url}`));
+      // Pushed to a fork: the float offers to open a pull request against the original repository.
+      if (access?.parent) setPullRequest(compareUrl(access.parent, current.context.owner, current.context.name, current.context.branch));
       return;
     }
   });
-  // Pre-fill the commit message from what changed, until the user edits it.
-  const suggestMessage = () => {
-    if (!local || messageTouched.current) return;
-    const ids = [...dirty.current], settings = !!settingsChanges(local);
-    const messages = ids.length === 0 ? "" : ids.length <= 2 ? ids.join(" and ") : `${ids.length} messages`;
-    setMessage(messages && settings ? `Update ${messages} and project settings` : messages ? `Update ${messages}` : settings ? "Update project settings" : DEFAULT_MESSAGE);
-  };
   const terms = useMemo(() => searchTerms(search), [search]);
   // Issues per bundle and locale from the SDK's diagnostics.
   const issuesOf = useCallback((bundle: BundleNested, locale: string): Issue[] =>
@@ -686,6 +728,11 @@ export default function App() {
   const commitLink = context && <a className="sha" href={`${repositoryUrl}/commit/${context.head}`} target="_blank" rel="noreferrer" title="Commit your draft is based on">{context.head.slice(0, 7)}</a>;
   const showEditor = () => { setReviewState(undefined); setView("edit"); };
   const signIn = <a className="button" href="/api/auth/login" onClick={() => { try { sessionStorage.setItem("fink:return", location.search); } catch { /* optional */ } }}><GitHubIcon /> Sign in with GitHub</a>;
+  const currentAccess = access && access.key === accessKey ? access : undefined;
+  const floatMode: FloatMode = !user ? { kind: "signin", signIn }
+    : currentAccess && !currentAccess.push ? { kind: "fork", forking, fork: forkRepository }
+    : pullRequest && !pendingCount ? { kind: "pullrequest", url: pullRequest, dismiss: () => setPullRequest(undefined) }
+    : { kind: "push" };
   const hasChanges = !!reviewState && (!!reviewState.ids.length || !!reviewState.settings);
   const reviewPanel = reviewState && context && <section className="review-page" aria-labelledby="changes-title">
     <header className="page-header"><div><h2 id="changes-title">Changes {pendingCount > 0 && <span className="badge changed">{pendingCount}</span>}</h2><p>Your local draft compared with <span className="inline-branch"><BranchIcon />{context.branch}</span> at {commitLink}</p></div></header>
@@ -766,7 +813,7 @@ export default function App() {
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}
         <LixFloat count={pendingCount} branch={context.branch} saving={saving} busy={busy} reviewing={!!reviewState} review={() => void review()} edit={showEditor}
-          message={message} setMessage={value => { messageTouched.current = true; setMessage(value); }} suggest={suggestMessage} commit={() => void publish()} signIn={user ? undefined : signIn} />
+          push={() => void publish()} mode={floatMode} />
       </>}
     </main>
     <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>

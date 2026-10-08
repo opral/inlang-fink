@@ -10,17 +10,19 @@ const source: Record<string, string> = {
   "src/routes/+page.svelte": "<script>\n\timport { m } from '$lib/paraglide/messages';\n</script>\n\n<Button variant=\"primary\">\n\t{m.hello()}\n</Button>\n<p>{m.items({ count: 2 })}</p>\n",
   "src/lib/cart.ts": "import * as m from '$lib/paraglide/messages';\nexport const summary = (count: number) => toast.success(m.items({ count }));\n",
 };
-async function stubApi(page: import("@playwright/test").Page, files = resources, code = source) {
+async function stubApi(page: import("@playwright/test").Page, files = resources, code = source, access: (owner: string) => unknown = () => ({ push: true, signedIn: true }), pushes: { owner: string; repo: string; message: string }[] = []) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     let data: unknown;
     if (url.pathname === "/api/user") data = { login: "translator" };
+    else if (url.pathname === "/api/github/access") data = access(url.searchParams.get("owner")!);
+    else if (url.pathname === "/api/github/fork") data = { owner: "translator", name: "repo" };
     else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: url.searchParams.get("branch") || "main", paths: Object.keys(files), projects: ["project.inlang"] };
     else if (url.pathname === "/api/github/branches") data = ["main", "translations"];
     else if (url.pathname === "/api/github/source") data = { files: code };
     else if (url.pathname === "/api/github/commits") data = [{ sha: "a".repeat(40), url: "https://github.com/example/repo/commit/aaa", message: "Add German copy\n\nReviewed", author: "translator", date: "2026-10-01T00:00:00Z" }];
     else if (url.pathname === "/api/github/file") data = { content: files[url.searchParams.get("path")!] };
-    else if (url.pathname === "/api/github/push") data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" };
+    else if (url.pathname === "/api/github/push") { pushes.push(route.request().postDataJSON()); data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" }; }
     else throw new Error(`Unexpected request ${url}`);
     await route.fulfill({ json: data });
   });
@@ -111,11 +113,10 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("Hallo von Fink");
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"]')).toContainText("Artikel");
   expect(await page.evaluate(() => (window as typeof window & { sdkWorkerRequests: number }).sdkWorkerRequests)).toBe(requestsBeforeReview);
-  await page.getByRole("button", { name: "Commit", exact: true }).click();
-  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/de.json"]);
-  expect(payload.message).toBe("Update hello and items");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦");
   expect(payload.head).toBe("a".repeat(40));
   expect(JSON.parse(payload.files["messages/de.json"]).hello).toBe("Hallo von Fink");
   expect(payload.files["messages/de.json"]).toContain("Artikel");
@@ -259,6 +260,30 @@ test("local drafts are listed, deleted with their recent project, and cleaned up
   await page.evaluate(() => { const drafts = JSON.parse(localStorage.getItem("fink:drafts")!); for (const draft of Object.values(drafts) as { pending: number }[]) draft.pending = 0; localStorage.setItem("fink:drafts", JSON.stringify(drafts)); });
   await page.reload();
   await expect.poll(stored, { timeout: 30_000 }).toBe(0);
+});
+
+test("without write access, Fink forks, keeps the edits, pushes to the fork and links a pull request", async ({ page }) => {
+  const pushes: { owner: string; repo: string; message: string }[] = [];
+  // No write access to example/repo; the fork translator/repo is writable.
+  await stubApi(page, resources, source, owner => owner === "example" ? { push: false, signedIn: true } : { push: true, signedIn: true, parent: { owner: "example", name: "repo" } }, pushes);
+  await openRepository(page);
+  const float = page.getByRole("complementary", { name: /Changes|Pending changes/ });
+  await expect(float).toContainText("Fork to make changes", { timeout: 90_000 });
+  await translation(page, "hello").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("!");
+  await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveText("Edited");
+  await expect(page.getByRole("button", { name: "Push", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Fork", exact: true }).click();
+  await expect(page.locator(".notice")).toContainText("translator/repo", { timeout: 30_000 });
+  await expect(page).toHaveURL(/repo=https%3A%2F%2Fgithub.com%2Ftranslator%2Frepo/);
+  // The edit moved to the fork's draft.
+  await expect(translation(page, "hello")).toHaveText("Hallo!");
+  await page.getByRole("button", { name: "Push", exact: true }).click();
+  await expect.poll(() => pushes.length).toBe(1);
+  expect(pushes[0]).toMatchObject({ owner: "translator", repo: "repo", message: "chore: update translations with Fink 🐦" });
+  const pullRequest = page.getByRole("link", { name: "Open pull request" });
+  await expect(pullRequest).toHaveAttribute("href", /^https:\/\/github\.com\/example\/repo\/compare\/main\.\.\.translator:repo:main\?/);
 });
 
 test("machine translation links to the request form and telemetry records interest without content", async ({ page }) => {
@@ -448,11 +473,10 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await expect(page.locator('[data-settings-side="after"]').first()).toContainText("de");
   await expect(page.locator('[data-settings-side="after"]').nth(1)).toContainText("en, de, fr");
   const request = page.waitForRequest(request => request.url().endsWith("/api/github/push"));
-  await page.getByRole("button", { name: "Commit", exact: true }).click();
-  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["project.inlang/settings.json"]);
-  expect(payload.message).toBe("Update project settings");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦");
   expect(JSON.parse(payload.files["project.inlang/settings.json"])).toEqual({ ...settings, baseLocale: "de", locales: ["en", "de", "fr"], experimental: { exampleFeature: true } });
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("0");
@@ -508,6 +532,7 @@ async function stubRemote(page: import("@playwright/test").Page, remote: { head:
     const url = new URL(route.request().url());
     let data: unknown;
     if (url.pathname === "/api/user") data = { login: "translator" };
+    else if (url.pathname === "/api/github/access") data = { push: true, signedIn: true };
     else if (url.pathname === "/api/github/tree") data = { head: remote.head, tree: "b".repeat(40), branch: "main", paths: Object.keys(remote.files), shas: remote.shas, projects: ["project.inlang"] };
     else if (url.pathname === "/api/github/branches") data = ["main"];
     else if (url.pathname === "/api/github/file") data = { content: remote.files[url.searchParams.get("path")!] };
@@ -565,8 +590,7 @@ test("pushing after GitHub moved syncs the draft and retries without asking", as
   await german.fill("Hallo von Fink"); await german.press("Tab");
   // GitHub advances between the pre-push check and the push itself.
   remote.rejectNextPush = true;
-  await page.getByRole("button", { name: "Commit", exact: true }).click();
-  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
   await expect(page.getByText(/Pushed to main/)).toBeVisible({ timeout: 60_000 });
   expect(remote.pushes).toHaveLength(1);
   expect(remote.pushes[0]!.head).toBe("e".repeat(40));
@@ -588,8 +612,7 @@ test("a push after GitHub replaced an edit still tells the translator", async ({
   await translation(page, "items").fill("Artikel"); await translation(page, "items").press("Tab");
   // Meanwhile GitHub changes the same German message.
   remote.files = { ...files, "messages/de.json": JSON.stringify({ hello: "Servus" }) }; remote.shas = shasOf(remote.files); remote.head = "9".repeat(40);
-  await page.getByRole("button", { name: "Commit", exact: true }).click();
-  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Your edit to hello was replaced by newer changes on GitHub. Pushed to main." })).toBeVisible({ timeout: 60_000 });
   expect(Object.keys(remote.pushes[0]!.files)).toEqual(["messages/de.json"]);
   expect(JSON.parse(remote.pushes[0]!.files["messages/de.json"]!).hello).toBe("Servus");

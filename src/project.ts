@@ -200,23 +200,7 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
     const next = new Set(bundles.map(bundle => bundle.id));
     const changed = bundles.filter(bundle => current.get(bundle.id) !== bundleSignature(bundle));
     const removedIds = [...current.keys()].filter(id => !next.has(id));
-    // Batched: one statement per chunk instead of one round trip to the Lix worker per row.
-    const chunks = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
-    const rewritten = [...removedIds, ...changed.map(bundle => bundle.id)];
-    const messages = changed.flatMap(bundle => bundle.messages.map(message => ({ id: message.id, bundle_id: bundle.id, locale: message.locale, selectors: message.selectors })));
-    const variants = changed.flatMap(bundle => bundle.messages.flatMap(message => message.variants.map(variant => ({ id: variant.id, message_id: message.id, matches: variant.matches, pattern: variant.pattern }))));
-    await local.project.db.transaction().execute(async tx => {
-      // Lix supports IN with value lists but not subqueries, so message ids are read first.
-      for (const ids of chunks(rewritten, 500)) {
-        const messageIds = (await tx.selectFrom("inlang_message").select("id").where("bundle_id", "in", ids).execute()).map(row => row.id);
-        for (const chunk of chunks(messageIds, 500)) await tx.deleteFrom("inlang_variant").where("message_id", "in", chunk).execute();
-        await tx.deleteFrom("inlang_message").where("bundle_id", "in", ids).execute();
-        await tx.deleteFrom("inlang_bundle").where("id", "in", ids).execute();
-      }
-      for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("inlang_bundle").values(rows).execute();
-      for (const rows of chunks(messages, 500)) await tx.insertInto("inlang_message").values(rows).execute();
-      for (const rows of chunks(variants, 500)) await tx.insertInto("inlang_variant").values(rows).execute();
-    });
+    await replaceBundles(local.project, changed, removedIds);
     progress("Preparing editor…");
     Object.assign(context, { head: tree.head, tree: tree.tree, settings, original: remote.original, baseline: {}, bundleBaseline: bundleSignatures(remoteBundles), shas: fileShas(tree, remote) });
     await saveContext(local);
@@ -241,6 +225,29 @@ export async function readBundle(project: InlangProject, id: string): Promise<Bu
 /** A message whose every pattern is blank is the same as no translation: it is not a change and is never pushed. */
 const blank = (pattern: unknown) => (pattern as { type: string; value?: string }[]).every(part => part.type === "text" && !part.value?.trim());
 export const isBlankMessage = (message: MessageShape) => message.variants.every(variant => blank(variant.pattern));
+/**
+ * Writes whole bundles (messages and variants included) and deletes `removedIds`, in one
+ * transaction. Used by sync and when edits move to a fork.
+ */
+export async function replaceBundles(project: InlangProject, changed: BundleNested[], removedIds: string[] = []) {
+  // Batched: one statement per chunk instead of one round trip to the Lix worker per row.
+  const chunks = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
+  const rewritten = [...removedIds, ...changed.map(bundle => bundle.id)];
+  const messages = changed.flatMap(bundle => bundle.messages.map(message => ({ id: message.id, bundle_id: bundle.id, locale: message.locale, selectors: message.selectors })));
+  const variants = changed.flatMap(bundle => bundle.messages.flatMap(message => message.variants.map(variant => ({ id: variant.id, message_id: message.id, matches: variant.matches, pattern: variant.pattern }))));
+  await project.db.transaction().execute(async tx => {
+    // Lix supports IN with value lists but not subqueries, so message ids are read first.
+    for (const ids of chunks(rewritten, 500)) {
+      const messageIds = (await tx.selectFrom("inlang_message").select("id").where("bundle_id", "in", ids).execute()).map(row => row.id);
+      for (const chunk of chunks(messageIds, 500)) await tx.deleteFrom("inlang_variant").where("message_id", "in", chunk).execute();
+      await tx.deleteFrom("inlang_message").where("bundle_id", "in", ids).execute();
+      await tx.deleteFrom("inlang_bundle").where("id", "in", ids).execute();
+    }
+    for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("inlang_bundle").values(rows).execute();
+    for (const rows of chunks(messages, 500)) await tx.insertInto("inlang_message").values(rows).execute();
+    for (const rows of chunks(variants, 500)) await tx.insertInto("inlang_variant").values(rows).execute();
+  });
+}
 /** Compare editable content, excluding IDs regenerated by resource imports. */
 export function bundleSignature(bundle: BundleNested): string {
   return JSON.stringify({ declarations: bundle.declarations, messages: bundle.messages.filter(message => !isBlankMessage(message)).map(message => ({

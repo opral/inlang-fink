@@ -1,5 +1,5 @@
 import { cookie, HttpError, requireSameOrigin, seal, setCookie, tokenFor, unseal, type Session } from "./auth";
-import { boundedJson, github, push, repoBase, validPath, type PushInput } from "./github";
+import { boundedJson, fork, github, push, repoBase, validPath, type ForkInput, type PushInput } from "./github";
 import { extractSource, isSourcePath } from "./source";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 type LoginState = { purpose: "oauth"; expires: number; nonce: string; origin: string; verifier: string };
@@ -79,8 +79,18 @@ export default {
         requireSameOrigin(request); if (!token) throw new HttpError(401, "Sign in before pushing.");
         return json(await push(await boundedJson<PushInput>(request), token));
       }
+      if (url.pathname === "/api/github/fork" && request.method === "POST") {
+        requireSameOrigin(request); if (!token) throw new HttpError(401, "Sign in before forking.");
+        return json(await fork(await boundedJson<ForkInput>(request), token));
+      }
       if (request.method !== "GET") throw new HttpError(405, "Method not allowed.");
       const base = repoBase(url.searchParams.get("owner") ?? "", url.searchParams.get("repo") ?? "");
+      // Like fink.inlang.com: collaborators push to the branch, everyone else works in a fork.
+      if (url.pathname === "/api/github/access") {
+        if (!token) return json({ push: false, signedIn: false });
+        const repository = await github<{ fork: boolean; permissions?: { push?: boolean }; parent?: { name: string; owner: { login: string } } }>(base, token);
+        return json({ signedIn: true, push: !!repository.permissions?.push, ...(repository.fork && repository.parent ? { parent: { owner: repository.parent.owner.login, name: repository.parent.name } } : {}) });
+      }
       if (url.pathname === "/api/github/branches") {
         const branches = [];
         for (let page = 1; page <= 10; page++) {
