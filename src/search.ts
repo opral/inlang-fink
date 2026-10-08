@@ -1,7 +1,8 @@
 import type { BundleNested } from "@inlang/sdk/browser";
 
 /** Lowercased search terms; every term must match (e.g. "diese api"). */
-export const searchTerms = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
+// Braces are ignored so "{count}" finds the variable the way it is displayed.
+export const searchTerms = (query: string) => query.toLowerCase().replace(/[{}]/g, " ").split(/\s+/).filter(Boolean);
 
 /** The text a translator sees: bundle id, message text, and variable names. */
 export function searchText(bundle: BundleNested): string {
@@ -14,15 +15,18 @@ export function searchText(bundle: BundleNested): string {
   return parts.join("\n").toLowerCase();
 }
 
-const HIGHLIGHT = "fink-search";
-/** Marks matches inside the light-DOM pattern editors with the CSS Custom Highlight API. */
+// Shared with <inlang-pattern-view>, which styles this highlight inside its shadow root.
+const HIGHLIGHT = "inlang-search";
+/** Marks matches in message keys, source text and translation editors with the CSS Custom Highlight API. */
 export function highlightMatches(root: Element | null, terms: string[]) {
   if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
   if (!root || !terms.length) { CSS.highlights.delete(HIGHLIGHT); return; }
   const ranges: Range[] = [];
-  // Only the editable text: the editor also renders its scoped <style> in light DOM.
-  for (const editor of root.querySelectorAll("inlang-pattern-editor [contenteditable]")) {
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+  // Only text a translator reads: the editor also renders its scoped <style> in light DOM.
+  const scopes: Node[] = [...root.querySelectorAll(".message-key, inlang-pattern-editor [contenteditable]")];
+  for (const view of root.querySelectorAll(".message-ref inlang-pattern-view")) if (view.shadowRoot) scopes.push(view.shadowRoot);
+  for (const scope of scopes) {
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, { acceptNode: node => node.parentElement?.closest("style") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
     for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
       const text = node.data.toLowerCase();
       if (text.length !== node.data.length) continue; // Case mapping changed offsets; skip rather than misplace.

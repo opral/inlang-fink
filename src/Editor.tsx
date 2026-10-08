@@ -1,4 +1,5 @@
 import React, { memo, useMemo, useState } from "react";
+import { Modal } from "./Modal";
 import { createComponent } from "@lit/react";
 import { InlangBundle, InlangBundleAction, InlangMessage, InlangVariant, InlangPatternEditor, InlangAddSelector, type ChangeEventDetail } from "@inlang/editor-component";
 import type { BundleNested, MessageNested, ProjectSettings } from "@inlang/sdk/browser";
@@ -27,6 +28,6 @@ export const Editor = memo(function Editor({ bundle, settings, locales, change, 
         </MessageElement> : <MessageElement slot="message" key={locale} message={{ id: `missing-${bundle.id}-${locale}`, bundleId: bundle.id, locale, selectors: [] }} variants={[]} settings={settings}><button slot="variant" className="missing-translation" onClick={() => addLocale(bundle, locale)}>＋ Add translation</button></MessageElement>;
       })}
     </BundleElement>
-    {selector && <div className="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label="Add selector or plural" className="dialog"><header><h2>Add selector / plural</h2><button onClick={() => setSelector(undefined)}>Close</button></header><SelectorElement bundle={rendered} message={structuredClone(selector)} variants={structuredClone(selector.variants)} onEntityChange={handleChange} onComplete={() => setSelector(undefined)} /></section></div>}
+    {selector && <Modal label="Add selector or plural" onClose={() => setSelector(undefined)}><header><h2>Add selector / plural</h2><button onClick={() => setSelector(undefined)}>Close</button></header><SelectorElement bundle={rendered} message={structuredClone(selector)} variants={structuredClone(selector.variants)} onEntityChange={handleChange} onComplete={() => setSelector(undefined)} /></Modal>}
   </article>;
 });

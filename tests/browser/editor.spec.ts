@@ -141,6 +141,14 @@ test("To do filters and the language menu count work per language", async ({ pag
   await expect(page.locator('[data-bundle="usage"]')).toBeVisible();
   await page.getByRole("button", { name: "Missing translation 1" }).click();
   await expect(page.locator('[data-bundle="items"]')).toBeVisible();
+  // Translating keeps the card in the filtered list, and the new field has focus.
+  await page.locator('[data-bundle="items"]').getByRole("button", { name: "Translate to German" }).click();
+  await expect(translation(page, "items")).toBeFocused();
+  await page.keyboard.type("Artikel");
+  await expect(translation(page, "items")).toHaveText("Artikel");
+  // Now it needs {count} instead of a translation, and it stays put while the filter is unchanged.
+  await expect(page.locator('[data-bundle="items"] .message-status')).toHaveText("Missing {count} in German");
+  await expect(page.locator("[data-bundle]")).toHaveCount(1);
   await page.getByRole("button", { name: /English.*German/ }).click();
   await expect(page.getByRole("checkbox", { name: /German/ })).toContainText("2 to do");
   await expect(page.getByRole("checkbox", { name: /French/ })).toContainText("done");
@@ -167,6 +175,10 @@ test("creates plural variants for a missing translation in the structure editor"
   await selector.getByRole("button", { name: "Add selector", exact: true }).click();
   await expect(selector).not.toBeVisible();
   await expect(german.locator("inlang-variant")).toHaveCount(3);
+  // Forms without any text are still untranslated; the change starts with the first word.
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+  await german.locator("inlang-variant").first().locator("[contenteditable]").click();
+  await page.keyboard.type("Ein Artikel");
   await dialog.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page.locator('[data-diff-message="items"] [data-diff-side="after"] inlang-message')).toHaveCount(2);
@@ -197,11 +209,11 @@ test("opens the selected showcase directly and pages large catalogs without losi
   await page.getByLabel("Search messages", { exact: true }).fill("demo00");
   await expect(page.locator('[data-bundle="demo00"]')).toBeVisible();
   await expect(page.locator("[data-bundle]")).toHaveCount(1);
-  // Every term must match; matches in message text are highlighted.
+  // Every term must match; matches in keys and message text are highlighted.
   await page.getByLabel("Search messages", { exact: true }).fill("25 message");
   await expect(page.locator('[data-bundle="demo25"]')).toBeVisible();
   await expect(page.locator("[data-bundle]")).toHaveCount(1);
-  await expect.poll(() => page.evaluate(() => CSS.highlights.get("fink-search")?.size ?? 0)).toBe(2);
+  await expect.poll(() => page.evaluate(() => CSS.highlights.get("inlang-search")?.size ?? 0)).toBe(3);
 });
 
 test("offers typed plural matches, preserves custom text, and rejects invalid categories", async ({ page }) => {
@@ -255,7 +267,7 @@ test("offers typed plural matches, preserves custom text, and rejects invalid ca
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
   // The URL keeps repository, branch, and project; reload reopens the local draft.
   await page.reload();
-  await expect(reference(page, "gender")).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('[data-bundle="gender"]')).toBeVisible({ timeout: 60_000 });
   dialog = await editStructure(page, "gender");
   await expect(dialog.locator("inlang-variant").first().getByRole("textbox", { name: "Match gender" })).toHaveValue("nonbinary");
 });

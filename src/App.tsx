@@ -352,7 +352,8 @@ export default function App() {
         if (!dirty.current.size && !settingsChanges(current)) { setReviewState(undefined); setView("edit"); setNotice(withReplaced(replaced.length ? "Nothing left to push." : "Your changes are already on GitHub.")); return; }
       }
       setProgress("Preparing files for GitHub…");
-      const { files } = await preparePush(current);
+      const { files, pruned } = await preparePush(current);
+      if (pruned) await refresh(current);
       if (!Object.keys(files).length) { setNotice(withReplaced("No resource changes to push.")); return; }
       setProgress("Pushing changes…");
       let result: { head: string; tree: string; url: string };
@@ -419,14 +420,23 @@ export default function App() {
     }
     return result;
   }, [searched, kindsOf, dirtyCount]);
-  const visible = useMemo(() => searched.filter(bundle =>
-    filter === "all" ? true : filter === "edited" ? dirty.current.has(bundle.id) : todoKind === "all" ? kindsOf(bundle).size > 0 : kindsOf(bundle).has(todoKind)
-  ), [searched, filter, todoKind, kindsOf, dirtyCount]);
+  // A card stays in the list while the filter is unchanged, so fixing it doesn't pull it away mid-typing.
+  const shown = useRef({ key: "", ids: new Set<string>() });
+  const visible = useMemo(() => {
+    const key = [filter, todoKind, targetLocales.join(), terms.join(" ")].join("|");
+    if (shown.current.key !== key) shown.current = { key, ids: new Set() };
+    const { ids } = shown.current;
+    const result = searched.filter(bundle => ids.has(bundle.id) ||
+      (filter === "all" ? true : filter === "edited" ? dirty.current.has(bundle.id) : todoKind === "all" ? kindsOf(bundle).size > 0 : kindsOf(bundle).has(todoKind)));
+    for (const bundle of result) ids.add(bundle.id);
+    return result;
+  }, [searched, filter, todoKind, kindsOf, dirtyCount, targetLocales, terms]);
   useEffect(() => {
     const root = table.current;
     highlightMatches(root, terms);
     if (!root || !terms.length) return;
-    let frame = 0;
+    // Pattern views render into their shadow roots after this effect.
+    let frame = requestAnimationFrame(() => highlightMatches(root, terms));
     const observer = new MutationObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => highlightMatches(root, terms)); });
     observer.observe(root, { subtree: true, childList: true, characterData: true });
     return () => { observer.disconnect(); cancelAnimationFrame(frame); highlightMatches(null, []); };
@@ -520,7 +530,7 @@ export default function App() {
           {filter === "todo" && <div className="chips" role="group" aria-label="Kind of work">
             {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
           </div>}
-          {focus && <div className="column-heads" aria-hidden="true"><span>{languageName(focus.source)}{focus.source === context.settings.baseLocale ? " · reference" : ""}</span><span>{focus.all ? "All languages" : focus.targets.map(languageName).join(", ")}</span></div>}
+          {focus && !focus.all && <div className="column-heads" aria-hidden="true"><span>{languageName(focus.source)}{focus.source === context.settings.baseLocale ? " · reference" : ""}</span><span>{focus.all ? "All languages" : focus.targets.map(languageName).join(", ")}</span></div>}
         </div>
         <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}

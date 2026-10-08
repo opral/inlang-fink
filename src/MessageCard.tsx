@@ -4,6 +4,7 @@ import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessa
 import type { BundleNested, Declaration, MessageNested, ProjectSettings } from "@inlang/sdk/browser";
 import { Editor } from "./Editor";
 import { Dropdown } from "./Menu";
+import { Modal } from "./Modal";
 import { UsageCode } from "./UsagePeek";
 import { describeUsage, type Usage } from "./usage";
 import { languageName, type LanguageFocus } from "./languages";
@@ -49,8 +50,11 @@ function inputName(selector: string, declarations: Declaration[]) {
 const matchLabel = (variant: Variant, message: MessageNested, declarations: Declaration[]) => {
   const plural = (key: string) => selectorKeys(key, declarations, message.locale, message.variants).plural;
   if (variant.matches.every(match => match.type === "catchall-match" && !plural(match.key))) return "default form";
-  return variant.matches.map(match => match.type === "literal-match" ? match.value : plural(match.key) ? "other" : "any").join(" · ");
+  return variant.matches.map(match => match.type === "literal-match" ? match.value : plural(match.key) ? "other" : "any other").join(" · ");
 };
+
+/** Focuses an editor once it has rendered, e.g. after the button that was focused went away. */
+const focusEditor = (editor: InlangPatternEditor | null | undefined) => requestAnimationFrame(() => editor?.querySelector<HTMLElement>("[contenteditable]")?.focus());
 
 function ComplexTranslation({ bundle, message, source, issues, variants, addVariant }: { bundle: BundleNested; message: MessageNested; source?: MessageNested; issues: Issue[]; variants: Map<string, Variant>; addVariant: Props["addVariant"] }) {
   const label = (variant: Variant) => matchLabel(variant, message, bundle.declarations);
@@ -61,15 +65,17 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   const missing = issues.filter(issue => issue.type === "missing-form").length;
   const by = message.selectors.map(selector => inputName(selector.name, bundle.declarations));
   const isDefault = selected && selected === defaultVariant(message);
+  const editor = useRef<InlangPatternEditor>(null), focusId = useRef<string | undefined>(undefined);
+  useEffect(() => { if (focusId.current && selected?.id === focusId.current) { focusId.current = undefined; focusEditor(editor.current); } }, [selected]);
   const add = (matches: Match[]) => {
     const id = crypto.randomUUID();
     // New forms start from the default form's text, which is usually closest.
     addVariant(bundle.id, { id, messageId: message.id, matches, pattern: structuredClone(defaultVariant(message)?.pattern ?? []) });
-    setSelectedId(id);
+    setSelectedId(id); focusId.current = id;
   };
   return <>
     {expanded && selected && <p className="editing">Editing {label(selected)}</p>}
-    {selected && <div className="field"><PatternEditor variant={variants.get(selected.id)} declarations={bundle.declarations} aria-label={`${languageName(message.locale)} translation of ${bundle.id}, form ${label(selected)}`} /></div>}
+    {selected && <div className="field"><PatternEditor ref={editor} variant={variants.get(selected.id)} declarations={bundle.declarations} aria-label={`${languageName(message.locale)} translation of ${bundle.id}, form ${label(selected)}`} /></div>}
     {!expanded && selected && <p className="caption">{isDefault ? `Default form · any ${by.join(", ")}` : `Form ${label(selected)}`}</p>}
     {expanded && <Forms message={message} variants={message.variants} declarations={bundle.declarations} locale={message.locale} selectedVariantId={selected?.id ?? ""}
       onSelectVariant={event => setSelectedId((event as CustomEvent<{ variantId: string }>).detail.variantId)}
@@ -89,7 +95,8 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
   const root = useRef<HTMLElement>(null);
-  const editors = useRef(new Map<string, InlangPatternEditor>());
+  const editors = useRef(new Map<string, InlangPatternEditor>()), focusLocale = useRef<string | undefined>(undefined);
+  useEffect(() => { const editor = focusLocale.current && editors.current.get(focusLocale.current); if (editor) { focusLocale.current = undefined; focusEditor(editor); } }, [bundle]);
   // Pattern editors emit composed "change" events with the updated variant.
   useEffect(() => {
     const element = root.current;
@@ -100,7 +107,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   }, [change]);
   const source = bundle.messages.find(message => message.locale === focus.source);
   // Reviewing all languages also makes the reference itself editable.
-  const targets = focus.all ? settings.locales : focus.targets;
+  const targets = focus.all ? [focus.source, ...settings.locales.filter(locale => locale !== focus.source)] : focus.targets;
   const issues = useMemo(() => Object.fromEntries(settings.locales.filter(locale => locale !== focus.source).map(locale => [locale, issuesOf(bundle, locale)])), [bundle, settings.locales, focus.source, issuesOf]);
   const status = cardStatus(targets.flatMap(locale => (issues[locale] ?? []).map(issue => ({ locale, issue }))), { edited, replaced, unused }, targets.length > 1);
   // Lit components compare by identity; clone each variant once per bundle snapshot.
@@ -113,17 +120,17 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const localeIssues = issues[locale] ?? [];
     const simple = message && isSimple(message);
     return <div className="message-row" key={locale}>
-      <div className="message-ref">{locale === focus.source ? null : source ? <><PatternView pattern={defaultVariant(source)?.pattern ?? []} declarations={bundle.declarations} />{source.variants.length > 1 && <span className="form-count"> · {source.variants.length} forms</span>}</> : <span className="muted">No {languageName(focus.source)} text</span>}</div>
-      <div className="message-target">
+      <div className="message-ref" data-locale={label ? undefined : languageName(focus.source)}>{locale === focus.source ? null : source ? <><PatternView pattern={defaultVariant(source)?.pattern ?? []} declarations={bundle.declarations} />{source.variants.length > 1 && <span className="form-count"> · {source.variants.length} forms</span>}</> : <span className="muted">No {languageName(focus.source)} text</span>}</div>
+      <div className="message-target" data-locale={label ? undefined : languageName(locale)}>
         {label && <span className="target-locale">{languageName(locale)}</span>}
-        {!message ? <button type="button" className="field empty" onClick={() => addLocale(bundle, locale)}>Translate to {languageName(locale)}</button>
+        {!message ? <button type="button" className="field empty" onClick={() => { focusLocale.current = locale; addLocale(bundle, locale); }}>Translate to {languageName(locale)}</button>
           : simple ? message.variants.map(variant => <div key={variant.id} className="field"><PatternEditor ref={element => { if (element) editors.current.set(locale, element); else editors.current.delete(locale); }} variant={variants.get(variant.id)} declarations={bundle.declarations} aria-label={`${languageName(locale)} translation of ${bundle.id}`} /></div>)
           : <ComplexTranslation bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} />}
-        {simple && localeIssues.flatMap(issue => issue.type === "missing-variable" ? [issue.name] : []).map(name => <p key={name} className="field-note defect">Missing {`{${name}}`} in {languageName(locale)}. <button type="button" className="inline-link" onClick={() => editors.current.get(locale)?.insertExpression(name)}>Insert {`{${name}}`}</button></p>)}
+        {simple && localeIssues.flatMap(issue => issue.type === "missing-variable" ? [issue.name] : []).map(name => <p key={name} className="field-note defect">Missing {`{${name}}`} in {languageName(locale)}. <button type="button" className="inline-link" onClick={() => { const editor = editors.current.get(locale); editor?.insertExpression(name); focusEditor(editor); }}>Insert {`{${name}}`}</button></p>)}
       </div>
     </div>;
   };
-  return <article className="message-card" data-bundle={bundle.id} ref={root} aria-label={bundle.id}>
+  return <article className={focus.all ? "message-card all" : "message-card"} data-bundle={bundle.id} ref={root} aria-label={bundle.id}>
     <header className="message-head">
       <h3 className="message-key">{bundle.id}</h3>
       {status && <span className={`message-status ${status.tone}`}>{status.label}</span>}
@@ -143,9 +150,9 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
       <span className={othersTodo ? "others-state todo" : "others-state"}>{othersTodo ? `${othersTodo} need${othersTodo === 1 ? "s" : ""} work` : "all translated"}</span>
     </div>}
     {showOthers && others.map(locale => row(locale, true))}
-    {structure && <div className="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label={`Edit structure of ${bundle.id}`} className="dialog wide"><header><h2>Edit structure · <span className="mono">{bundle.id}</span></h2><button onClick={() => setStructure(false)}>Done</button></header>
+    {structure && <Modal label={`Edit structure of ${bundle.id}`} className="wide" onClose={() => setStructure(false)}><header><h2>Edit structure · <span className="mono">{bundle.id}</span></h2><button onClick={() => setStructure(false)}>Done</button></header>
       <p className="dialog-help">Variables, selectors and forms for every language. Changes save as you go.</p>
       <Editor bundle={bundle} settings={settings} locales={[focus.source, ...targets]} change={change} addLocale={addLocale} removeBundle={removeBundle} />
-    </section></div>}
+    </Modal>}
   </article>;
 });
