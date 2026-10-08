@@ -72,6 +72,12 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .help-link { color: var(--muted); text-decoration: none; font-weight: 500; }
 .help-link:hover { color: var(--text); }
 .account .button { font-size: 13px; }
+.star-button { display: inline-flex; align-items: stretch; height: 28px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; font-weight: 500; font-size: 13px; overflow: hidden; white-space: nowrap; }
+.star-button:hover { border-color: var(--border-strong); }
+.star-label { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; }
+.star-label .icon { color: #e3b341; }
+.star-button:hover .star-label { background: var(--hover); }
+.star-count { display: inline-flex; align-items: center; padding: 0 9px; border-left: 1px solid var(--border); background: var(--subtle); font-variant-numeric: tabular-nums; }
 .account-trigger { border: 0; box-shadow: none; background: transparent; padding: 4px 6px; font-size: 13px; gap: 8px; }
 
 /* Dropdowns */
@@ -498,7 +504,8 @@ body:has(.lixfloat) footer { padding-bottom: 72px; }
 }
 @media (max-width: 740px) {
   .menu-bar { gap: 8px; }
-  .help-link, .account-login, .repo-owner, .project-identity > .separator:first-of-type { display: none; }
+  .help-link, .account-login, .repo-owner, .project-identity > .separator:first-of-type, .star-text { display: none; }
+  .star-label { padding: 0 8px; }
   .project-identity { gap: 4px; }
   .brand { font-size: 0; gap: 2px; }
   .brand img { width: 22px; height: 22px; }

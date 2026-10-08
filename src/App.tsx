@@ -15,6 +15,7 @@ import { issueKind, type Issue, type IssueKind } from "./issues";
 import { Landing } from "./Landing";
 import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
+import { StarButton } from "./StarButton";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcases";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
@@ -750,6 +751,7 @@ export default function App() {
   const others = recent.filter(project => !context || recentKey(project) !== recentKey(context)).slice(0, 5);
   const account = <div className="account">
     <a href="https://github.com/opral/inlang-fink#readme" className="help-link" target="_blank" rel="noreferrer">Help</a>
+    <StarButton />
     {user ? <Dropdown className="account-trigger" title="Account" align="end" label={<><img className="avatar" src={`https://github.com/${user.login}.png?size=48`} alt="" width="22" height="22" referrerPolicy="no-referrer" /><span className="account-login">{user.login}</span><Chevron /></>}>
       {close => <><div className="dropdown-heading">Signed in as <strong>{user.login}</strong></div><a className="menu-item" href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a><button className="menu-item" onClick={() => { close(); void run(async () => { await api("auth/logout", {}); setUser(null); await identify(undefined); }); }}>Sign out</button></>}
     </Dropdown> : signIn}
