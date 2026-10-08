@@ -116,11 +116,13 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/de.json"]);
-  expect(payload.message).toBe("chore: update translations with Fink 🐦");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com");
   expect(payload.head).toBe("a".repeat(40));
   expect(JSON.parse(payload.files["messages/de.json"]).hello).toBe("Hallo von Fink");
   expect(payload.files["messages/de.json"]).toContain("Artikel");
-  await expect(page.getByText(/Pushed to main/)).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
+  await expect(page.getByRole("link", { name: "View commit" })).toHaveAttribute("href", "https://github.com/example/repo/commit/ccc");
+  await expect(page.locator(".notice")).toHaveCount(0);
   await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -281,7 +283,7 @@ test("without write access, Fink forks, keeps the edits, pushes to the fork and 
   await expect(translation(page, "hello")).toHaveText("Hallo!");
   await page.getByRole("button", { name: "Push", exact: true }).click();
   await expect.poll(() => pushes.length).toBe(1);
-  expect(pushes[0]).toMatchObject({ owner: "translator", repo: "repo", message: "chore: update translations with Fink 🐦" });
+  expect(pushes[0]).toMatchObject({ owner: "translator", repo: "repo", message: "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com" });
   const pullRequest = page.getByRole("link", { name: "Open pull request" });
   await expect(pullRequest).toHaveAttribute("href", /^https:\/\/github\.com\/example\/repo\/compare\/main\.\.\.translator:repo:main\?/);
 });
@@ -476,7 +478,7 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["project.inlang/settings.json"]);
-  expect(payload.message).toBe("chore: update translations with Fink 🐦");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com");
   expect(JSON.parse(payload.files["project.inlang/settings.json"])).toEqual({ ...settings, baseLocale: "de", locales: ["en", "de", "fr"], experimental: { exampleFeature: true } });
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("0");
@@ -613,8 +615,21 @@ test("a push after GitHub replaced an edit still tells the translator", async ({
   // Meanwhile GitHub changes the same German message.
   remote.files = { ...files, "messages/de.json": JSON.stringify({ hello: "Servus" }) }; remote.shas = shasOf(remote.files); remote.head = "9".repeat(40);
   await page.getByRole("button", { name: "Push", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Your edit to hello was replaced by newer changes on GitHub. Pushed to main." })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("status").filter({ hasText: "Your edit to hello was replaced by newer changes on GitHub." })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
   expect(Object.keys(remote.pushes[0]!.files)).toEqual(["messages/de.json"]);
   expect(JSON.parse(remote.pushes[0]!.files["messages/de.json"]!).hello).toBe("Servus");
   expect(remote.pushes[0]!.files["messages/de.json"]).toContain("Artikel");
+});
+
+test("signed out, a repository GitHub refuses without an account prompts to sign in", async ({ page }) => {
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/user") return route.fulfill({ json: null });
+    await route.fulfill({ status: 401, json: { error: "Sign in with GitHub to open this repository. GitHub limits requests without an account." } });
+  });
+  await openRepository(page);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("Sign in with GitHub to open this repository");
+  await expect(alert.getByRole("link", { name: "Sign in with GitHub" })).toHaveAttribute("href", "/api/auth/login");
 });

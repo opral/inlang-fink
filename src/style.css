@@ -119,6 +119,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .welcome { padding-top: 0; padding-bottom: 64px; }
 .error, .notice { margin: 0 0 20px; padding: 12px 14px; border-radius: var(--radius); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .error { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.error > span { flex: 1; }
+.error > .button { flex-shrink: 0; font-size: 13px; padding: 5px 10px; color: var(--text); }
 .error button { border: 0; box-shadow: none; background: transparent; color: inherit; padding: 0 6px; font-size: 18px; }
 .notice { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
 .loading-status { position: fixed; z-index: 70; top: 76px; left: 50%; translate: -50% 0; display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 8px 14px; background: var(--text); color: #fff; font-size: 13px; border-radius: 999px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }

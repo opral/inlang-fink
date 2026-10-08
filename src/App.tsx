@@ -27,7 +27,8 @@ import { preparePush, replaceBundles, openRepositoryProject, syncWithRemote, git
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
 /** The commit message fink.inlang.com used for every push; translators don't write commits. */
-const PUSH_MESSAGE = "chore: update translations with Fink 🐦";
+// The body names Fink's URL so commits pushed with Fink can be found with a GitHub commit search.
+export const PUSH_MESSAGE = "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com";
 const replacedNotice = (ids: string[]) => `${ids.length === 1 ? `Your edit to ${ids[0]} was` : `${ids.length} of your edits (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""}) were`} replaced by newer changes on GitHub.`;
 /** GitHub's compare page for a fork's branch against the original repository, as fink.inlang.com opened it. */
 function compareUrl(parent: { owner: string; name: string }, owner: string, name: string, branch: string) {
@@ -67,7 +68,8 @@ export default function App() {
   // Write access and fork state, as on fink.inlang.com: collaborators push, everyone else forks.
   const [access, setAccess] = useState<{ key: string; push: boolean; signedIn: boolean; parent?: { owner: string; name: string } }>();
   const [forking, setForking] = useState(false);
-  const [pullRequest, setPullRequest] = useState<string>();
+  // The last push, shown in the float with links to the commit and, for a fork, the pull request to open.
+  const [pushed, setPushed] = useState<{ commit: string; pullRequest?: string }>();
   const [projects, setProjects] = useState<string[]>([]);
   const [initializing, setInitializing] = useState(() => { const params = new URLSearchParams(location.search); return !!params.get("repo") && !!params.get("project"); });
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
@@ -132,7 +134,9 @@ export default function App() {
     setDirtyCount(dirty.current.size);
     setSettingsDirty(!!settingsChanges(current));
   }, [indexBundle]);
-  const report = useCallback((error: unknown) => { setError(error instanceof Error ? error.message : String(error)); }, []);
+  // A 401 from Fink's API means GitHub wants an account (rate limit or private repository): the error offers sign-in.
+  const [needsSignIn, setNeedsSignIn] = useState(false);
+  const report = useCallback((error: unknown) => { setError(error instanceof Error ? error.message : String(error)); setNeedsSignIn((error as { status?: number })?.status === 401); }, []);
   const run = useCallback(async (task: () => Promise<void>) => { setBusy(true); setProgress(""); setError(""); setNotice(""); try { await task(); } catch (error) { report(error); } finally { setBusy(false); } }, [report]);
   useEffect(() => {
     void (async () => {
@@ -153,6 +157,7 @@ export default function App() {
       const repository = params.get("repo"), project = params.get("project");
       setInitializing(false);
       if (repository && project) void openLocation(repository, params.get("branch") ?? "", project);
+      else if (repository) setUrl(repository);
     })();
     return () => { flushRef.current(); void queue.current.then(() => localRef.current?.close()).catch(report); };
   }, []);
@@ -258,7 +263,7 @@ export default function App() {
     } finally { loading.current = false; }
     await navigator.storage.persist();
     setPage(0); setView("edit"); setReviewState(undefined); setTree(undefined); setProjects(nextTree.projects);
-    setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setPullRequest(undefined);
+    setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setPushed(undefined);
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
     if (localRef.current) recordDraft({ name: localRef.current.name, owner: repository.owner, repo: repository.name, branch: nextTree.branch, projectPath });
@@ -636,9 +641,9 @@ export default function App() {
       if (current.context.shas) Object.assign(current.context.shas, Object.fromEntries(await Promise.all(Object.entries(files).map(async ([path, content]) => [path, await gitBlobSha(content)]))));
       current.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
       baseline.current = current.context.bundleBaseline; dirty.current.clear();
-      await saveContext(current); setLocal({ ...current }); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); setNotice(withReplaced(`Pushed to ${current.context.branch}. Commit: ${result.url}`));
-      // Pushed to a fork: the float offers to open a pull request against the original repository.
-      if (access?.parent) setPullRequest(compareUrl(access.parent, current.context.owner, current.context.name, current.context.branch));
+      await saveContext(current); setLocal({ ...current }); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); if (replaced.length) setNotice(replacedNotice(replaced));
+      // The float shows the push with a link to the commit; pushed to a fork, also the pull request to open.
+      setPushed({ commit: result.url, pullRequest: access?.parent ? compareUrl(access.parent, current.context.owner, current.context.name, current.context.branch) : undefined });
       return;
     }
   });
@@ -727,11 +732,12 @@ export default function App() {
   const repositoryUrl = context && `https://github.com/${context.owner}/${context.name}`;
   const commitLink = context && <a className="sha" href={`${repositoryUrl}/commit/${context.head}`} target="_blank" rel="noreferrer" title="Commit your draft is based on">{context.head.slice(0, 7)}</a>;
   const showEditor = () => { setReviewState(undefined); setView("edit"); };
-  const signIn = <a className="button" href="/api/auth/login" onClick={() => { try { sessionStorage.setItem("fink:return", location.search); } catch { /* optional */ } }}><GitHubIcon /> Sign in with GitHub</a>;
+  // After signing in, return to the open project, or to the repository typed on the landing page.
+  const signIn = <a className="button" href="/api/auth/login" onClick={() => { try { sessionStorage.setItem("fink:return", location.search || (url.trim() ? `?${new URLSearchParams({ repo: url.trim() })}` : "")); } catch { /* optional */ } }}><GitHubIcon /> Sign in with GitHub</a>;
   const currentAccess = access && access.key === accessKey ? access : undefined;
   const floatMode: FloatMode = !user ? { kind: "signin", signIn }
     : currentAccess && !currentAccess.push ? { kind: "fork", forking, fork: forkRepository }
-    : pullRequest && !pendingCount ? { kind: "pullrequest", url: pullRequest, dismiss: () => setPullRequest(undefined) }
+    : pushed && !pendingCount ? { kind: "pushed", ...pushed, dismiss: () => setPushed(undefined) }
     : { kind: "push" };
   const hasChanges = !!reviewState && (!!reviewState.ids.length || !!reviewState.settings);
   const reviewPanel = reviewState && context && <section className="review-page" aria-labelledby="changes-title">
@@ -780,13 +786,13 @@ export default function App() {
     </div></header>
     <main className={context ? "workspace" : "welcome"}>
       {context && <h1 className="visually-hidden">{context.owner}/{context.name} · {reviewState ? "Changes" : view === "history" ? "History" : view === "settings" ? "Settings" : "Edit"}</h1>}
-      {context && error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
+      {context && error && <div role="alert" className="error"><span>{error}</span>{needsSignIn && !user && signIn}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}
       {context && notice && <p role="status" className="notice">{notice}</p>}
       {busy && <p role="status" className="loading-status"><span className="spinner" aria-hidden="true" />{progress || "Working…"}</p>}
       {!context && <Landing url={url} setUrl={value => { setUrl(value); setRepo(undefined); setTree(undefined); setBranch(""); }} submit={() => void discover()} busy={busy || initializing}
         picker={tree && { tree, branches, branch, path, setBranch, setPath, open: () => void open() }}
         recent={recent} openRecent={openRecent} forget={project => void forgetProject(project)} openShowcase={openShowcase}
-        status={<>{error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{notice && <p role="status" className="notice">{notice}</p>}</>} />}
+        status={<>{error && <div role="alert" className="error"><span>{error}</span>{needsSignIn && !user && signIn}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{notice && <p role="status" className="notice">{notice}</p>}</>} />}
       {context && <>
         {reviewPanel || (view === "history" ? <History context={context} pending={pendingCount} review={() => void review()} /> : view === "settings" ? <section className="settings-page"><header className="page-header"><div><h2>Project settings</h2><p className="settings-context"><a href={repositoryUrl} target="_blank" rel="noreferrer">{context.owner}/{context.name}</a> · {context.projectPath} · <span className="inline-branch"><BranchIcon />{context.branch}</span></p></div><button onClick={download} disabled={busy || saving}><DownloadIcon />Download project</button></header><div className="settings-form" inert={busy || saving}><Settings settings={context.settings} revision={settingsRevision} save={saveSettings} /></div><LocalDrafts openName={local?.name} /></section> : <>
         <div className="list-toolbar">

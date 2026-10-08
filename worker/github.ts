@@ -17,6 +17,10 @@ export async function boundedJson<T>(request: Request | Response): Promise<T> {
 export async function github<T>(path: string, token?: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`https://api.github.com${path}`, { method: method ?? (body === undefined ? "GET" : "POST"), headers: { Accept: "application/vnd.github+json", "User-Agent": "inlang-fink", "X-GitHub-Api-Version": "2022-11-28", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), redirect: "manual" });
   if (!response.ok) {
+    // Signed out, GitHub refuses anonymous requests once the shared rate limit is used up (403/429) and
+    // hides private repositories (404): both mean the user should sign in.
+    if (!token && (response.status === 401 || response.status === 403 || response.status === 429 || response.status === 404))
+      throw new HttpError(401, response.status === 404 ? "Repository not found. If it's private, sign in with GitHub to open it." : "Sign in with GitHub to open this repository. GitHub limits requests without an account.");
     // Never echo upstream messages that could contain credential or private content.
     throw new HttpError(response.status === 422 ? 409 : response.status, response.status === 404 ? "Repository or file not found. Check GitHub App access." : response.status === 422 ? "GitHub rejected the commit because the branch changed. Try again." : `GitHub request failed (${response.status}). Check permissions and rate limits.`);
   }
