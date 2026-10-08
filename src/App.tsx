@@ -27,8 +27,9 @@ import { preparePush, replaceBundles, openRepositoryProject, syncWithRemote, git
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
 /** The commit message fink.inlang.com used for every push; translators don't write commits. */
-// The body names Fink's URL so commits pushed with Fink can be found with a GitHub commit search.
-export const PUSH_MESSAGE = "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com";
+// The body names Fink's URL so commits pushed with Fink can be found with a GitHub commit search, and
+// the co-author trailer credits @inlang-bot (GitHub links hello@inlang.com to that account).
+export const PUSH_MESSAGE = "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com\n\nCo-authored-by: Fink <hello@inlang.com>";
 const replacedNotice = (ids: string[]) => `${ids.length === 1 ? `Your edit to ${ids[0]} was` : `${ids.length} of your edits (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""}) were`} replaced by newer changes on GitHub.`;
 /** GitHub's compare page for a fork's branch against the original repository, as fink.inlang.com opened it. */
 function compareUrl(parent: { owner: string; name: string }, owner: string, name: string, branch: string) {

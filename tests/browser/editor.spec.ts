@@ -116,7 +116,7 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["messages/de.json"]);
-  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com\n\nCo-authored-by: Fink <hello@inlang.com>");
   expect(payload.head).toBe("a".repeat(40));
   expect(JSON.parse(payload.files["messages/de.json"]).hello).toBe("Hallo von Fink");
   expect(payload.files["messages/de.json"]).toContain("Artikel");
@@ -283,7 +283,7 @@ test("without write access, Fink forks, keeps the edits, pushes to the fork and 
   await expect(translation(page, "hello")).toHaveText("Hallo!");
   await page.getByRole("button", { name: "Push", exact: true }).click();
   await expect.poll(() => pushes.length).toBe(1);
-  expect(pushes[0]).toMatchObject({ owner: "translator", repo: "repo", message: "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com" });
+  expect(pushes[0]).toMatchObject({ owner: "translator", repo: "repo", message: "chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com\n\nCo-authored-by: Fink <hello@inlang.com>" });
   const pullRequest = page.getByRole("link", { name: "Open pull request" });
   await expect(pullRequest).toHaveAttribute("href", /^https:\/\/github\.com\/example\/repo\/compare\/main\.\.\.translator:repo:main\?/);
 });
@@ -478,7 +478,7 @@ test("shared settings save to OPFS, appear in review, and push only settings", a
   await page.getByRole("button", { name: "Push", exact: true }).click();
   const payload = (await request).postDataJSON();
   expect(Object.keys(payload.files)).toEqual(["project.inlang/settings.json"]);
-  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com");
+  expect(payload.message).toBe("chore: update translations with Fink 🐦\n\nPushed via https://fink.inlang.com\n\nCo-authored-by: Fink <hello@inlang.com>");
   expect(JSON.parse(payload.files["project.inlang/settings.json"])).toEqual({ ...settings, baseLocale: "de", locales: ["en", "de", "fr"], experimental: { exampleFeature: true } });
   await expect(page.getByText(/Pushed to main/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Changes/ })).toContainText("0");
