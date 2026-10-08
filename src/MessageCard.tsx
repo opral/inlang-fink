@@ -8,6 +8,7 @@ import { Modal } from "./Modal";
 import { UsageCode } from "./UsagePeek";
 import { describeUsage, type Usage } from "./usage";
 import { languageName, type LanguageFocus } from "./languages";
+import { SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import type { Issue } from "./issues";
 
 const PatternEditor = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
@@ -22,7 +23,7 @@ type Props = {
   bundle: BundleNested; settings: ProjectSettings; focus: LanguageFocus; issuesOf: (bundle: BundleNested, locale: string) => Issue[];
   usages?: Usage[]; code?: { url: string; scope: string }; replaced?: boolean; edited?: boolean; unused?: boolean;
   change: (detail: ChangeEventDetail) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
-  addVariant: (bundleId: string, variant: Variant) => void;
+  addVariant: (bundleId: string, variant: Variant) => void; machineTranslate: (request: MachineTranslationRequest) => void;
 };
 
 /** One status per card, most urgent first. */
@@ -118,7 +119,7 @@ function formRows(message: MessageNested, declarations: Declaration[], required:
   return rows;
 }
 
-export const MessageCard = memo(function MessageCard({ bundle, settings, focus, issuesOf, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant }: Props) {
+export const MessageCard = memo(function MessageCard({ bundle, settings, focus, issuesOf, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, machineTranslate }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
@@ -167,7 +168,10 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const localeIssues = locale === focus.source ? [] : issues[locale] ?? [];
     const name = languageName(locale);
     let cells: React.ReactNode;
-    if (!message) cells = <button type="button" className="message-cell empty" onClick={() => { focusKey.current = locale; addLocale(bundle, locale); }}>Translate to {name}…</button>;
+    if (!message) cells = <div className="message-cell missing-translation-row">
+      <button type="button" className="empty" onClick={() => { focusKey.current = locale; addLocale(bundle, locale); }}>Translate to {name}…</button>
+      <button type="button" className="mt-button" onClick={() => machineTranslate({ source: focus.source, targets: [locale], count: 1, message: bundle.id })}><SparkleIcon />Machine translate</button>
+    </div>;
     else if (isSimple(message)) cells = message.variants.map(variant => <div key={variant.id} className="message-cell edit">
       {editor(locale, variant, `${name} translation of ${bundle.id}`)}
       {localeIssues.flatMap(issue => issue.type === "missing-variable" ? [issue.name] : []).map(variable => <p key={variable} className="field-note defect">{`{${variable}}`} is missing. <button type="button" className="inline-link" onClick={() => { const target = editors.current.get(locale); target?.insertExpression(variable); focusEditor(target); }}>Insert {`{${variable}}`}</button></p>)}

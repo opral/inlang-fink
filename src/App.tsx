@@ -5,6 +5,7 @@ import { RichDiff } from "./DiffBundleView";
 import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
 import { validateSettingsEdit } from "./settingsData";
 import { LixFloat } from "./LixFloat";
+import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
@@ -391,6 +392,8 @@ export default function App() {
     return issues;
   }, [focus?.source, local]);
   const todoCounts = useMemo(() => new Map<string, number>(), [bundles, issuesOf]);
+  const [mtRequest, setMtRequest] = useState<MachineTranslationRequest>();
+  const machineTranslate = useCallback((request: MachineTranslationRequest) => setMtRequest(request), []);
   const todoIn = useCallback((locale: string) => {
     let count = todoCounts.get(locale);
     if (count === undefined) { count = bundles.filter(bundle => issuesOf(bundle, locale).length).length; todoCounts.set(locale, count); }
@@ -531,9 +534,12 @@ export default function App() {
             {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
           </div>}
         </div>
-        <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
+        <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span>
+          {focus && counts["missing-translation"] > 0 && <button className="mt-bulk" onClick={() => machineTranslate({ source: focus.source, targets: targetLocales.filter(locale => locale !== focus.source), count: counts["missing-translation"] })}><SparkleIcon />Machine translate {counts["missing-translation"]} missing</button>}
+          <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
+        {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

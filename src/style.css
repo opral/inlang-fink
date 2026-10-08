@@ -288,6 +288,20 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-cell.edit.complex { cursor: auto; display: flex; flex-direction: column; gap: 8px; }
 .message-cell.edit.complex:focus-within { box-shadow: none; }
 .message-cell inlang-pattern-editor { display: block; }
+.message-cell.missing-translation-row { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 0; }
+.missing-translation-row .empty { flex: 1; min-width: 0; justify-content: flex-start; min-height: 48px; padding: 11px 16px; border: 0; border-radius: 0; box-shadow: none; background: transparent; font-size: 15px; font-weight: 400; color: var(--muted); }
+.missing-translation-row .empty:hover { color: var(--text); background: transparent; }
+.missing-translation-row:hover { background: #fcfcfd; }
+.mt-button, .mt-bulk { gap: 6px; font-size: 13px; color: var(--text-2); box-shadow: none; }
+.mt-button { height: 30px; padding: 0 10px; border-color: var(--border); background: var(--surface); }
+.mt-button:hover, .mt-bulk:hover { color: var(--text); border-color: var(--border-strong); }
+.list-head .mt-bulk { margin-left: auto; margin-right: 8px; padding: 4px 10px; }
+.mt-dialog { width: min(480px, calc(100% - 24px)); }
+.mt-dialog h2 { display: inline-flex; align-items: center; gap: 8px; }
+.mt-dialog p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.mt-dialog code { font-family: var(--mono); font-size: 12.5px; color: var(--blue); background: #eff6ff; border-radius: 4px; padding: 1px 4px; }
+.mt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.dialog-close { width: 32px; height: 32px; padding: 0; border: 0; box-shadow: none; background: transparent; font-size: 20px; color: var(--muted); }
 .message-cell.empty { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; box-shadow: none; background: transparent; font-weight: 400; color: var(--muted); }
 .message-cell.empty:hover { color: var(--text); background: #fcfcfd; }
 .message-cell.form { display: flex; align-items: baseline; gap: 12px; }
@@ -364,6 +378,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
   .message-locale { border-right: 0; border-bottom: 1px solid #f4f4f5; padding: 6px 16px; }
   .message-locale .todo-dot { margin-top: 0; align-self: center; }
   .message-cell.form { flex-direction: column; gap: 2px; }
+  .missing-translation-row .mt-button { font-size: 0; width: 34px; padding: 0; gap: 0; }
+  .list-head .mt-bulk { font-size: 0; gap: 0; padding: 6px 8px; }
   .form-label { flex: none; }
   .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .chips button { flex-shrink: 0; }

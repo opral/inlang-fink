@@ -161,6 +161,28 @@ test("To do filters and the language menu count work per language", async ({ pag
   await expect(page.getByRole("button", { name: /English.*French/ })).toBeVisible({ timeout: 60_000 });
 });
 
+test("machine translation asks the translator to email us to activate it", async ({ page }) => {
+  await stubApi(page);
+  await openRepository(page);
+  const items = page.locator('[data-bundle="items"]');
+  await expect(items.getByRole("button", { name: "Machine translate" })).toBeVisible({ timeout: 90_000 });
+  await items.getByRole("button", { name: "Machine translate" }).click();
+  const dialog = page.getByRole("dialog", { name: "Machine translation" });
+  await expect(dialog).toContainText("example/repo");
+  const email = dialog.getByRole("link", { name: "Write email" });
+  const href = decodeURIComponent((await email.getAttribute("href"))!);
+  expect(href).toContain("mailto:hello@opral.com?subject=Activate machine translation for example/repo");
+  expect(href).toContain("(English → German)");
+  expect(href).toContain('"items"');
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  // The bulk action covers every missing translation in the chosen languages.
+  await page.getByRole("button", { name: "Machine translate 1 missing" }).click();
+  await expect(page.getByRole("dialog", { name: "Machine translation" })).toBeVisible();
+  // Nothing was written to the draft.
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+});
+
 test("creates plural variants for a missing translation in the structure editor", async ({ page }) => {
   await stubApi(page);
   await openRepository(page);
