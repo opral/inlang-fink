@@ -19,6 +19,9 @@ importers:
       '@inlang/plugin-i18next':
         specifier: 6.3.0
         version: 6.3.0
+      '@inlang/plugin-m-function-matcher':
+        specifier: 2.2.17
+        version: 2.2.17
       '@inlang/plugin-message-format':
         specifier: 4.4.5
         version: 4.4.5
@@ -605,6 +608,9 @@ packages:
 
   '@inlang/plugin-i18next@6.3.0':
     resolution: {integrity: sha512-xVHFtXaNJPVrN5NMbhSzyhLvvNPWkYvjmonN4ie/BAu8etGk0JzP0aqtH/B4ItQBjWn90r8PjuqGAbMDWH/TyA==}
+
+  '@inlang/plugin-m-function-matcher@2.2.17':
+    resolution: {integrity: sha512-KzJuRQiXVRJR48HCqIjx83cOwuvnyvugSl2VrBtPmyW7w5p+ulEGdNCZu2+KvIiOI/Q1HAEWwM/XSpLY9vunMA==}
 
   '@inlang/plugin-message-format@4.4.5':
     resolution: {integrity: sha512-g3WpG00mx3Wq/3zulz4uuT+HhdBRB7UMz2hVbfSm+E4RJHXNYyFyvS0elPETX7gEz8yiTd0KbyukZGJHetmkZA==}
@@ -1962,6 +1968,10 @@ snapshots:
     dependencies:
       '@inlang/sdk': 3.1.0
       '@sinclair/typebox': 0.31.28
+
+  '@inlang/plugin-m-function-matcher@2.2.17':
+    dependencies:
+      '@inlang/sdk': 3.1.0
 
   '@inlang/plugin-message-format@4.4.5':
     dependencies:

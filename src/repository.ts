@@ -40,7 +40,8 @@ export function outputPath(settings: ProjectSettings, pluginKey: string, output:
 }
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/${path}`, { method: body === undefined ? "GET" : "POST", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const result = await response.json() as T & { error?: string };
+  let result: T & { error?: string };
+  try { result = await response.json(); } catch { throw new Error(`Request failed (${response.status}). Try again.`); }
   if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status}).`);
   return result as T;
 }

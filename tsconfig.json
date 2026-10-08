@@ -24,6 +24,7 @@
     "playwright.config.ts"
   ],
   "exclude": [
-    "tests/worker.test.ts"
+    "tests/worker.test.ts",
+    "tests/source.test.ts"
   ]
 }

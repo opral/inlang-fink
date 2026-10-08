@@ -16,6 +16,7 @@
   "include": [
     "worker",
     "worker-configuration.d.ts",
-    "tests/worker.test.ts"
+    "tests/worker.test.ts",
+    "tests/source.test.ts"
   ]
 }

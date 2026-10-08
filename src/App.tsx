@@ -13,9 +13,10 @@ import { BranchMenu } from "./BranchMenu";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcases";
 import { highlightMatches, searchTerms, searchText } from "./search";
+import { isUnused, scanUsages, type UsageIndex } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { preparePush, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
-import { api, parseRepository, repoQuery, type Repo, type RepoTree } from "./repository";
+import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
 const DEFAULT_MESSAGE = "Update translations with Fink";
 export default function App() {
@@ -62,6 +63,9 @@ export default function App() {
   const dirty = useRef(new Set<string>());
   const searchIndex = useRef(new WeakMap<BundleNested, string>());
   const table = useRef<HTMLDivElement>(null);
+  const [usage, setUsage] = useState<{ key: string; index: UsageIndex }>();
+  const [usageStatus, setUsageStatus] = useState<{ state: "idle" | "loading" | "ready" | "error"; error?: string }>({ state: "idle" });
+  const usageCache = useRef(new Map<string, Promise<UsageIndex>>());
   const branchCache = useRef(new Map<string, Promise<string[]>>());
   const indexBundle = useCallback((id: string, bundle?: BundleNested) => {
     const previous = bundleIndex.current.get(id);
@@ -277,6 +281,22 @@ export default function App() {
     });
   };
   useEffect(() => { if (local) setRecentPending(local.context, pendingCount); }, [local, pendingCount]);
+  // Where each message is used in the app's code, at the commit the draft is based on. The bundled
+  // matcher understands Paraglide's m.*() calls, so only message-format projects are scanned.
+  const usageKey = local && "plugin.inlang.messageFormat" in local.context.settings ? `${local.context.owner}/${local.context.name}@${local.context.head}:${projectScope(local.context)}` : undefined;
+  useEffect(() => {
+    if (!local || !usageKey) { setUsage(undefined); setUsageStatus({ state: "idle" }); return; }
+    let live = true, request = usageCache.current.get(usageKey);
+    if (!request) {
+      const scope = projectScope(local.context);
+      request = api<{ files: Record<string, string> }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: scope })}`).then(result => scanUsages(result.files));
+      usageCache.current.set(usageKey, request);
+      request.catch(() => usageCache.current.delete(usageKey));
+    }
+    setUsageStatus({ state: "loading" });
+    request.then(index => { if (live) { setUsage({ key: usageKey, index }); setUsageStatus({ state: "ready" }); } }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
+    return () => { live = false; };
+  }, [usageKey]);
   const review = async () => {
     if (!local) return;
     setError("");
@@ -344,6 +364,10 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   });
   const context = local?.context;
+  const codeUrl = context && `https://github.com/${context.owner}/${context.name}/blob/${context.head}`, codeScope = context ? projectScope(context) : "";
+  const code = useMemo(() => codeUrl ? { url: codeUrl, scope: codeScope } : undefined, [codeUrl, codeScope]);
+  // Results always match the commit shown; a newly created bundle is never reported as unused.
+  const usageIndex = usage && usage.key === usageKey ? usage.index : undefined;
   const repositoryUrl = context && `https://github.com/${context.owner}/${context.name}`;
   const commitLink = context && <a className="sha" href={`${repositoryUrl}/commit/${context.head}`} target="_blank" rel="noreferrer" title="Commit your draft is based on">{context.head.slice(0, 7)}</a>;
   const showEditor = () => { setReviewState(undefined); setView("edit"); };
@@ -390,7 +414,7 @@ export default function App() {
         {tab("Changes", !!reviewState, () => void review(), <span className={pendingCount ? "badge changed" : "badge"}>{pendingCount}</span>, busy || saving)}
         {tab("History", !reviewState && view === "history", () => { setReviewState(undefined); setView("history"); })}
         {tab("Settings", !reviewState && view === "settings", () => { setReviewState(undefined); setView("settings"); })}
-        <span className="sync-status"><span role="status" className={saving ? "save-status saving" : failure.current ? "save-status failed" : "save-status"}>{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span><span className="based-on">based on {commitLink}</span></span>
+        <span className="sync-status"><span role="status" className={saving ? "save-status saving" : failure.current ? "save-status failed" : "save-status"}>{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span>{usageStatus.state === "loading" && <span className="usage-status">Finding usage in code…</span>}{usageStatus.state === "error" && <span className="usage-status failed" title={usageStatus.error}>Usage in code unavailable</span>}<span className="based-on">based on {commitLink}</span></span>
       </nav>}
     </div></header>
     <main className={context ? "workspace" : "welcome"}>
@@ -407,7 +431,7 @@ export default function App() {
         <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={context.settings.locales} baseLocale={context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" type="search" aria-label="Search messages" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search…" /></div>
         <div className="table-header"><span>{visible.length} {visible.length === 1 ? "Bundle" : "Bundles"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} />)}
+        <div className="message-table" ref={table} inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

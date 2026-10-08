@@ -5,13 +5,18 @@ const resources: Record<string, string> = {
   "messages/en.json": JSON.stringify({ hello: "Hello", items: [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["countPlural"], match: { "countPlural=one": "One item", "countPlural=*": "{count} items" } }] }),
   "messages/de.json": JSON.stringify({ hello: "Hallo" }),
 };
-async function stubApi(page: import("@playwright/test").Page, files = resources) {
+const source: Record<string, string> = {
+  "src/routes/+page.svelte": "<script>\n\timport { m } from '$lib/paraglide/messages';\n</script>\n\n<Button variant=\"primary\">\n\t{m.hello()}\n</Button>\n<p>{m.items({ count: 2 })}</p>\n",
+  "src/lib/cart.ts": "import * as m from '$lib/paraglide/messages';\nexport const summary = (count: number) => toast.success(m.items({ count }));\n",
+};
+async function stubApi(page: import("@playwright/test").Page, files = resources, code = source) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     let data: unknown;
     if (url.pathname === "/api/user") data = { login: "translator" };
     else if (url.pathname === "/api/github/tree") data = { head: "a".repeat(40), tree: "b".repeat(40), branch: url.searchParams.get("branch") || "main", paths: Object.keys(files), projects: ["project.inlang"] };
     else if (url.pathname === "/api/github/branches") data = ["main", "translations"];
+    else if (url.pathname === "/api/github/source") data = { files: code };
     else if (url.pathname === "/api/github/commits") data = [{ sha: "a".repeat(40), url: "https://github.com/example/repo/commit/aaa", message: "Add German copy\n\nReviewed", author: "translator", date: "2026-10-01T00:00:00Z" }];
     else if (url.pathname === "/api/github/file") data = { content: files[url.searchParams.get("path")!] };
     else if (url.pathname === "/api/github/push") data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" };
@@ -132,6 +137,7 @@ test("opens the selected showcase directly and pages large catalogs without losi
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/user") return route.fulfill({ json: null });
+    if (url.pathname === "/api/github/source") return route.fulfill({ json: { files: {} } });
     expect(url.searchParams.get("owner")).toBe("pocket-id");
     expect(url.searchParams.get("repo")).toBe("pocket-id");
     if (url.pathname === "/api/github/tree") return route.fulfill({ json: { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: ["frontend/project.inlang/settings.json", "frontend/messages/en.json"], projects: ["frontend/project.inlang"] } });
@@ -280,4 +286,32 @@ test("branch menu keeps a separate draft per branch and history marks the draft 
   await page.getByRole("button", { name: "Fink", exact: true }).click();
   await page.getByRole("button", { name: "Open another repository…" }).click();
   await expect(page.getByRole("button", { name: "Open example/repo" }).first()).toContainText("1 unpushed");
+});
+
+test("shows where each message is used in code above its translations", async ({ page }) => {
+  await stubApi(page, { ...resources, "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]!), legacy_banner: "Old banner" }) });
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const hello = page.locator('[data-bundle="hello"] .usage-peek');
+  await expect(hello).toBeVisible({ timeout: 90_000 });
+  await expect(hello.locator(".usage-role")).toHaveText("Button");
+  await expect(hello.locator(".usage-code .hit")).toContainText("{m.hello()}");
+  await expect(hello.locator(".usage-code mark")).toHaveText("m.hello()");
+  await expect(hello.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/routes/+page.svelte#L6`);
+  const items = page.locator('[data-bundle="items"] .usage-peek');
+  await expect(items).toContainText("1 of 2");
+  const roles = [await items.locator(".usage-role").textContent()];
+  await items.getByRole("button", { name: "Next usage" }).click();
+  await expect(items).toContainText("2 of 2");
+  roles.push(await items.locator(".usage-role").textContent());
+  expect(roles.sort()).toEqual(["Text", "Toast"]);
+  await expect(items.getByRole("button", { name: "Usage in code" })).toHaveAttribute("aria-expanded", "true");
+  await items.getByRole("button", { name: "Usage in code" }).click();
+  await expect(items.locator(".usage-code")).toHaveCount(0);
+  await expect(items).toContainText("2 usages");
+  await expect(items.getByRole("button", { name: "Usage in code" })).toHaveAttribute("aria-expanded", "false");
+  await items.getByRole("button", { name: "Usage in code" }).click();
+  await expect(items.locator(".usage-code")).toBeVisible();
+  await expect(page.locator('[data-bundle="legacy_banner"] .usage-peek')).toContainText("Not used in code");
 });

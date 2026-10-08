@@ -2,19 +2,22 @@ import React, { memo, useMemo, useState } from "react";
 import { createComponent } from "@lit/react";
 import { InlangBundle, InlangBundleAction, InlangMessage, InlangVariant, InlangPatternEditor, InlangAddSelector, type ChangeEventDetail } from "@inlang/editor-component";
 import type { BundleNested, MessageNested, ProjectSettings } from "@inlang/sdk/browser";
+import { UsagePeek } from "./UsagePeek";
+import type { Usage } from "./usage";
 const BundleElement = createComponent({ react: React, tagName: "inlang-bundle", elementClass: InlangBundle, events: { onEntityChange: "change" } });
 const BundleActionElement = createComponent({ react: React, tagName: "inlang-bundle-action", elementClass: InlangBundleAction });
 const MessageElement = createComponent({ react: React, tagName: "inlang-message", elementClass: InlangMessage });
 const VariantElement = createComponent({ react: React, tagName: "inlang-variant", elementClass: InlangVariant });
 const PatternElement = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
 const SelectorElement = createComponent({ react: React, tagName: "inlang-add-selector", elementClass: InlangAddSelector, events: { onEntityChange: "change", onComplete: "submit" } });
-export const Editor = memo(function Editor({ bundle, settings, locales, change, addLocale, removeBundle }: { bundle: BundleNested; settings: ProjectSettings; locales: string[]; change: (detail: ChangeEventDetail) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void }) {
+export const Editor = memo(function Editor({ bundle, settings, locales, change, addLocale, removeBundle, usages, unused = false, code }: { usages?: Usage[]; unused?: boolean; code?: { url: string; scope: string }; bundle: BundleNested; settings: ProjectSettings; locales: string[]; change: (detail: ChangeEventDetail) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void }) {
   const rendered = useMemo(() => structuredClone(bundle), [bundle]);
   const [selector, setSelector] = useState<MessageNested>();
   const handleChange = (event: Event) => { if (event instanceof CustomEvent && event.detail?.entity) change(structuredClone(event.detail)); };
   return <article className="bundle" data-bundle={bundle.id}>
     <BundleElement bundle={rendered} onEntityChange={handleChange}>
       <BundleActionElement slot="bundle-action" actionTitle="Delete" onClick={() => removeBundle(bundle.id)} aria-label={`Delete ${bundle.id}`} />
+      {code && <UsagePeek bundleId={bundle.id} usages={usages} unused={unused} codeUrl={code.url} scope={code.scope} />}
       {settings.locales.filter(locale => !locales.length || locales.includes(locale) || locale === settings.baseLocale).map(locale => {
         const message = rendered.messages.find(m => m.locale === locale);
         return message ? <MessageElement slot="message" key={message.id} message={message} variants={message.variants} settings={settings}>

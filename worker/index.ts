@@ -1,5 +1,6 @@
 import { cookie, HttpError, requireSameOrigin, seal, setCookie, tokenFor, unseal, type Session } from "./auth";
 import { boundedJson, github, push, repoBase, validPath, type PushInput } from "./github";
+import { extractSource, isSourcePath } from "./source";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 type LoginState = { purpose: "oauth"; expires: number; nonce: string; origin: string; verifier: string };
 type Relay = { purpose: "relay"; expires: number; nonce: string; session: string; origin: string };
@@ -79,6 +80,18 @@ export default {
         if (tree.truncated) throw new HttpError(413, "GitHub returned an incomplete repository tree. Choose a smaller repository.");
         const paths = tree.tree.filter(entry => entry.type === "blob" && entry.mode !== "120000").map(entry => entry.path);
         return json({ branch, head: commit.sha, tree: commit.commit.tree.sha, paths, projects: paths.filter(path => path.endsWith(".inlang/settings.json")).map(path => path.slice(0, -14)) });
+      }
+      if (url.pathname === "/api/github/source") {
+                const ref = url.searchParams.get("ref") ?? "", scope = url.searchParams.get("path") ?? "";
+        if (!/^[0-9a-f]{40}$/.test(ref) || (scope && !validPath(scope))) throw new HttpError(400, "Invalid source request.");
+        const archive = await fetch(`https://api.github.com${base}/tarball/${ref}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "inlang-fink", "X-GitHub-Api-Version": "2022-11-28", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        if (!archive.ok || !archive.body) {
+          await archive.body?.cancel();
+          throw new HttpError(archive.status === 404 ? 404 : [401, 403, 429].includes(archive.status) ? archive.status : 502, archive.status === 404 ? "Repository or commit not found. Check GitHub App access." : `GitHub archive request failed (${archive.status}). Check permissions and rate limits.`);
+        }
+        const files = await extractSource(archive.body, path => isSourcePath(path, scope));
+        // Signed-in requests may include private code: never cache it. Public source is pinned to a commit.
+        return Response.json({ files }, { headers: { "Cache-Control": token ? "no-store" : "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
       }
       if (url.pathname === "/api/github/commits") {
         const branch = url.searchParams.get("branch") ?? "", path = url.searchParams.get("path") ?? "";
