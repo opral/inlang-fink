@@ -20,14 +20,28 @@ test("stale branch heads are rejected before creating any Git objects", async ()
   await expect(push(input, "test-token")).rejects.toMatchObject({ status: 409 });
   expect(mock).toHaveBeenCalledTimes(1);
 });
-test("push preserves the base tree, commits against the expected head, and never force-updates", async () => {
+const graphqlCommit = { data: { createCommitOnBranch: { commit: { oid: "d".repeat(40), url: "https://github.com/example/repo/commit/ddd", tree: { oid: "e".repeat(40) } } } } };
+test("push commits through createCommitOnBranch (signed by GitHub) against the expected head", async () => {
   const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify({ baseLocale: "en", locales: ["en", "de"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) };
-  const responses = [{ object: { sha: input.head } }, settingsFile, { tree: { sha: "b".repeat(40) } }, { sha: "c".repeat(40) }, { sha: "d".repeat(40), html_url: "https://github.com/example/repo/commit/ddd" }, {}];
+  const responses = [{ object: { sha: input.head } }, settingsFile, graphqlCommit];
   const mock = vi.fn().mockImplementation(async () => Response.json(responses.shift())); vi.stubGlobal("fetch", mock);
-  await expect(push(input, "test-token")).resolves.toMatchObject({ head: "d".repeat(40) });
-  expect(JSON.parse(mock.mock.calls[3][1].body)).toMatchObject({ base_tree: "b".repeat(40), tree: [{ path: "messages/en.json", mode: "100644", type: "blob" }] });
-  expect(JSON.parse(mock.mock.calls[4][1].body)).toMatchObject({ parents: [input.head] });
-  expect(JSON.parse(mock.mock.calls[5][1].body)).toEqual({ sha: "d".repeat(40), force: false });
+  await expect(push({ ...input, message: "Translate\n\nCo-authored-by: Fink <hello@inlang.com>", files: { "messages/en.json": '{"hello":"Grüß"}' } }, "test-token")).resolves.toEqual({ head: "d".repeat(40), tree: "e".repeat(40), url: "https://github.com/example/repo/commit/ddd" });
+  expect(mock.mock.calls[2][0]).toBe("https://api.github.com/graphql");
+  const { variables } = JSON.parse(mock.mock.calls[2][1].body);
+  expect(variables.input).toMatchObject({ branch: { repositoryNameWithOwner: "example/repo", branchName: "main" }, expectedHeadOid: input.head, message: { headline: "Translate", body: "Co-authored-by: Fink <hello@inlang.com>" } });
+  const [addition] = variables.input.fileChanges.additions;
+  expect(addition.path).toBe("messages/en.json");
+  expect(new TextDecoder().decode(Uint8Array.from(atob(addition.contents), char => char.charCodeAt(0)))).toBe('{"hello":"Grüß"}');
+});
+test("a branch that moved during the commit is a 409, other GraphQL errors don't leak upstream text", async () => {
+  const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify({ baseLocale: "en", locales: ["en"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } })) };
+  for (const [errors, status] of [[[{ type: "STALE_DATA", message: "Expected branch to point to aaa but it did not." }], 409], [[{ type: "FORBIDDEN", message: "secret detail" }], 403]] as const) {
+    const responses = [{ object: { sha: input.head } }, settingsFile, { data: { createCommitOnBranch: null }, errors }];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json(responses.shift())));
+    const error = await push(input, "test-token").catch(reason => reason);
+    expect(error).toMatchObject({ status });
+    expect(error.message).not.toContain("secret detail");
+  }
 });
 test("push rejects traversal, workflows, non-JSON files and empty commits", async () => {
   const cases: Record<string,string>[] = [{ "../secret.json": "{}" }, { ".github/workflows/build.json": "{}" }, { "code.ts": "{}" }, {}];
@@ -64,10 +78,10 @@ test("push accepts core settings and new locale resources together, rejects plug
   const before = { baseLocale: "en", locales: ["en"], modules: ["https://example.com/plugin.js"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } };
   const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify(before)) };
   const after = { ...before, locales: ["en", "fr"] };
-  const responses = [{ object: { sha: input.head } }, settingsFile, { tree: { sha: "b".repeat(40) } }, { sha: "c".repeat(40) }, { sha: "d".repeat(40) }, {}];
+  const responses = [{ object: { sha: input.head } }, settingsFile, graphqlCommit];
   const mock = vi.fn().mockImplementation(async () => Response.json(responses.shift())); vi.stubGlobal("fetch", mock);
   await expect(push({ ...input, files: { "project.inlang/settings.json": JSON.stringify(after), "messages/fr.json": '{"hello":"Salut"}' } }, "test-token")).resolves.toMatchObject({ head: "d".repeat(40) });
-  expect(JSON.parse(mock.mock.calls[3][1].body).tree.map((file: { path: string }) => file.path)).toEqual(["project.inlang/settings.json", "messages/fr.json"]);
+  expect(JSON.parse(mock.mock.calls[2][1].body).variables.input.fileChanges.additions.map((file: { path: string }) => file.path)).toEqual(["project.inlang/settings.json", "messages/fr.json"]);
   mock.mockImplementation(async () => Response.json(mock.mock.calls.length === 1 ? { object: { sha: input.head } } : settingsFile)); mock.mockClear();
   await expect(push({ ...input, files: { "project.inlang/settings.json": JSON.stringify({ ...after, modules: [] }) } }, "test-token")).rejects.toMatchObject({ status: 400 });
   expect(mock).toHaveBeenCalledTimes(2);

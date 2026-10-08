@@ -57,12 +57,31 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
     }
   }
   if (entries.some(([path]) => !allowed.has(path))) throw new HttpError(400, "Only resource paths configured in this project can be pushed.");
-  const commit = await github<{ tree: { sha: string } }>(`${base}/git/commits/${input.head}`, token);
-  const tree = await github<{ sha: string }>(`${base}/git/trees`, token, { base_tree: commit.tree.sha, tree: entries.map(([path, content]) => ({ path, mode: "100644", type: "blob", content })) });
-  const next = await github<{ sha: string; html_url: string }>(`${base}/git/commits`, token, { message: input.message.trim(), tree: tree.sha, parents: [input.head] });
-  // Non-force update rejects a concurrent branch advance between our read and write.
-  await github(refPath, token, { sha: next.sha, force: false }, "PATCH");
-  return { head: next.sha, tree: tree.sha, url: next.html_url ?? `https://github.com/${input.owner}/${input.repo}/commit/${next.sha}` };
+  // GitHub signs commits made with createCommitOnBranch, so they show as Verified (opral/inlang#4409);
+  // REST git/commits leaves them unsigned. expectedHeadOid rejects a concurrent branch advance.
+  const [headline, ...body] = input.message.trim().split("\n");
+  const result = await github<{ data?: { createCommitOnBranch?: { commit: { oid: string; url: string; tree: { oid: string } } } }; errors?: { type?: string; message?: string }[] }>("/graphql", token, {
+    query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid url tree { oid } } } }",
+    variables: { input: {
+      branch: { repositoryNameWithOwner: `${input.owner}/${input.repo}`, branchName: input.branch },
+      expectedHeadOid: input.head,
+      message: { headline, body: body.join("\n").trim() },
+      fileChanges: { additions: entries.map(([path, content]) => ({ path, contents: base64(content) })) },
+    } },
+  });
+  const commit = result.data?.createCommitOnBranch?.commit;
+  if (!commit) {
+    // Never echo upstream messages that could contain credential or private content.
+    if (result.errors?.some(error => error.type === "STALE_DATA" || /expected branch to point to/i.test(error.message ?? ""))) throw new HttpError(409, "The branch changed on GitHub while pushing.");
+    throw new HttpError(result.errors?.some(error => error.type === "FORBIDDEN") ? 403 : 502, "GitHub rejected the commit. Check permissions and branch protection.");
+  }
+  return { head: commit.oid, tree: commit.tree.oid, url: commit.url };
+}
+function base64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
 }
 
 export type ForkInput = { owner: string; repo: string; branch: string };
