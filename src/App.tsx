@@ -530,7 +530,6 @@ export default function App() {
           {filter === "todo" && <div className="chips" role="group" aria-label="Kind of work">
             {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
           </div>}
-          {focus && !focus.all && <div className="column-heads" aria-hidden="true"><span>{languageName(focus.source)}{focus.source === context.settings.baseLocale ? " · reference" : ""}</span><span>{focus.all ? "All languages" : focus.targets.map(languageName).join(", ")}</span></div>}
         </div>
         <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}

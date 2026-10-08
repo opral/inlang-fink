@@ -58,7 +58,8 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   // The only other language is German, so the editor focuses English → German.
   await expect(reference(page, "hello")).toHaveText("Hello", { timeout: 90_000 });
   await expect(translation(page, "hello")).toHaveText("Hallo");
-  await expect(reference(page, "items")).toContainText("2 forms");
+  // Plural forms are rows under the language, each with its category and example numbers.
+  await expect(page.locator('[data-bundle="items"] .message-ref .form-label')).toHaveText(["one1", "other0, 2, 3…"]);
   await expect(page.locator('[data-bundle="items"]')).toContainText("Missing");
   // Review all languages shows English as an editable row too.
   await page.getByRole("button", { name: /English.*German/ }).click();
