@@ -238,8 +238,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 /* Usage in code: a light peek above each message's translations */
 .usage-peek { display: block; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 .usage-peek.collapsed .usage-bar { padding-bottom: 8px; }
-.usage-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; padding: 8px 12px 0; font-size: 12px; }
-.usage-peek.unused { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; font-size: 12px; }
+.usage-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; padding: 8px 12px 0 13px; font-size: 12px; }
+.usage-peek.unused { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px 8px 13px; font-size: 12px; }
 .usage-role { flex-shrink: 0; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
 .usage-role.unused { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
 .usage-path { display: flex; flex: 1 1 18ch; min-width: 0; overflow: hidden; font-family: var(--mono); color: #52525b; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
@@ -255,7 +255,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .usage-code > code { display: inline-block; min-width: 100%; font: inherit; background: none; border: 0; padding: 0; }
 .usage-code > code > span { display: block; padding-right: 12px; background: var(--bg); }
 .usage-code > code > .hit { background: #eff6ff; color: var(--text-2); }
-.usage-code .ln { position: sticky; left: 0; display: inline-block; width: 48px; padding-right: 14px; text-align: right; color: var(--muted); background: inherit; user-select: none; }
+/* Line numbers fill the locale column so code starts where translations start. */
+.usage-code .ln { position: sticky; left: 0; display: inline-block; width: 93px; padding-left: 13px; padding-right: 12px; text-align: left; color: var(--muted); background: inherit; user-select: none; }
 .usage-code mark { background: #dbeafe; color: var(--blue); border-radius: 3px; padding: 0 2px; font-weight: 500; }
 .usage-note { flex: 1 1 12ch; min-width: 0; }
 .usage-status { color: var(--muted); }
@@ -371,7 +372,6 @@ body:has(.lixfloat) footer { padding-bottom: 72px; }
   .float-label { display: none; }
   .float-composer { flex-direction: column; }
   .usage-status { display: none; }
-  .usage-code .ln { width: 36px; padding-right: 10px; }
   .footer-grid { flex-direction: column; text-align: center; }
   .dialog-backdrop { padding: 12px; }
   .bundle { overflow-x: auto; }
