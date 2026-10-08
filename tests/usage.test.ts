@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import { isUnused, scanUsages, usageRole } from "../src/usage";
+import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
+import type { InlangPlugin } from "@inlang/sdk/browser";
+import { sourceSnapshot, usagesFromReferences, usageRole } from "../src/usage";
+
+// References come from the inlang m-function matcher's usage analysis (what the SDK's findUsages returns).
+async function usages(files: Record<string, string>) {
+  const analysis = await (mFunctionMatcher as InlangPlugin).analyzeUsage!({ files: sourceSnapshot(files), settings: { baseLocale: "en", locales: ["en"] } as never });
+  return { analysis, byBundle: usagesFromReferences(analysis.references ?? [], files) };
+}
 
 const page = `<script lang="ts">
 	import { m } from '$lib/paraglide/messages';
@@ -16,9 +24,10 @@ const page = `<script lang="ts">
 <p>{m.refresh_failed({ resource: m.images() })}</p>
 `;
 
-test("finds usages with the inlang matcher, adds nested calls, snippets and roles", async () => {
-  const index = await scanUsages({ "src/routes/settings/+page.svelte": page, "src/lib/strings.ts": "export const legacy = 'mentioned_only';" });
-  const first = (id: string) => index.usages.get(id)?.[0];
+test("turns SDK references into snippets and roles", async () => {
+  const { analysis, byBundle } = await usages({ "src/routes/settings/+page.svelte": page });
+  expect(analysis.status).toBe("complete");
+  const first = (id: string) => byBundle.get(id)?.[0];
   expect(first("add_claim")).toMatchObject({ path: "src/routes/settings/+page.svelte", line: 10, role: "Button" });
   const claim = first("add_claim")!;
   expect(claim.snippet).toEqual({ start: 9, lines: ['<Button variant="secondary">', "\t{m.add_claim()}", "</Button>"] });
@@ -28,16 +37,11 @@ test("finds usages with the inlang matcher, adds nested calls, snippets and role
   expect(first("settings_title")?.role).toBe("Page title");
   expect(first("search_placeholder")?.role).toBe("Input placeholder");
   expect(first("refresh_failed")?.role).toBe("Text");
-  // The plugin consumes call arguments; the nested message is still found.
   expect(first("images")?.role).toBe("Part of refresh_failed");
-  expect(isUnused(index, "add_claim")).toBe(false);
-  expect(isUnused(index, "mentioned_only")).toBe(false);
-  expect(isUnused(index, "never_referenced")).toBe(true);
 });
 
-test("files without a messages import are not matched", async () => {
-  const index = await scanUsages({ "src/other.ts": "const m = { hello: () => 'x' }; m.hello();" });
-  expect(index.usages.size).toBe(0);
+test("the snapshot leaves out generated Paraglide code, dependencies and non-code files", () => {
+  expect(sourceSnapshot({ "src/a.ts": "", "src/lib/paraglide/messages.js": "", "node_modules/x/index.js": "", "src/app.css": "", "src/types.d.ts": "", "src/App.vue": "" }).map(file => file.path)).toEqual(["src/a.ts", "src/App.vue"]);
 });
 
 test("roles come from attributes, properties, callees and the nearest element", () => {
@@ -51,19 +55,17 @@ test("roles come from attributes, properties, callees and the nearest element", 
   expect(at("const value = m.x();")).toBeUndefined();
 });
 
-test("aliased imports, comments and dynamic lookups are handled conservatively", async () => {
-  const index = await scanUsages({
+test("aliased imports and comments come from the analysis; dynamic lookups make it incomplete", async () => {
+  const { byBundle } = await usages({
     "src/a.svelte": "<script>\n\timport * as messages from '$lib/paraglide/messages';\n</script>\n<h1>{messages.welcome()}</h1>\n",
     "src/b.ts": "import { m } from './paraglide/messages';\n// m.commented_out()\n/* m.block() */\nexport const x = m.real();\n",
   });
-  expect(index.usages.get("welcome")?.[0]?.role).toBe("Heading");
-  expect(index.usages.has("commented_out")).toBe(false);
-  expect(index.usages.has("block")).toBe(false);
-  expect(index.usages.get("real")?.[0]?.role).toBeUndefined();
-  expect(isUnused(index, "nowhere")).toBe(true);
-  expect(isUnused(index, "has space")).toBe(false);
-  const dynamic = await scanUsages({ "src/c.ts": "import { m } from './paraglide/messages';\nconst label = (key: string) => m[key]();\n" });
-  expect(isUnused(dynamic, "nowhere")).toBe(false);
+  expect(byBundle.get("welcome")?.[0]?.role).toBe("Heading");
+  expect(byBundle.has("commented_out")).toBe(false);
+  expect(byBundle.has("block")).toBe(false);
+  expect(byBundle.get("real")?.[0]?.role).toBeUndefined();
+  const dynamic = await usages({ "src/c.ts": "import { m } from './paraglide/messages';\nconst label = (key: string) => m[key]();\n" });
+  expect(dynamic.analysis.status).toBe("incomplete");
 });
 
 test("TypeScript generics, scripts and arrow attributes do not produce element roles", () => {
@@ -77,8 +79,8 @@ test("TypeScript generics, scripts and arrow attributes do not produce element r
 });
 
 test("long lines are cut to a window around the call", async () => {
-  const index = await scanUsages({ "src/long.ts": `import { m } from './paraglide/messages';\nexport const x = [${"'filler', ".repeat(60)}m.far_right()];\n` });
-  const usage = index.usages.get("far_right")![0]!, line = usage.snippet.lines[usage.line - usage.snippet.start]!;
+  const { byBundle } = await usages({ "src/long.ts": `import { m } from './paraglide/messages';\nexport const x = [${"'filler', ".repeat(60)}m.far_right()];\n` });
+  const usage = byBundle.get("far_right")![0]!, line = usage.snippet.lines[usage.line - usage.snippet.start]!;
   expect(line.length).toBeLessThan(260);
   expect(line.slice(usage.from, usage.to)).toBe("m.far_right()");
 });

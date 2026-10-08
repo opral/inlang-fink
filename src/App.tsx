@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BundleNested, MessageNested, ProjectSettings } from "@inlang/sdk/browser";
+import { checkProject, findUsages, type BundleNested, type CheckDiagnostic, type CheckStatus, type InlangProject, type MessageNested, type ProjectSettings, type SourceFile } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
 import { RichDiff } from "./DiffBundleView";
 import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
@@ -10,14 +10,14 @@ import { MessageCard } from "./MessageCard";
 import type { Restructure } from "./flows";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
-import { issueKind, messageIssues, type Issue, type IssueKind } from "./issues";
+import { issueKind, type Issue, type IssueKind } from "./issues";
 import { Landing } from "./Landing";
 import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcases";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
-import { isUnused, scanUsages, type UsageIndex } from "./usage";
+import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
@@ -70,9 +70,14 @@ export default function App() {
   const dirty = useRef(new Set<string>());
   const searchIndex = useRef(new WeakMap<BundleNested, string>());
   const table = useRef<HTMLDivElement>(null);
-  const [usage, setUsage] = useState<{ key: string; index: UsageIndex }>();
+  // The app's source at the draft's base commit, its usages (inlang SDK findUsages) and the SDK's check results.
+  const [source, setSource] = useState<{ key: string; raw: Record<string, string>; files: SourceFile[] }>();
+  const [usage, setUsage] = useState<{ key: string; byBundle: Map<string, Usage[]> }>();
   const [usageStatus, setUsageStatus] = useState<{ state: "idle" | "loading" | "ready" | "error"; error?: string }>({ state: "idle" });
-  const usageCache = useRef(new Map<string, Promise<UsageIndex>>());
+  const usageCache = useRef(new Map<string, Promise<Record<string, string>>>());
+  const [diagnostics, setDiagnostics] = useState<{ byBundle: Map<string, CheckDiagnostic[]>; usage?: CheckStatus }>();
+  const checked = useRef<{ project?: InlangProject; key: string; files?: SourceFile[]; bundles: Map<string, BundleNested> }>({ key: "", bundles: new Map() });
+  const checkQueue = useRef<Promise<void>>(Promise.resolve());
   const branchCache = useRef(new Map<string, Promise<string[]>>());
   const indexBundle = useCallback((id: string, bundle?: BundleNested) => {
     const previous = bundleIndex.current.get(id);
@@ -222,21 +227,21 @@ export default function App() {
     if (!local) return;
     enqueue(async () => {
       const data = detail.newData;
-      const bundleId = detail.entity === "bundle" ? detail.entityId : owners.current.get(`${detail.entity}:${detail.entityId}`) ?? (detail.entity === "message" && data ? (data as BundleNested["messages"][number]).bundleId : detail.entity === "variant" && data ? owners.current.get(`message:${(data as BundleNested["messages"][number]["variants"][number]).messageId}`) : undefined);
+      const bundleId = detail.entity === "bundle" ? detail.entityId : owners.current.get(`${detail.entity}:${detail.entityId}`) ?? (detail.entity === "message" && data ? (data as BundleNested["messages"][number]).bundle_id : detail.entity === "variant" && data ? owners.current.get(`message:${(data as BundleNested["messages"][number]["variants"][number]).message_id}`) : undefined);
       if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
       if (data) {
         // Strip nested UI data; the SDK stores three separate tables.
         if (detail.entity === "bundle") {
           const value = data as BundleNested;
-          await local.project.db.insertInto("bundle").values({ id: value.id, declarations: value.declarations }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations })).execute();
+          await local.project.db.insertInto("inlang_bundle").values({ id: value.id, declarations: value.declarations }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations })).execute();
         } else if (detail.entity === "message") {
           const value = data as BundleNested["messages"][number];
-          await local.project.db.insertInto("message").values({ id: value.id, bundleId: value.bundleId, locale: value.locale, selectors: value.selectors }).onConflict(oc => oc.column("id").doUpdateSet({ selectors: value.selectors })).execute();
+          await local.project.db.insertInto("inlang_message").values({ id: value.id, bundle_id: value.bundle_id, locale: value.locale, selectors: value.selectors }).onConflict(oc => oc.column("id").doUpdateSet({ selectors: value.selectors })).execute();
         } else {
           const value = data as BundleNested["messages"][number]["variants"][number];
-          await local.project.db.insertInto("variant").values(value).onConflict(oc => oc.column("id").doUpdateSet({ pattern: value.pattern, matches: value.matches })).execute();
+          await local.project.db.insertInto("inlang_variant").values(value).onConflict(oc => oc.column("id").doUpdateSet({ pattern: value.pattern, matches: value.matches })).execute();
         }
-      } else await local.project.db.deleteFrom(detail.entity).where("id", "=", detail.entityId).execute();
+      } else await local.project.db.deleteFrom(`inlang_${detail.entity}` as const).where("id", "=", detail.entityId).execute();
       await refresh(local, bundleId);
     });
   }, [enqueue, refresh]);
@@ -246,8 +251,8 @@ export default function App() {
     enqueue(async () => {
       const id = crypto.randomUUID();
       await local.project.db.transaction().execute(async tx => {
-        await tx.insertInto("message").values({ id, bundleId: bundle.id, locale, selectors: [] }).execute();
-        await tx.insertInto("variant").values({ id: crypto.randomUUID(), messageId: id, matches: [], pattern: [] }).execute();
+        await tx.insertInto("inlang_message").values({ id, bundle_id: bundle.id, locale, selectors: [] }).execute();
+        await tx.insertInto("inlang_variant").values({ id: crypto.randomUUID(), message_id: id, matches: [], pattern: [] }).execute();
       });
       await refresh(local, bundle.id);
     });
@@ -258,8 +263,8 @@ export default function App() {
     if (!local) return;
     enqueue(async () => {
       await local.project.db.transaction().execute(async tx => {
-        await tx.insertInto("message").values({ id: shape.id, bundleId: bundle.id, locale, selectors: shape.selectors }).execute();
-        if (shape.variants.length) await tx.insertInto("variant").values(shape.variants).execute();
+        await tx.insertInto("inlang_message").values({ id: shape.id, bundle_id: bundle.id, locale, selectors: shape.selectors }).execute();
+        if (shape.variants.length) await tx.insertInto("inlang_variant").values(shape.variants).execute();
       });
       await refresh(local, bundle.id);
     });
@@ -270,10 +275,10 @@ export default function App() {
     if (!local) return;
     enqueue(async () => {
       await local.project.db.transaction().execute(async tx => {
-        if (next.declarations) await tx.updateTable("bundle").set({ declarations: next.declarations }).where("id", "=", bundleId).execute();
-        await tx.updateTable("message").set({ selectors: next.selectors }).where("id", "=", messageId).execute();
-        await tx.deleteFrom("variant").where("messageId", "=", messageId).execute();
-        if (next.variants.length) await tx.insertInto("variant").values(next.variants).execute();
+        if (next.declarations) await tx.updateTable("inlang_bundle").set({ declarations: next.declarations }).where("id", "=", bundleId).execute();
+        await tx.updateTable("inlang_message").set({ selectors: next.selectors }).where("id", "=", messageId).execute();
+        await tx.deleteFrom("inlang_variant").where("message_id", "=", messageId).execute();
+        if (next.variants.length) await tx.insertInto("inlang_variant").values(next.variants).execute();
       });
       await refresh(local, bundleId);
     });
@@ -282,7 +287,7 @@ export default function App() {
     const local = localRef.current;
     if (!local) return;
     enqueue(async () => {
-      await local.project.db.deleteFrom("variant").where("id", "=", variantId).execute();
+      await local.project.db.deleteFrom("inlang_variant").where("id", "=", variantId).execute();
       await refresh(local, bundleId);
     });
   }, [enqueue, refresh]);
@@ -290,7 +295,7 @@ export default function App() {
     const local = localRef.current;
     if (!local) return;
     enqueue(async () => {
-      await local.project.db.insertInto("variant").values(variant).execute();
+      await local.project.db.insertInto("inlang_variant").values(variant).execute();
       await refresh(local, bundleId);
     });
   }, [enqueue, refresh]);
@@ -299,10 +304,10 @@ export default function App() {
     if (!local || !confirm(`Delete message ${id} in every locale?`)) return;
     enqueue(async () => {
       await local.project.db.transaction().execute(async tx => {
-        const messages = await tx.selectFrom("message").select("id").where("bundleId", "=", id).execute();
-        for (const message of messages) await tx.deleteFrom("variant").where("messageId", "=", message.id).execute();
-        await tx.deleteFrom("message").where("bundleId", "=", id).execute();
-        await tx.deleteFrom("bundle").where("id", "=", id).execute();
+        const messages = await tx.selectFrom("inlang_message").select("id").where("bundle_id", "=", id).execute();
+        for (const message of messages) await tx.deleteFrom("inlang_variant").where("message_id", "=", message.id).execute();
+        await tx.deleteFrom("inlang_message").where("bundle_id", "=", id).execute();
+        await tx.deleteFrom("inlang_bundle").where("id", "=", id).execute();
       });
       await refresh(local, id);
     });
@@ -311,7 +316,7 @@ export default function App() {
     if (!local || !newId.trim()) return;
     const id = newId.trim();
     enqueue(async () => {
-      await local.project.db.insertInto("bundle").values({ id, declarations: [] }).execute();
+      await local.project.db.insertInto("inlang_bundle").values({ id, declarations: [] }).execute();
       await refresh(local, id); setNewId(""); setShowNewMessage(false);
     });
   };
@@ -338,18 +343,57 @@ export default function App() {
   // matcher understands Paraglide's m.*() calls, so only message-format projects are scanned.
   const usageKey = local && "plugin.inlang.messageFormat" in local.context.settings ? `${local.context.owner}/${local.context.name}@${local.context.head}:${projectScope(local.context)}` : undefined;
   useEffect(() => {
-    if (!local || !usageKey) { setUsage(undefined); setUsageStatus({ state: "idle" }); return; }
+    if (!local || !usageKey) { setSource(undefined); setUsage(undefined); setUsageStatus({ state: "idle" }); return; }
     let live = true, request = usageCache.current.get(usageKey);
     if (!request) {
       const scope = projectScope(local.context);
-      request = api<{ files: Record<string, string> }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: scope })}`).then(result => scanUsages(result.files));
+      request = api<{ files: Record<string, string> }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: scope })}`).then(result => result.files);
       usageCache.current.set(usageKey, request);
       request.catch(() => usageCache.current.delete(usageKey));
     }
     setUsageStatus({ state: "loading" });
-    request.then(index => { if (live) { setUsage({ key: usageKey, index }); setUsageStatus({ state: "ready" }); } }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
+    request.then(raw => { if (live) setSource({ key: usageKey, raw, files: sourceSnapshot(raw) }); }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
     return () => { live = false; };
   }, [usageKey]);
+  const sourceFiles = source && source.key === usageKey ? source.files : undefined;
+  useEffect(() => {
+    if (!local || !source || source.key !== usageKey) return;
+    let live = true;
+    findUsages({ project: local.project, files: source.files }).then(result => {
+      if (!live) return;
+      setUsage({ key: source.key, byBundle: usagesFromReferences(result.references, source.raw) });
+      setUsageStatus({ state: "ready" });
+    }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
+    return () => { live = false; };
+  }, [local, source, usageKey]);
+  // inlang SDK checks: a full run when the project, reference language or source changes, then only
+  // the bundles an edit replaced (bundles are immutable snapshots, so identity tells what changed).
+  const referenceLocale = focus?.source ?? local?.context.settings.baseLocale;
+  useEffect(() => {
+    if (!local || !referenceLocale || !bundles.length) return;
+    const project = local.project, previous = checked.current, current = new Map(bundles.map(bundle => [bundle.id, bundle]));
+    let ids: string[] | undefined;
+    if (previous.project === project && previous.key === referenceLocale && previous.files === sourceFiles) {
+      ids = [...new Set([...current.keys(), ...previous.bundles.keys()])].filter(id => current.get(id) !== previous.bundles.get(id));
+      if (!ids.length) return;
+      if (ids.length > 200) ids = undefined;
+    }
+    checked.current = { project, key: referenceLocale, files: sourceFiles, bundles: current };
+    const scope = ids;
+    checkQueue.current = checkQueue.current.then(async () => {
+      const result = await checkProject({ project, files: sourceFiles, referenceLocale, bundleIds: scope });
+      if (checked.current.project !== project) return;
+      setDiagnostics(state => {
+        // Unchanged bundles keep their arrays, so their cards don't re-render.
+        const byBundle = scope && state ? new Map(state.byBundle) : new Map<string, CheckDiagnostic[]>();
+        for (const id of scope ?? []) byBundle.delete(id);
+        const fresh = new Map<string, CheckDiagnostic[]>();
+        for (const diagnostic of result.diagnostics) { const list = fresh.get(diagnostic.bundleId); if (list) list.push(diagnostic); else fresh.set(diagnostic.bundleId, [diagnostic]); }
+        for (const [id, list] of fresh) byBundle.set(id, list);
+        return { byBundle, usage: scope ? state?.usage : result.checks.find(check => check.id === "unused-message") };
+      });
+    }).catch(report);
+  }, [bundles, local, referenceLocale, sourceFiles, report]);
   const review = async () => {
     if (!local) return;
     setError("");
@@ -416,16 +460,9 @@ export default function App() {
     setMessage(messages && settings ? `Update ${messages} and project settings` : messages ? `Update ${messages}` : settings ? "Update project settings" : DEFAULT_MESSAGE);
   };
   const terms = useMemo(() => searchTerms(search), [search]);
-  // Issues per bundle and locale; bundles are immutable snapshots, so results are cached per object.
-  const issueCache = useRef(new WeakMap<BundleNested, Map<string, Issue[]>>());
-  const issuesOf = useCallback((bundle: BundleNested, locale: string) => {
-    let byLocale = issueCache.current.get(bundle);
-    if (!byLocale) { byLocale = new Map(); issueCache.current.set(bundle, byLocale); }
-    const reference = focus?.source ?? local?.context.settings.baseLocale ?? locale, key = `${reference}|${locale}`;
-    let issues = byLocale.get(key);
-    if (!issues) { issues = messageIssues(bundle, locale, reference); byLocale.set(key, issues); }
-    return issues;
-  }, [focus?.source, local]);
+  // Issues per bundle and locale from the SDK's diagnostics.
+  const issuesOf = useCallback((bundle: BundleNested, locale: string): Issue[] =>
+    (diagnostics?.byBundle.get(bundle.id) ?? []).filter((diagnostic): diagnostic is Issue => diagnostic.locale === locale && diagnostic.checkId !== "unused-message"), [diagnostics]);
   const todoCounts = useMemo(() => new Map<string, number>(), [bundles, issuesOf]);
   const [mtRequest, setMtRequest] = useState<MachineTranslationRequest>();
   const machineTranslate = useCallback((request: MachineTranslationRequest) => setMtRequest(request), []);
@@ -436,9 +473,9 @@ export default function App() {
   }, [bundles, issuesOf, todoCounts]);
   const projectKey = local ? `${local.context.owner}/${local.context.name}/${local.context.projectPath}` : "";
   useEffect(() => {
-    if (!local || focus || !bundles.length) return;
+    if (!local || focus || !bundles.length || !diagnostics) return;
     setFocus(readFocus(projectKey, local.context.settings.locales, local.context.settings.baseLocale, todoIn));
-  }, [local, focus, bundles.length, projectKey, todoIn]);
+  }, [local, focus, bundles.length, projectKey, todoIn, diagnostics]);
   const changeFocus = (next: LanguageFocus) => { setFocus(next); writeFocus(projectKey, next); };
   const targetLocales = useMemo(() => !local || !focus ? [] : focus.all ? local.context.settings.locales.filter(locale => locale !== focus.source) : focus.targets, [local, focus]);
   const kindsOf = useCallback((bundle: BundleNested) => new Set(targetLocales.flatMap(locale => issuesOf(bundle, locale).map(issueKind))), [targetLocales, issuesOf]);
@@ -503,7 +540,7 @@ export default function App() {
   const codeUrl = context && `https://github.com/${context.owner}/${context.name}/blob/${context.head}`, codeScope = context ? projectScope(context) : "";
   const code = useMemo(() => codeUrl ? { url: codeUrl, scope: codeScope } : undefined, [codeUrl, codeScope]);
   // Results always match the commit shown; a newly created bundle is never reported as unused.
-  const usageIndex = usage && usage.key === usageKey ? usage.index : undefined;
+  const usageIndex = usage && usage.key === usageKey ? usage.byBundle : undefined;
   const repositoryUrl = context && `https://github.com/${context.owner}/${context.name}`;
   const commitLink = context && <a className="sha" href={`${repositoryUrl}/commit/${context.head}`} target="_blank" rel="noreferrer" title="Commit your draft is based on">{context.head.slice(0, 7)}</a>;
   const showEditor = () => { setReviewState(undefined); setView("edit"); };
@@ -583,7 +620,7 @@ export default function App() {
           <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

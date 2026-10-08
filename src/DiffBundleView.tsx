@@ -26,7 +26,7 @@ export function baselineBundle(id: string, signature?: string, current?: BundleN
   }
   return { ...value, id, messages: value.messages.map((message, index) => {
     const messageId = `baseline-message-${index}`;
-    return { ...message, id: messageId, bundleId: id, variants: message.variants.map((variant, index) => ({ ...variant, id: `${messageId}-variant-${index}`, messageId })) };
+    return { ...message, id: messageId, bundle_id: id, variants: message.variants.map((variant, index) => ({ ...variant, id: `${messageId}-variant-${index}`, message_id: messageId })) };
   }) };
 }
 

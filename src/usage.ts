@@ -1,18 +1,16 @@
-import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
+import type { SourceFile, UsageReference } from "@inlang/sdk/browser";
 
-// Where messages are used in the app's code. The inlang m-function-matcher plugin
-// (the SDK's ideExtension.messageReferenceMatchers contract) finds Paraglide's m.*()
-// calls; Fink adds a snippet and a role for translators.
+// Where messages are used in the app's code. The inlang SDK finds the references
+// (`findUsages`, from the m-function matcher's analysis); Fink adds a snippet and a role for translators.
 export type Usage = { path: string; line: number; from: number; to: number; snippet: { start: number; lines: string[] }; role?: string };
-export type UsageIndex = { usages: Map<string, Usage[]>; words: Set<string>; dynamic: boolean };
-type Match = { messageId: string; position: { start: { line: number; character: number }; end: { line: number; character: number } } };
-
-const matcher = (mFunctionMatcher.meta!["app.inlang.ideExtension"] as { messageReferenceMatchers: ((args: { documentText: string }) => Promise<Match[]>)[] }).messageReferenceMatchers[0]!;
-const IMPORTS_M = /import\s+(?:\*\s+as\s+m|\{[^}]*\bm\b[^}]*\})\s+from/;
-const NAMESPACE_IMPORT = /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+["'][^"']*paraglide\/messages[^"']*["']/g;
-// The plugin's matcher is quadratic on long runs without an "m"; minified or generated files are skipped.
-const MAX_SCANNED = 200_000, LONG_LINE = /[^\n]{5000}/;
 const SNIPPET_WIDTH = 240;
+
+/** Code a usage analysis can read; generated Paraglide output and dependencies are left out. */
+export function sourceSnapshot(files: Record<string, string>): SourceFile[] {
+  return Object.entries(files)
+    .filter(([path]) => /\.(?:[cm]?[jt]sx?|svelte|vue|astro)$/i.test(path) && !/\.d\.[cm]?ts$/i.test(path) && !/(^|\/)(node_modules|paraglide|dist|build|\.svelte-kit)\//.test(path))
+    .map(([path, content]) => ({ path, content }));
+}
 
 const ATTRIBUTE_ROLES: Record<string, string> = { placeholder: "Input placeholder", "aria-label": "Accessible label", title: "Tooltip", alt: "Image description", label: "Label", description: "Description", tooltip: "Tooltip", helptext: "Help text", "help-text": "Help text" };
 const PROPERTY_ROLES: Record<string, string> = { confirmlabel: "Confirm button", cancellabel: "Cancel button", label: "Label", title: "Title", description: "Description", placeholder: "Input placeholder", message: "Message", tooltip: "Tooltip", heading: "Heading", text: "Text", error: "Error message" };
@@ -72,18 +70,6 @@ export function usageRole(source: string, index: number, path = "file.svelte"): 
   if (open && open !== "script" && open !== "style") return elementRole(open);
 }
 
-/** Blanks comments, keeping length and newlines, so commented-out calls are not usages. */
-export function maskComments(source: string): string {
-  return source.replace(/("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/g, (match, string?: string) => string ?? match.replace(/[^\n]/g, " "));
-}
-
-/** 1-based line containing `index`, by binary search over line start offsets. */
-function lineOf(offsets: number[], index: number): number {
-  let low = 0, high = offsets.length - 1;
-  while (low < high) { const middle = (low + high + 1) >> 1; if (offsets[middle]! <= index) low = middle; else high = middle - 1; }
-  return low + 1;
-}
-
 /** One line of context on each side (no blank edges), dedented, and cut to a window around the call on long lines. */
 function snippet(lines: string[], line: number, from: number, to: number) {
   let start = Math.max(1, line - 1), end = Math.min(lines.length, line + 1);
@@ -99,52 +85,28 @@ function snippet(lines: string[], line: number, from: number, to: number) {
   return { start, lines: picked.map(clip), from: from - cut + shift, to: Math.min(to, cut + SNIPPET_WIDTH) - cut + shift };
 }
 
-/** Scans source files; yields to the browser between files so the editor stays responsive. */
-export async function scanUsages(files: Record<string, string>): Promise<UsageIndex> {
-  const usages = new Map<string, Usage[]>(), words = new Set<string>();
-  let dynamic = false, processed = 0;
-  for (const [path, text] of Object.entries(files)) {
-    if (++processed % 10 === 0) await new Promise(resolve => setTimeout(resolve));
-    for (const word of text.match(/[\w$.-]+/g) ?? []) { words.add(word); if (word.includes(".")) for (const part of word.split(".")) words.add(part); }
-    const aliases = [...text.matchAll(NAMESPACE_IMPORT)].map(match => match[1]!);
-    if (IMPORTS_M.test(text) && !aliases.includes("m")) aliases.push("m");
-    if (!aliases.length) continue;
-    if (aliases.some(alias => new RegExp(`(?<![\\w$.])${escape(alias)}\\s*\\[(?!\\s*["'])`).test(text))) dynamic = true;
-    if (text.length > MAX_SCANNED || LONG_LINE.test(text)) continue;
-    const masked = maskComments(text), lines = text.split("\n"), maskedLines = masked.split("\n"), offsets: number[] = [];
-    for (let line = 0, offset = 0; line < lines.length; offset += lines[line]!.length + 1, line++) offsets.push(offset);
-    const found: { id: string; line: number; column: number; end: number }[] = [];
-    if (aliases.includes("m")) for (const match of await matcher({ documentText: text })) {
-      const { start, end } = match.position;
-      // The plugin reports the identifier after `m.`; widen to include `m.` for highlighting.
-      const lineText = lines[start.line - 1] ?? "", column = Math.max(0, lineText.lastIndexOf("m", start.character - 2));
-      if (maskedLines[start.line - 1]?.[column] !== "m") continue; // inside a comment
-      found.push({ id: match.messageId, line: start.line, column, end: end.line === start.line ? end.character - 1 : lineText.length });
+/** Usages per message from SDK references, with a snippet and role, most descriptive first. */
+export function usagesFromReferences(references: readonly UsageReference[], files: Record<string, string>): Map<string, Usage[]> {
+  const usages = new Map<string, Usage[]>(), split = new Map<string, { lines: string[]; offsets: number[] }>();
+  for (const reference of references) {
+    const text = files[reference.path];
+    if (text === undefined) continue;
+    let file = split.get(reference.path);
+    if (!file) {
+      const lines = text.split("\n"), offsets: number[] = [];
+      for (let line = 0, offset = 0; line < lines.length; offset += lines[line]!.length + 1, line++) offsets.push(offset);
+      split.set(reference.path, file = { lines, offsets });
     }
-    // The plugin consumes a call's arguments and only knows the `m` import: a second pass finds
-    // nested calls (m.a({ x: m.b() })) and calls through namespace aliases.
-    for (const alias of aliases) {
-      for (const match of masked.matchAll(new RegExp(`(?<![\\w$.])${escape(alias)}\\.([A-Za-z_$][\\w$]*)\\s*\\(`, "g"))) {
-        const index = match.index!, line = lineOf(offsets, index), column = index - offsets[line - 1]!;
-        if (found.some(value => value.line === line && (value.column === column || (value.column < column && column < value.end && value.id === match[1])))) continue;
-        found.push({ id: match[1]!, line, column, end: column + match[0].length + 1 });
-      }
-    }
-    for (const value of found) {
-      const view = snippet(lines, value.line, value.column, value.end);
-      const usage: Usage = { path, line: value.line, from: Math.max(0, view.from), to: Math.max(0, view.to), snippet: { start: view.start, lines: view.lines }, role: usageRole(text, offsets[value.line - 1]! + value.column, path) };
-      const list = usages.get(value.id); if (list) list.push(usage); else usages.set(value.id, [usage]);
-    }
+    const { line, column } = reference.start;
+    const end = reference.end.line === line ? reference.end.column : file.lines[line - 1]?.length ?? column;
+    const view = snippet(file.lines, line, column, end);
+    const usage: Usage = { path: reference.path, line, from: Math.max(0, view.from), to: Math.max(0, view.to), snippet: { start: view.start, lines: view.lines }, role: usageRole(text, (file.offsets[line - 1] ?? 0) + column, reference.path) };
+    const list = usages.get(reference.bundleId);
+    if (list) list.push(usage); else usages.set(reference.bundleId, [usage]);
   }
   for (const list of usages.values()) list.sort((a, b) => Number(!a.role || a.role.startsWith("In <")) - Number(!b.role || b.role.startsWith("In <")) || a.path.localeCompare(b.path) || a.line - b.line);
-  return { usages, words, dynamic };
+  return usages;
 }
-
-/**
- * Unused only when the id is a plain identifier that appears nowhere in the source and no message
- * is looked up dynamically (m[key]); anything less certain is not flagged.
- */
-export const isUnused = (index: UsageIndex, bundleId: string) => !index.dynamic && /^[A-Za-z_$][\w$]*$/.test(bundleId) && !index.usages.has(bundleId) && !index.words.has(bundleId);
 
 const humanize = (segment: string) => segment.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, char => char.toUpperCase());
 /** Where in the app a file renders, as a breadcrumb: routes/settings/admin/+page.svelte → "Settings › Admin". */

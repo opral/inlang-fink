@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BundleNested, Declaration, MessageNested } from "@inlang/sdk/browser";
-import { closestName, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words } from "../src/flows";
+import { joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words } from "../src/flows";
 
 const v = (name: string) => ({ type: "expression" as const, arg: { type: "variable-reference" as const, name } });
 const t = (value: string) => ({ type: "text" as const, value });
@@ -10,10 +10,10 @@ const declarations: Declaration[] = [
   { type: "local-variable", name: "countPlural", value: { type: "expression", arg: { type: "variable-reference", name: "count" }, annotation: { type: "function-reference", name: "plural", options: [] } } },
 ];
 const plural = (locale: string, one: string, other: string): MessageNested => ({
-  id: `m-${locale}`, bundleId: "invites", locale, selectors: [{ type: "variable-reference", name: "countPlural" }],
+  id: `m-${locale}`, bundle_id: "invites", locale, selectors: [{ type: "variable-reference", name: "countPlural" }],
   variants: [
-    { id: `${locale}-one`, messageId: `m-${locale}`, matches: [{ type: "literal-match", key: "countPlural", value: "one" }], pattern: [{ type: "markup-start", name: "b" }, v("count"), t(` ${one}`), { type: "markup-end", name: "b" }, t(" sent to "), { type: "markup-start", name: "link" }, v("email"), { type: "markup-end", name: "link" }] },
-    { id: `${locale}-other`, messageId: `m-${locale}`, matches: [{ type: "catchall-match", key: "countPlural" }], pattern: [{ type: "markup-start", name: "b" }, v("count"), t(` ${other}`), { type: "markup-end", name: "b" }, t(" sent to "), { type: "markup-start", name: "link" }, v("email"), { type: "markup-end", name: "link" }] },
+    { id: `${locale}-one`, message_id: `m-${locale}`, matches: [{ type: "literal-match", key: "countPlural", value: "one" }], pattern: [{ type: "markup-start", name: "b" }, v("count"), t(` ${one}`), { type: "markup-end", name: "b" }, t(" sent to "), { type: "markup-start", name: "link" }, v("email"), { type: "markup-end", name: "link" }] },
+    { id: `${locale}-other`, message_id: `m-${locale}`, matches: [{ type: "catchall-match", key: "countPlural" }], pattern: [{ type: "markup-start", name: "b" }, v("count"), t(` ${other}`), { type: "markup-end", name: "b" }, t(" sent to "), { type: "markup-start", name: "link" }, v("email"), { type: "markup-end", name: "link" }] },
   ],
 });
 const english = plural("en", "invitation", "invitations");
@@ -30,17 +30,15 @@ describe("markup", () => {
 });
 
 describe("variables", () => {
-  it("suggests missing variables first and catches misspellings", () => {
+  it("suggests missing variables first and renames or removes them", () => {
     expect(variableSuggestions(english, [v("count")], declarations)).toEqual([{ name: "email", hint: "missing" }, { name: "count", hint: "used" }]);
-    expect(closestName("totl", ["used", "total"])).toBe("total");
-    expect(closestName("banana", ["used", "total"])).toBeUndefined();
     expect(renameVariable([t("von "), v("totl"), t(" belegt")], "totl", "total")).toEqual([t("von "), v("total"), t(" belegt")]);
     expect(renameVariable([t("a "), v("x"), t(" b")], "x")).toEqual([t("a  b")]);
   });
 });
 
 describe("per-language selectors", () => {
-  const russian: MessageNested = { id: "m-ru", bundleId: "files", locale: "ru", selectors: [], variants: [{ id: "ru-1", messageId: "m-ru", matches: [], pattern: [v("count"), t(" файлов выбрано")] }] };
+  const russian: MessageNested = { id: "m-ru", bundle_id: "files", locale: "ru", selectors: [], variants: [{ id: "ru-1", message_id: "m-ru", matches: [], pattern: [v("count"), t(" файлов выбрано")] }] };
   const files: BundleNested = { id: "files", declarations: [{ type: "input-variable", name: "count" }], messages: [russian] };
 
   it("splits one language by number, adding the plural declaration once", () => {

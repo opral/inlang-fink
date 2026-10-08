@@ -5,7 +5,7 @@ import { bundleSignatures, changedLocales, mergeBundles, mergeSettings } from ".
 let ids = 0;
 const bundle = (id: string, texts: Record<string, string>): BundleNested => ({ id, declarations: [], messages: Object.entries(texts).map(([locale, text]) => {
   const messageId = `m${++ids}`;
-  return { id: messageId, bundleId: id, locale, selectors: [], variants: [{ id: `v${++ids}`, messageId, matches: [], pattern: [{ type: "text", value: text }] }] };
+  return { id: messageId, bundle_id: id, locale, selectors: [], variants: [{ id: `v${++ids}`, message_id: messageId, matches: [], pattern: [{ type: "text", value: text }] }] };
 }) });
 const text = (bundles: BundleNested[], id: string, locale: string) => (bundles.find(b => b.id === id)?.messages.find(m => m.locale === locale)?.variants[0]?.pattern[0] as { value?: string } | undefined)?.value;
 
@@ -21,7 +21,7 @@ test("remote changes apply, local edits survive, and the remote wins where both 
   expect(text(bundles, "mine", "en")).toBe("New in draft");     // created in the draft
   expect(text(bundles, "theirs", "en")).toBe("New on GitHub");  // created on GitHub
   expect(replaced).toEqual(["bye"]);
-  expect(bundles.find(b => b.id === "hello")!.messages.every(m => m.bundleId === "hello")).toBe(true);
+  expect(bundles.find(b => b.id === "hello")!.messages.every(m => m.bundle_id === "hello")).toBe(true);
 });
 
 test("a bundle edited locally but deleted on GitHub follows GitHub and is reported", () => {

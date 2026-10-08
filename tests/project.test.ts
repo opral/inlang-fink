@@ -4,11 +4,11 @@ import { bundleSignature, bundleSignatures } from "../src/project";
 
 const bundle: BundleNested = {
   id: "hello", declarations: [], messages: [
-    { id: "message-a", bundleId: "hello", locale: "en", selectors: [], variants: [
-      { id: "variant-a", messageId: "message-a", matches: [], pattern: [{ type: "text", value: "Hello" }] },
+    { id: "message-a", bundle_id: "hello", locale: "en", selectors: [], variants: [
+      { id: "variant-a", message_id: "message-a", matches: [], pattern: [{ type: "text", value: "Hello" }] },
     ] },
-    { id: "message-b", bundleId: "hello", locale: "de", selectors: [], variants: [
-      { id: "variant-b", messageId: "message-b", matches: [], pattern: [{ type: "text", value: "Hallo" }] },
+    { id: "message-b", bundle_id: "hello", locale: "de", selectors: [], variants: [
+      { id: "variant-b", message_id: "message-b", matches: [], pattern: [{ type: "text", value: "Hallo" }] },
     ] },
   ],
 };
@@ -18,7 +18,7 @@ describe("semantic draft baselines", () => {
     imported.messages.reverse();
     imported.messages.forEach(message => {
       message.id += "-reimported";
-      message.variants.forEach(variant => { variant.id += "-reimported"; variant.messageId = message.id; });
+      message.variants.forEach(variant => { variant.id += "-reimported"; variant.message_id = message.id; });
     });
     expect(bundleSignature(imported)).toBe(bundleSignature(bundle));
   });

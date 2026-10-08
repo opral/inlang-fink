@@ -25,7 +25,7 @@ export const Editor = memo(function Editor({ bundle, settings, locales, change, 
             {message.variants.length > 1 && <button className="variant-action" slot="variant-action" aria-label="Delete variant" onClick={() => change({ entity: "variant", entityId: variant.id })}>×</button>}
           </VariantElement>)}
           <button className="selector-add" slot="selector-button" aria-label="Add selector / plural" title="Add selector / plural" onClick={() => setSelector(message)}>＋</button>
-        </MessageElement> : <MessageElement slot="message" key={locale} message={{ id: `missing-${bundle.id}-${locale}`, bundleId: bundle.id, locale, selectors: [] }} variants={[]} settings={settings}><button slot="variant" className="missing-translation" onClick={() => addLocale(bundle, locale)}>＋ Add translation</button></MessageElement>;
+        </MessageElement> : <MessageElement slot="message" key={locale} message={{ id: `missing-${bundle.id}-${locale}`, bundle_id: bundle.id, locale, selectors: [] }} variants={[]} settings={settings}><button slot="variant" className="missing-translation" onClick={() => addLocale(bundle, locale)}>＋ Add translation</button></MessageElement>;
       })}
     </BundleElement>
     {selector && <Modal label="Add selector or plural" onClose={() => setSelector(undefined)}><header><h2>Add selector / plural</h2><button onClick={() => setSelector(undefined)}>Close</button></header><SelectorElement bundle={rendered} message={structuredClone(selector)} variants={structuredClone(selector.variants)} onEntityChange={handleChange} onComplete={() => setSelector(undefined)} /></Modal>}

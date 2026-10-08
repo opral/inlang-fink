@@ -2,3 +2,6 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
+# Unreleased inlang packages from opral/inlang#4437 and #4438; every dependent uses the same SDK.
+overrides:
+  "@inlang/sdk": "file:vendor/inlang-sdk-3.2.0-pr.4438.tgz"

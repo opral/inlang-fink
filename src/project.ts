@@ -1,3 +1,4 @@
+import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
 import { openProject, selectBundleNested, type InlangProject, type InlangPlugin, type ProjectSettings, type BundleNested } from "@inlang/sdk/browser";
 import { openLix } from "@lix-js/sdk";
 import { OpfsStorage } from "@lix-js/storage-opfs";
@@ -18,6 +19,8 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
   if (plugins.length !== 1) throw new Error("Configure exactly one resource plugin (i18next or inlang message format) per project to avoid ambiguous message ownership.");
   return plugins;
 }
+/** The editor's project also loads the m-function matcher, whose usage analysis powers checks and usages. */
+const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), mFunctionMatcher as InlangPlugin<any>];
 export const METADATA = "/fink-context.json";
 export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectPath: string, progress: (message: string) => void = () => {}): Promise<LocalProject> {
   const key = [repo.owner.toLowerCase(), repo.name.toLowerCase(), tree.branch, projectPath].join("/");
@@ -30,14 +33,14 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     if (stored.rows[0]) {
       progress("Restoring saved draft…");
       const context: RepoContext = JSON.parse(new TextDecoder().decode(stored.rows[0].content));
-      project = await openProject({ lix, providePlugins: pluginsFor(context.settings) });
+      project = await openProject({ lix, providePlugins: editorPlugins(context.settings) });
       return { project, context, close: async () => { await project!.close(); await lix.close(); } };
     }
     progress("Reading project settings…");
     const rawSettings = await readRemoteFile(repo, tree, `${projectPath}/settings.json`);
     const settings: ProjectSettings = JSON.parse(rawSettings);
     // Plugins are bundled and pinned, never evaluated from an untrusted repository.
-    project = await openProject({ lix, settings: { ...settings, modules: [] }, providePlugins: pluginsFor(settings) });
+    project = await openProject({ lix, settings: { ...settings, modules: [] }, providePlugins: editorPlugins(settings) });
     // Metadata is the completed-import marker. Reset incomplete imports before retrying.
     await clearMessages(project);
     const context: RepoContext = { ...repo, branch: tree.branch, projectPath, head: tree.head, tree: tree.tree, settings, original: { [`${projectPath}/settings.json`]: rawSettings }, baseline: {} };
@@ -53,9 +56,9 @@ const readRemoteFile = async (repo: Repo, tree: RepoTree, path: string) => (awai
 const fileShas = (tree: RepoTree, context: Pick<RepoContext, "original">) => tree.shas ? Object.fromEntries(Object.keys(context.original).flatMap(path => tree.shas![path] ? [[path, tree.shas![path]]] : [])) : undefined;
 async function clearMessages(project: InlangProject) {
   await project.db.transaction().execute(async tx => {
-    await tx.deleteFrom("variant").execute();
-    await tx.deleteFrom("message").execute();
-    await tx.deleteFrom("bundle").execute();
+    await tx.deleteFrom("inlang_variant").execute();
+    await tx.deleteFrom("inlang_message").execute();
+    await tx.deleteFrom("inlang_bundle").execute();
   });
 }
 /** Resource files the configured plugins would import that exist in `tree`. */
@@ -121,7 +124,7 @@ export function mergeBundles(base: Record<string, string>, local: BundleNested[]
       const sa = a && messageSignature(a), sb = b && messageSignature(b), so = o && messageSignature(o);
       const pick = sa === so ? b : sb === so || sa === sb ? a : b;
       if (sa !== so && pick !== a) lost = true;
-      if (pick) merged.messages.push({ ...pick, bundleId: id });
+      if (pick) merged.messages.push({ ...pick, bundle_id: id });
     }
     if (lost) replaced.push(id);
     bundles.push(merged);
@@ -199,19 +202,19 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
     // Batched: one statement per chunk instead of one round trip to the Lix worker per row.
     const chunks = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
     const rewritten = [...removedIds, ...changed.map(bundle => bundle.id)];
-    const messages = changed.flatMap(bundle => bundle.messages.map(message => ({ id: message.id, bundleId: bundle.id, locale: message.locale, selectors: message.selectors })));
-    const variants = changed.flatMap(bundle => bundle.messages.flatMap(message => message.variants.map(variant => ({ id: variant.id, messageId: message.id, matches: variant.matches, pattern: variant.pattern }))));
+    const messages = changed.flatMap(bundle => bundle.messages.map(message => ({ id: message.id, bundle_id: bundle.id, locale: message.locale, selectors: message.selectors })));
+    const variants = changed.flatMap(bundle => bundle.messages.flatMap(message => message.variants.map(variant => ({ id: variant.id, message_id: message.id, matches: variant.matches, pattern: variant.pattern }))));
     await local.project.db.transaction().execute(async tx => {
       // Lix supports IN with value lists but not subqueries, so message ids are read first.
       for (const ids of chunks(rewritten, 500)) {
-        const messageIds = (await tx.selectFrom("message").select("id").where("bundleId", "in", ids).execute()).map(row => row.id);
-        for (const chunk of chunks(messageIds, 500)) await tx.deleteFrom("variant").where("messageId", "in", chunk).execute();
-        await tx.deleteFrom("message").where("bundleId", "in", ids).execute();
-        await tx.deleteFrom("bundle").where("id", "in", ids).execute();
+        const messageIds = (await tx.selectFrom("inlang_message").select("id").where("bundle_id", "in", ids).execute()).map(row => row.id);
+        for (const chunk of chunks(messageIds, 500)) await tx.deleteFrom("inlang_variant").where("message_id", "in", chunk).execute();
+        await tx.deleteFrom("inlang_message").where("bundle_id", "in", ids).execute();
+        await tx.deleteFrom("inlang_bundle").where("id", "in", ids).execute();
       }
-      for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("bundle").values(rows).execute();
-      for (const rows of chunks(messages, 500)) await tx.insertInto("message").values(rows).execute();
-      for (const rows of chunks(variants, 500)) await tx.insertInto("variant").values(rows).execute();
+      for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("inlang_bundle").values(rows).execute();
+      for (const rows of chunks(messages, 500)) await tx.insertInto("inlang_message").values(rows).execute();
+      for (const rows of chunks(variants, 500)) await tx.insertInto("inlang_variant").values(rows).execute();
     });
     progress("Preparing editor…");
     Object.assign(context, { head: tree.head, tree: tree.tree, settings, original: remote.original, baseline: {}, bundleBaseline: bundleSignatures(remoteBundles), shas: fileShas(tree, remote) });
@@ -232,7 +235,7 @@ export async function saveContext(local: Pick<LocalProject, "project" | "context
 export async function readBundles(project: InlangProject): Promise<BundleNested[]> { return selectBundleNested(project.db).execute(); }
 /** Reload only the edited bundle, preserving all other editor object identities. */
 export async function readBundle(project: InlangProject, id: string): Promise<BundleNested | undefined> {
-  return selectBundleNested(project.db).where("bundle.id", "=", id).executeTakeFirst();
+  return selectBundleNested(project.db).where("inlang_bundle.id", "=", id).executeTakeFirst();
 }
 /** A message whose every pattern is blank is the same as no translation: it is not a change and is never pushed. */
 const blank = (pattern: unknown) => (pattern as { type: string; value?: string }[]).every(part => part.type === "text" && !part.value?.trim());
@@ -316,8 +319,8 @@ export async function preparePush(local: LocalProject): Promise<{ files: Record<
   // Blank messages would export as "" and hide the fallback; drop them so the key stays untranslated.
   const blankIds = (await readBundles(local.project)).flatMap(bundle => bundle.messages.filter(isBlankMessage).map(message => message.id));
   if (blankIds.length) await local.project.db.transaction().execute(async tx => {
-    await tx.deleteFrom("variant").where("messageId", "in", blankIds).execute();
-    await tx.deleteFrom("message").where("id", "in", blankIds).execute();
+    await tx.deleteFrom("inlang_variant").where("message_id", "in", blankIds).execute();
+    await tx.deleteFrom("inlang_message").where("id", "in", blankIds).execute();
   });
   const locales = changedLocales(await getBaselineSignatures(local), await readBundles(local.project));
   const files = locales.size ? await exportResources(local, locales) : {};

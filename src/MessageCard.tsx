@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createComponent } from "@lit/react";
-import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, markupNames, pluralExamples, selectorKeys, variableNames, type ChangeEventDetail, type Match } from "@inlang/editor-component";
-import type { BundleNested, Declaration, MessageNested, Pattern, ProjectSettings } from "@inlang/sdk/browser";
+import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, selectorKeys, variableNames, type ChangeEventDetail, type Match } from "@inlang/editor-component";
+import type { BundleNested, CheckDiagnostic, Declaration, MessageNested, Pattern, ProjectSettings } from "@inlang/sdk/browser";
 import { Editor } from "./Editor";
 import { Dropdown } from "./Menu";
 import { Modal } from "./Modal";
@@ -9,9 +9,9 @@ import { UsageCode } from "./UsagePeek";
 import { describeUsage, type Usage } from "./usage";
 import { languageName, type LanguageFocus } from "./languages";
 import { SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
-import { closestName, joinMessage, markupLabel, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
+import { joinMessage, markupLabel, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
 import { seeded } from "./seeded";
-import type { Issue } from "./issues";
+import { isMissing, type Issue } from "./issues";
 
 const PatternEditor = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
 const PatternView = createComponent({ react: React, tagName: "inlang-pattern-view", elementClass: InlangPatternView });
@@ -22,7 +22,9 @@ type Variant = MessageNested["variants"][number];
 export type CardStatus = { tone: "todo" | "defect" | "neutral"; label: string };
 // Props are primitives or stable references so typing in one message re-renders only that card.
 type Props = {
-  bundle: BundleNested; settings: ProjectSettings; focus: LanguageFocus; issuesOf: (bundle: BundleNested, locale: string) => Issue[];
+  bundle: BundleNested; settings: ProjectSettings; focus: LanguageFocus;
+  /** This bundle's inlang SDK diagnostics (checkProject), compared with the focused source language. */
+  diagnostics?: CheckDiagnostic[];
   usages?: Usage[]; code?: { url: string; scope: string }; replaced?: boolean; edited?: boolean; unused?: boolean;
   change: (detail: ChangeEventDetail) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
   addVariant: (bundleId: string, variant: Variant) => void; removeVariant: (bundleId: string, variantId: string) => void;
@@ -33,13 +35,13 @@ type Props = {
 
 /** One status per card, most urgent first. */
 export function cardStatus(issues: { locale: string; issue: Issue }[], flags: { edited?: boolean; replaced?: boolean; unused?: boolean; stillSource?: number; sourceName?: string }, several: boolean): CardStatus | undefined {
-  const missing = issues.filter(({ issue }) => issue.type === "missing-translation");
+  const missing = issues.filter(({ issue }) => isMissing(issue));
   if (missing.length) return { tone: "todo", label: several ? `Missing in ${missing.map(({ locale }) => languageName(locale)).join(", ")}` : "Missing" };
-  const markup = issues.find(({ issue }) => issue.type === "missing-markup");
-  const placeholder = issues.find(({ issue }) => issue.type === "missing-variable" || issue.type === "extra-variable");
-  if (placeholder && "name" in placeholder.issue) return { tone: "defect", label: `${placeholder.issue.type === "extra-variable" ? "Unexpected" : "Missing"} {${placeholder.issue.name}} in ${languageName(placeholder.locale)}` };
-  if (markup && "name" in markup.issue) return { tone: "defect", label: `${markupLabel(markup.issue.name)} missing in ${languageName(markup.locale)}` };
-  const forms = issues.filter(({ issue }) => issue.type === "missing-form");
+  for (const { issue, locale } of issues) {
+    if (issue.checkId === "missing-variable" || issue.checkId === "unknown-variable") return { tone: "defect", label: `${issue.checkId === "unknown-variable" ? "Unexpected" : "Missing"} {${issue.name}} in ${languageName(locale)}` };
+  }
+  for (const { issue, locale } of issues) if (issue.checkId === "missing-markup") return { tone: "defect", label: `${markupLabel(issue.name)} missing in ${languageName(locale)}` };
+  const forms = issues.filter(({ issue }) => issue.checkId === "missing-variant");
   if (forms.length) return { tone: "todo", label: `${forms.length} ${forms.length === 1 ? "form" : "forms"} missing` };
   if (flags.stillSource) return { tone: "todo", label: flags.stillSource === 1 ? `Still in ${flags.sourceName}` : `${flags.stillSource} forms still in ${flags.sourceName}` };
   if (flags.edited) return { tone: "neutral", label: "Edited" };
@@ -64,7 +66,6 @@ const matchLabel = (variant: Variant, message: MessageNested, declarations: Decl
 
 /** Focuses an editor once it has rendered, e.g. after the button that was focused went away. */
 const focusEditor = (editor: InlangPatternEditor | null | undefined) => requestAnimationFrame(() => editor?.querySelector<HTMLElement>("[contenteditable]")?.focus());
-const isEmpty = (pattern: Pattern) => pattern.every(part => part.type === "text" && !part.value.trim());
 const listOf = (items: string[]) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
 /** What English does with a piece of markup, for the fix note ("links “docs”"). */
@@ -107,19 +108,17 @@ function formRows(message: MessageNested, declarations: Declaration[], required:
 }
 
 type Notes = { missing: string[]; extra: { name: string; suggestion?: string }[]; markup: { part: Extract<Pattern[number], { type: "markup-start" }>; text: string }[]; standalone: Extract<Pattern[number], { type: "markup-standalone" }>[] };
-/** What one translated form lacks compared with the reference: variables, markup, and variables English doesn't have. */
-function formNotes(pattern: Pattern, source: MessageNested | undefined, exactNumber: boolean): Notes | undefined {
-  if (!source || isEmpty(pattern)) return undefined;
-  const reference = [...new Set(source.variants.flatMap(variant => variableNames(variant.pattern)))];
-  const own = variableNames(pattern), tags = markupNames(pattern), markup = referenceMarkup(source);
-  const missing = exactNumber ? [] : reference.filter(name => !own.includes(name));
-  const extra = own.filter(name => !reference.includes(name)).map(name => ({ name, suggestion: closestName(name, missing.length ? missing : reference) }));
-  const notes: Notes = {
-    missing, extra,
-    markup: markup.paired.filter(({ part }) => !tags.includes(part.name)).map(({ part, text }) => ({ part, text })),
-    standalone: markup.standalone.filter(({ part }) => !tags.includes(part.name)).map(({ part }) => part),
+/** The SDK's diagnostics for one form, with the reference markup needed to fix them. */
+function formNotes(issues: Issue[], variantId: string, markup: ReturnType<typeof referenceMarkup>): Notes | undefined {
+  const own = issues.filter(issue => "variantId" in issue && issue.variantId === variantId);
+  if (!own.length) return undefined;
+  const tags = own.flatMap(issue => issue.checkId === "missing-markup" ? [issue.name] : []);
+  return {
+    missing: own.flatMap(issue => issue.checkId === "missing-variable" ? [issue.name] : []),
+    extra: own.flatMap(issue => issue.checkId === "unknown-variable" ? [{ name: issue.name, suggestion: issue.suggestion }] : []),
+    markup: markup.paired.filter(({ part }) => tags.includes(part.name)).map(({ part, text }) => ({ part, text })),
+    standalone: markup.standalone.filter(({ part }) => tags.includes(part.name)).map(({ part }) => part),
   };
-  return notes.missing.length || notes.extra.length || notes.markup.length || notes.standalone.length ? notes : undefined;
 }
 
 function ComplexTranslation({ bundle, message, source, issues, variants, addVariant, editorProps }: { bundle: BundleNested; message: MessageNested; source?: MessageNested; issues: Issue[]; variants: Map<string, Variant>; addVariant: Props["addVariant"]; editorProps: (pattern: Pattern) => Record<string, unknown> }) {
@@ -128,7 +127,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   const [preview, setPreview] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const selected = message.variants.find(variant => variant.id === selectedId) ?? defaultVariant(message);
-  const missing = issues.filter(issue => issue.type === "missing-form").length;
+  const missing = issues.filter(issue => issue.checkId === "missing-variant").length;
   const by = message.selectors.map(selector => inputName(selector.name, bundle.declarations));
   const isDefault = selected && selected === defaultVariant(message);
   const editor = useRef<InlangPatternEditor>(null), focusId = useRef<string | undefined>(undefined);
@@ -136,7 +135,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   const add = (matches: Match[]) => {
     const id = crypto.randomUUID();
     // New forms start from the default form's text, which is usually closest.
-    addVariant(bundle.id, { id, messageId: message.id, matches, pattern: structuredClone(defaultVariant(message)?.pattern ?? []) });
+    addVariant(bundle.id, { id, message_id: message.id, matches, pattern: structuredClone(defaultVariant(message)?.pattern ?? []) });
     setSelectedId(id); focusId.current = id;
   };
   return <>
@@ -155,7 +154,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   </>;
 }
 
-export const MessageCard = memo(function MessageCard({ bundle, settings, focus, issuesOf, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
+export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
@@ -178,7 +177,11 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const sourceName = languageName(focus.source);
   // Reviewing all languages also makes the reference itself editable.
   const targets = focus.all ? [focus.source, ...settings.locales.filter(locale => locale !== focus.source)] : focus.targets;
-  const issues = useMemo(() => Object.fromEntries(settings.locales.filter(locale => locale !== focus.source).map(locale => [locale, issuesOf(bundle, locale)])), [bundle, settings.locales, focus.source, issuesOf]);
+  const issues = useMemo(() => {
+    const byLocale: Record<string, Issue[]> = {};
+    for (const diagnostic of diagnostics ?? []) if (diagnostic.checkId !== "unused-message" && diagnostic.locale && diagnostic.locale !== focus.source) (byLocale[diagnostic.locale] ??= []).push(diagnostic);
+    return byLocale;
+  }, [diagnostics, focus.source]);
   const stillSource = targets.flatMap(locale => bundle.messages.find(message => message.locale === locale)?.variants ?? []).filter(variant => seeded.get(variant.id)?.pattern === JSON.stringify(variant.pattern)).length;
   const status = cardStatus(targets.flatMap(locale => (issues[locale] ?? []).map(issue => ({ locale, issue }))), { edited, replaced, unused, stillSource, sourceName }, targets.length > 1);
   const tone = !status ? "" : status.tone !== "neutral" ? "todo" : status.label === "Not used in code" ? "neutral" : "changed";
@@ -194,7 +197,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     variant={variants.get(variant.id)} declarations={bundle.declarations} aria-label={label} {...editorProps(variant.pattern)} />;
   const setPattern = (variant: Variant, pattern: Pattern) => change({ entity: "variant", entityId: variant.id, newData: { ...variant, pattern } } as ChangeEventDetail);
   const notes = (key: string, variant: Variant, locale: string, exactNumber: boolean) => {
-    const found = locale === focus.source ? undefined : formNotes(variant.pattern, source, exactNumber);
+    const found = locale === focus.source ? undefined : formNotes(issues[locale] ?? [], variant.id, markup);
     const target = () => editors.current.get(key);
     const copy = copied[variant.id];
     return <>
@@ -263,7 +266,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
               const id = crypto.randomUUID(), pattern = structuredClone(near?.variant?.pattern ?? defaultVariant(message)?.pattern ?? []);
               focusKey.current = `${locale}:${id}`;
               if (near) setCopied(value => ({ ...value, [id]: { from: near.label, hint: form.hint, pattern: JSON.stringify(pattern) } }));
-              addVariant(bundle.id, { id, messageId: message.id, matches: form.matches, pattern });
+              addVariant(bundle.id, { id, message_id: message.id, matches: form.matches, pattern });
             }}>{exact ? `+ Add a form for ${form.key}` : `+ Add ${form.label} form`}</button></div>;
           const variant = form.variant, key = `${locale}:${variant.id}`, fresh = copied[variant.id]?.pattern === JSON.stringify(variant.pattern);
           return <div key={variant.id} className={`message-cell edit form${fresh ? " new" : ""}${matched === variant.id ? " matched" : ""}`} data-untranslated={untranslated(variant)}>
@@ -295,7 +298,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const used = [...new Set(bundle.messages.flatMap(value => value.selectors.map(selector => selector.name)))]
       .filter(selector => !selectorKeys(selector, bundle.declarations, locale, []).plural);
     const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${inputName(selector, bundle.declarations)}}`, next: () => splitMessage(bundle, message, { selector }) }));
-    return [...byNumber, ...bySelector].map(item => ({ ...item, messageId: message.id }));
+    return [...byNumber, ...bySelector].map(item => ({ ...item, message_id: message.id }));
   });
   return <article className="message-card" data-bundle={bundle.id} ref={root} aria-label={bundle.id}>
     <header className="message-head">
@@ -304,7 +307,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
         {status && <span className={`message-status ${tone}`}>{status.label}</span>}
         <Dropdown className="message-menu" title="More actions" align="end" label={<span aria-label={`More actions for ${bundle.id}`}>···</span>}>
           {close => <>
-            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.messageId, item.next()); }}>{item.label}</button>)}
+            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.message_id, item.next()); }}>{item.label}</button>)}
             <button type="button" className="menu-item" onClick={() => { close(); setStructure(true); }}>Edit structure…</button>
             <button type="button" className="menu-item" onClick={() => { close(); removeBundle(bundle.id); }}>Delete message</button>
           </>}

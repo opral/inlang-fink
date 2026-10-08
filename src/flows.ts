@@ -58,29 +58,6 @@ export function variableSuggestions(source: MessageNested | undefined, target: P
   return [...missing, ...present, ...others];
 }
 
-function distance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i++) {
-    let previous = row[0]!; row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const current = row[j]!;
-      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, previous + (a[i - 1]!.toLowerCase() === b[j - 1]!.toLowerCase() ? 0 : 1));
-      previous = current;
-    }
-  }
-  return row[b.length]!;
-}
-
-/** The candidate a misspelled name most likely meant ("totl" → "total"), if it is close. */
-export function closestName(name: string, candidates: string[]): string | undefined {
-  let best: string | undefined, score = Infinity;
-  for (const candidate of candidates) {
-    const value = distance(name, candidate);
-    if (value < score) { best = candidate; score = value; }
-  }
-  return best !== undefined && score <= Math.max(2, Math.floor(best.length / 3)) ? best : undefined;
-}
-
 /** Replaces (or, without `to`, removes) every `{from}` in a pattern. */
 export function renameVariable(pattern: Pattern, from: string, to?: string): Pattern {
   const result: Pattern = [];
@@ -134,14 +111,14 @@ export function splitMessage(bundle: BundleNested, message: MessageNested, by: {
   // Keys come from the locale's plural rules or from the other languages' variants.
   const others = bundle.messages.flatMap(value => value.variants);
   const forms = requiredForms({ selectors }, declarations, message.locale, others);
-  const variants = forms.map(matches => ({ id: crypto.randomUUID(), messageId: message.id, matches, pattern: structuredClone(text) }));
+  const variants = forms.map(matches => ({ id: crypto.randomUUID(), message_id: message.id, matches, pattern: structuredClone(text) }));
   return { declarations: declarations === bundle.declarations ? undefined : declarations, selectors, variants };
 }
 
 /** Undoes a split: one text for every case, taken from the default form. */
 export function joinMessage(message: MessageNested): Restructure {
   const fallback = message.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? message.variants.at(-1);
-  return { selectors: [], variants: [{ id: crypto.randomUUID(), messageId: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
+  return { selectors: [], variants: [{ id: crypto.randomUUID(), message_id: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
 }
 
 const keyOf = (variant: Variant, selector: string) => { const match = variant.matches.find(value => value.key === selector); return match?.type === "literal-match" ? match.value : "*"; };
@@ -152,7 +129,7 @@ const keyOf = (variant: Variant, selector: string) => { const match = variant.ma
  * (`copy`) or empty.
  */
 export function messageFromSource(bundle: BundleNested, source: MessageNested | undefined, locale: string, messageId: string, copy: boolean): { selectors: MessageNested["selectors"]; variants: Variant[] } {
-  if (!source || !source.selectors.length) return { selectors: [], variants: [{ id: crypto.randomUUID(), messageId, matches: [], pattern: copy ? structuredClone(source?.variants[0]?.pattern ?? []) : [] }] };
+  if (!source || !source.selectors.length) return { selectors: [], variants: [{ id: crypto.randomUUID(), message_id: messageId, matches: [], pattern: copy ? structuredClone(source?.variants[0]?.pattern ?? []) : [] }] };
   const singular = pluralCategories(locale).length <= 1;
   const selectors = source.selectors.filter(selector => !(singular && selectorKeys(selector.name, bundle.declarations, locale, source.variants).plural));
   const forms = requiredForms({ selectors }, bundle.declarations, locale, source.variants);
@@ -163,7 +140,7 @@ export function messageFromSource(bundle: BundleNested, source: MessageNested | 
     const from = source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || (value === "*" && keyOf(variant, key) === "other")))
       ?? source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || keyOf(variant, key) === "*"))
       ?? fallback;
-    return { id: crypto.randomUUID(), messageId, matches: matches as Match[], pattern: copy ? structuredClone(from?.pattern ?? []) : [] };
+    return { id: crypto.randomUUID(), message_id: messageId, matches: matches as Match[], pattern: copy ? structuredClone(from?.pattern ?? []) : [] };
   });
   return { selectors, variants };
 }
