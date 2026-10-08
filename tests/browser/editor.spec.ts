@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { test, expect } from "@playwright/test";
 const settings = { baseLocale: "en", locales: ["en", "de"], modules: [], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } };
 const resources: Record<string, string> = {
@@ -260,7 +261,21 @@ test("local drafts are listed, deleted with their recent project, and cleaned up
   await expect.poll(stored, { timeout: 30_000 }).toBe(0);
 });
 
-test("machine translation asks the translator to email us to activate it", async ({ page }) => {
+test("machine translation links to the request form and telemetry records interest without content", async ({ page }) => {
+  const events: { event: string; properties: Record<string, unknown> }[] = [];
+  let raw = "";
+  await page.addInitScript(() => localStorage.setItem("fink:telemetry", "on"));
+  await page.route("**/ingest/**", async route => {
+    // posthog-js gzips event batches (?compression=gzip-js).
+    const buffer = route.request().postDataBuffer() ?? Buffer.alloc(0);
+    const body = buffer[0] === 0x1f && buffer[1] === 0x8b ? gunzipSync(buffer).toString("utf8") : buffer.toString("utf8");
+    raw += body;
+    try {
+      const parsed = JSON.parse(body) as { event: string; properties: Record<string, unknown> } | { batch: { event: string; properties: Record<string, unknown> }[] } | { event: string; properties: Record<string, unknown> }[];
+      for (const item of Array.isArray(parsed) ? parsed : "batch" in parsed ? parsed.batch : [parsed]) events.push(item);
+    } catch { /* not an event payload */ }
+    await route.fulfill({ json: { status: 1 } });
+  });
   await stubApi(page);
   await openRepository(page);
   const items = page.locator('[data-bundle="items"]');
@@ -268,18 +283,19 @@ test("machine translation asks the translator to email us to activate it", async
   await items.getByRole("button", { name: "Machine translate" }).click();
   const dialog = page.getByRole("dialog", { name: "Machine translation" });
   await expect(dialog).toContainText("example/repo");
-  const email = dialog.getByRole("link", { name: "Write email" });
-  const href = decodeURIComponent((await email.getAttribute("href"))!);
-  expect(href).toContain("mailto:hello@opral.com?subject=Activate machine translation for example/repo");
-  expect(href).toContain("(English → German)");
-  expect(href).toContain('"items"');
+  await expect(dialog.getByRole("link", { name: "Request access" })).toHaveAttribute("href", /^https:\/\/docs\.google\.com\/forms\//);
   await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  // The bulk action covers every missing translation in the chosen languages.
-  await page.getByRole("button", { name: "Machine translate 1 missing" }).click();
-  await expect(page.getByRole("dialog", { name: "Machine translation" })).toBeVisible();
   // Nothing was written to the draft.
   await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+  await expect.poll(() => events.map(event => event.event), { timeout: 20_000 }).toEqual(expect.arrayContaining(["app:session_start", "project:project_view", "cloud:interest_button_click"]));
+  const view = events.find(event => event.event === "project:project_view")!.properties;
+  expect(view).toMatchObject({ app: "fink", message_count: 2, language_count: 2 });
+  expect(view.project_id).toMatch(/^[0-9a-f]{32}$/);
+  expect(events.every(event => event.properties.app === "fink" && typeof event.properties.app_version === "string")).toBe(true);
+  // Counts and hashes only: no repository, message keys or text.
+  // URLs keep origin and path only: the ?repo=…&project=… query names the repository.
+  expect(raw).toContain("project:project_view");
+  for (const content of ["example/repo", "example%2Frepo", "repo=", "Hallo", "items", "hello"]) expect(raw).not.toContain(content);
 });
 
 test("creates plural variants for a missing translation in the structure editor", async ({ page }) => {

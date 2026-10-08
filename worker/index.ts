@@ -51,9 +51,25 @@ async function auth(request: Request, env: Env, url: URL): Promise<Response | un
     return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", "Set-Cookie": setCookie(request, "fink_session", "", 0), "Cache-Control": "no-store" } });
   }
 }
+/**
+ * Reverse proxy for PostHog (US cloud), as PostHog recommends, so telemetry isn't dropped by ad
+ * blockers. Cookies stay on Fink's side; only the request body and client IP are forwarded.
+ */
+async function ingest(request: Request, url: URL): Promise<Response> {
+  const path = url.pathname.slice("/ingest".length);
+  const host = path.startsWith("/static/") ? "us-assets.i.posthog.com" : "us.i.posthog.com";
+  const headers = new Headers(request.headers);
+  headers.delete("cookie");
+  headers.set("host", host);
+  const ip = request.headers.get("cf-connecting-ip");
+  if (ip) headers.set("x-forwarded-for", ip);
+  return fetch(new Request(`https://${host}${path}${url.search}`, { method: request.method, headers, body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body, redirect: "follow" }));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/ingest/")) return ingest(request, url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
     try {
       const authResult = await auth(request, env, url); if (authResult) return authResult;

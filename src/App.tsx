@@ -22,6 +22,7 @@ import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
 import { LocalDrafts } from "./LocalDrafts";
+import { capture, hashId, identify, telemetryEnabled } from "./telemetry";
 import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
@@ -134,8 +135,11 @@ export default function App() {
           const back = sessionStorage.getItem("fink:return"); sessionStorage.removeItem("fink:return");
           if (back?.startsWith("?") && !location.search) history.replaceState(null, "", `/${back}`);
         }
-        setUser(await api("user"));
-      } catch (error) { report(error); }
+        const signedIn = await api<{ login: string } | null>("user");
+        setUser(signedIn);
+        await identify(signedIn?.login);
+        capture("app:session_start", { is_signed_in: !!signedIn });
+      } catch (error) { report(error); capture("app:session_start", { is_signed_in: false }); }
       const params = new URLSearchParams(location.search);
       const repository = params.get("repo"), project = params.get("project");
       setInitializing(false);
@@ -249,6 +253,19 @@ export default function App() {
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
     if (localRef.current) recordDraft({ name: localRef.current.name, owner: repository.owner, repo: repository.name, branch: nextTree.branch, projectPath });
+    if (localRef.current) void reportProjectView(localRef.current);
+  };
+  /** Project size and team size for telemetry: counts only, the repository is hashed. */
+  const reportProjectView = async (current: LocalProject) => {
+    if (!telemetryEnabled()) return;
+    const { context } = current, scope = projectScope(context);
+    const commits = await api<{ author: string }[]>(`github/commits?${repoQuery(context)}${scope ? `&path=${encodeURIComponent(scope)}` : ""}`).catch(() => undefined);
+    capture("project:project_view", {
+      project_id: await hashId(`${context.owner}/${context.name}/${context.projectPath}`),
+      message_count: bundleIndex.current.size,
+      language_count: context.settings.locales.length,
+      ...(commits ? { collaborator_count: new Set(commits.map(commit => commit.author)).size } : {}),
+    });
   };
   const open = () => run(async () => {
     if (!repo || !path) return;
@@ -566,6 +583,7 @@ export default function App() {
         if ((error as { status?: number }).status === 409 && attempt < 2) continue;
         throw error;
       }
+      capture("changes:commit_create", { message_count: dirty.current.size, language_count: Object.keys(files).filter(path => !path.endsWith("/settings.json")).length });
       current.context.head = result.head; current.context.tree = result.tree;
       Object.assign(current.context.original, files);
       if (current.context.shas) Object.assign(current.context.shas, Object.fromEntries(await Promise.all(Object.entries(files).map(async ([path, content]) => [path, await gitBlobSha(content)]))));
@@ -588,7 +606,7 @@ export default function App() {
     (diagnostics?.byBundle.get(bundle.id) ?? []).filter((diagnostic): diagnostic is Issue => diagnostic.locale === locale && diagnostic.checkId !== "unused-message"), [diagnostics]);
   const todoCounts = useMemo(() => new Map<string, number>(), [bundles, issuesOf]);
   const [mtRequest, setMtRequest] = useState<MachineTranslationRequest>();
-  const machineTranslate = useCallback((request: MachineTranslationRequest) => setMtRequest(request), []);
+  const machineTranslate = useCallback((request: MachineTranslationRequest) => { setMtRequest(request); capture("cloud:interest_button_click", { topic: "machine_translation", step: "open" }); }, []);
   const todoIn = useCallback((locale: string) => {
     let count = todoCounts.get(locale);
     if (count === undefined) { count = bundles.filter(bundle => issuesOf(bundle, locale).length).length; todoCounts.set(locale, count); }
@@ -679,7 +697,7 @@ export default function App() {
   const account = <div className="account">
     <a href="https://github.com/opral/inlang-fink#readme" className="help-link" target="_blank" rel="noreferrer">Help</a>
     {user ? <Dropdown className="account-trigger" title="Account" align="end" label={<><img className="avatar" src={`https://github.com/${user.login}.png?size=48`} alt="" width="22" height="22" referrerPolicy="no-referrer" /><span className="account-login">{user.login}</span><Chevron /></>}>
-      {close => <><div className="dropdown-heading">Signed in as <strong>{user.login}</strong></div><a className="menu-item" href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a><button className="menu-item" onClick={() => { close(); void run(async () => { await api("auth/logout", {}); setUser(null); }); }}>Sign out</button></>}
+      {close => <><div className="dropdown-heading">Signed in as <strong>{user.login}</strong></div><a className="menu-item" href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a><button className="menu-item" onClick={() => { close(); void run(async () => { await api("auth/logout", {}); setUser(null); await identify(undefined); }); }}>Sign out</button></>}
     </Dropdown> : signIn}
   </div>;
   const tab = (name: string, active: boolean, onClick: () => void, extra?: React.ReactNode, disabled = false) => <button className={active ? "active" : ""} aria-current={active ? "page" : undefined} disabled={disabled} onClick={onClick}>{name}{extra}</button>;
@@ -751,6 +769,6 @@ export default function App() {
           message={message} setMessage={value => { messageTouched.current = true; setMessage(value); }} suggest={suggestMessage} commit={() => void publish()} signIn={user ? undefined : signIn} />
       </>}
     </main>
-    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source</span><span className="footer-links"><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
+    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
   </>;
 }

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,12 @@ function compressedLixWasm(): Plugin {
     },
   };
 }
+// Telemetry's app_version: the package version plus the commit it was built from.
+const commit = process.env.GITHUB_SHA?.slice(0, 7) ?? (() => { try { return execSync("git rev-parse --short HEAD").toString().trim(); } catch { return "dev"; } })();
+const appVersion = `${JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version}+${commit}`;
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [react(), compressedLixWasm()],
   resolve: { alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
   worker: { format: "es", plugins: () => [compressedLixWasm()] },
