@@ -542,3 +542,16 @@ body:has(.lixfloat) footer { padding-bottom: 72px; }
 @media (max-width: 560px) { .showcase-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .settings-diff-columns { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .lixfloat, .dropdown-panel, .spinner, .float-count.saving, .save-status.saving::before { animation: none; } .variant-action { transition: none; } }
+
+.local-drafts { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
+.local-drafts h3 { margin: 0 0 4px; font-size: 15px; }
+.local-drafts header p { margin: 0 0 12px; font-size: 13px; color: var(--text-2); line-height: 1.5; max-width: 720px; }
+.local-drafts ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.local-drafts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name action" "meta action"; gap: 2px 12px; align-items: center; padding: 10px 14px; }
+.local-drafts li + li { border-top: 1px solid var(--border); }
+.local-draft-name { grid-area: name; font-size: 14px; overflow-wrap: anywhere; }
+.local-draft-name .mono { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.local-draft-meta { grid-area: meta; font-size: 12.5px; color: var(--muted); }
+.local-draft-meta .todo { color: #92400e; font-weight: 500; }
+.local-drafts li > button, .local-draft-open { grid-area: action; font-size: 13px; }
+.local-drafts-error { color: #b91c1c; font-size: 13px; }

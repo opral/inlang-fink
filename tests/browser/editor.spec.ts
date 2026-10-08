@@ -224,6 +224,42 @@ test("makes the translation's variable bold like the reference", async ({ page }
   await expect(translation(page, "access")).toHaveText("<b>{client}</b> möchte Zugriff");
 });
 
+test("local drafts are listed, deleted with their recent project, and cleaned up when unused", async ({ page }) => {
+  const stored = () => page.evaluate(async () => {
+    try {
+      let directory = await navigator.storage.getDirectory();
+      for (const part of ["lix", "sqlite-sahpool"]) directory = await directory.getDirectoryHandle(part);
+      const names: string[] = [];
+      for await (const [name] of (directory as unknown as { entries(): AsyncIterable<[string]> }).entries()) names.push(name);
+      return names.length;
+    } catch { return 0; }
+  });
+  await stubApi(page);
+  await openRepository(page);
+  await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const drafts = page.getByRole("region", { name: "Local drafts" });
+  await expect(drafts).toContainText("example/repo");
+  await expect(drafts).toContainText("Open now");
+  expect(await stored()).toBe(1);
+  // Removing the recent project deletes its draft (no unpushed changes, so no question).
+  await page.goto("/");
+  await page.getByRole("button", { name: "Remove example/repo and its local draft" }).click();
+  await expect.poll(stored).toBe(0);
+  await expect(page.getByRole("button", { name: "Remove example/repo and its local draft" })).toHaveCount(0);
+  // A clean draft that wasn't opened for 30 days is deleted after the next visit; one with unpushed changes stays.
+  await openRepository(page);
+  await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
+  await page.goto("/");
+  await page.evaluate(() => { const drafts = JSON.parse(localStorage.getItem("fink:drafts")!); for (const draft of Object.values(drafts) as { lastOpened: number; pending: number }[]) { draft.lastOpened = 0; draft.pending = 2; } localStorage.setItem("fink:drafts", JSON.stringify(drafts)); });
+  await page.reload();
+  await page.waitForTimeout(3000);
+  expect(await stored()).toBe(1);
+  await page.evaluate(() => { const drafts = JSON.parse(localStorage.getItem("fink:drafts")!); for (const draft of Object.values(drafts) as { pending: number }[]) draft.pending = 0; localStorage.setItem("fink:drafts", JSON.stringify(drafts)); });
+  await page.reload();
+  await expect.poll(stored, { timeout: 30_000 }).toBe(0);
+});
+
 test("machine translation asks the translator to email us to activate it", async ({ page }) => {
   await stubApi(page);
   await openRepository(page);

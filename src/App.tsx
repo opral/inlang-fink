@@ -20,6 +20,8 @@ import type { Showcase } from "./showcases";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
 import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
+import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
+import { LocalDrafts } from "./LocalDrafts";
 import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
@@ -213,7 +215,11 @@ export default function App() {
   const loadBranches = (repository: Repo = localRef.current?.context ?? repo!) => {
     const key = `${repository.owner}/${repository.name}`.toLowerCase();
     let request = branchCache.current.get(key);
-    if (!request) { request = api<string[]>(`github/branches?${repoQuery({ owner: repository.owner, name: repository.name })}`); branchCache.current.set(key, request); request.catch(() => branchCache.current.delete(key)); }
+    if (!request) {
+      request = api<string[]>(`github/branches?${repoQuery({ owner: repository.owner, name: repository.name })}`); branchCache.current.set(key, request); request.catch(() => branchCache.current.delete(key));
+      // Drafts of branches that no longer exist on GitHub are deleted when they hold no unpushed changes.
+      request.then(names => cleanupDrafts({ openName: localRef.current?.name, branches: { owner: repository.owner, repo: repository.name, names } })).catch(error => console.warn("Draft cleanup failed", error));
+    }
     return request;
   };
   const loadProject = async (repository: Repo, nextTree: RepoTree, projectPath: string, repositoryUrl: string) => {
@@ -242,6 +248,7 @@ export default function App() {
     setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
+    if (localRef.current) recordDraft({ name: localRef.current.name, owner: repository.owner, repo: repository.name, branch: nextTree.branch, projectPath });
   };
   const open = () => run(async () => {
     if (!repo || !path) return;
@@ -433,7 +440,28 @@ export default function App() {
       } finally { setSettingsRevision(value => value + 1); }
     }, false);
   };
-  useEffect(() => { if (local) setRecentPending(local.context, pendingCount); }, [local, pendingCount]);
+  useEffect(() => { if (local) { setRecentPending(local.context, pendingCount); setDraftPending(local.name, pendingCount); } }, [local, pendingCount]);
+  // Once per visit, when the browser is idle and no project is loading: register drafts made before
+  // the registry existed, then delete clean drafts that weren't opened for 30 days.
+  const cleaned = useRef(false);
+  useEffect(() => {
+    if (initializing || cleaned.current) return;
+    const start = () => {
+      if (loading.current) { setTimeout(start, 5000); return; }
+      cleaned.current = true;
+      void registerExisting(localRef.current?.name).then(() => cleanupDrafts({ openName: localRef.current?.name })).catch(error => console.warn("Draft cleanup failed", error));
+    };
+    const handle = "requestIdleCallback" in window ? requestIdleCallback(start, { timeout: 15000 }) : setTimeout(start, 5000);
+    return () => { if ("cancelIdleCallback" in window) cancelIdleCallback(handle as number); else clearTimeout(handle as ReturnType<typeof setTimeout>); };
+  }, [initializing]);
+  /** Removes a recent project and its local draft, asking first when the draft has unpushed changes. */
+  const forgetProject = async (project: RecentProject) => {
+    const name = await draftName(project.owner, project.name, project.branch, project.projectPath);
+    const pending = readDrafts()[name]?.pending ?? project.pending;
+    if (pending !== 0 && !confirm(pending > 0 ? `${pending} unpushed ${pending === 1 ? "change" : "changes"} on ${project.branch} will be lost. Delete the local draft?` : `This draft may have unpushed changes on ${project.branch}. Delete it?`)) return;
+    if ((await deleteDraft(name)) === "in-use") { setError(`The draft of ${project.owner}/${project.name} is open in another tab. Close it there first.`); return; }
+    setRecent(forgetRecent(project));
+  };
   // Where each message is used in the app's code, at the commit the draft is based on. The bundled
   // matcher understands Paraglide's m.*() calls, so only message-format projects are scanned.
   const usageKey = local && "plugin.inlang.messageFormat" in local.context.settings ? `${local.context.owner}/${local.context.name}@${local.context.head}:${projectScope(local.context)}` : undefined;
@@ -692,10 +720,10 @@ export default function App() {
       {busy && <p role="status" className="loading-status"><span className="spinner" aria-hidden="true" />{progress || "Working…"}</p>}
       {!context && <Landing url={url} setUrl={value => { setUrl(value); setRepo(undefined); setTree(undefined); setBranch(""); }} submit={() => void discover()} busy={busy || initializing}
         picker={tree && { tree, branches, branch, path, setBranch, setPath, open: () => void open() }}
-        recent={recent} openRecent={openRecent} forget={project => setRecent(forgetRecent(project))} openShowcase={openShowcase}
+        recent={recent} openRecent={openRecent} forget={project => void forgetProject(project)} openShowcase={openShowcase}
         status={<>{error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{notice && <p role="status" className="notice">{notice}</p>}</>} />}
       {context && <>
-        {reviewPanel || (view === "history" ? <History context={context} pending={pendingCount} review={() => void review()} /> : view === "settings" ? <section className="settings-page"><header className="page-header"><div><h2>Project settings</h2><p className="settings-context"><a href={repositoryUrl} target="_blank" rel="noreferrer">{context.owner}/{context.name}</a> · {context.projectPath} · <span className="inline-branch"><BranchIcon />{context.branch}</span></p></div><button onClick={download} disabled={busy || saving}><DownloadIcon />Download project</button></header><div className="settings-form" inert={busy || saving}><Settings settings={context.settings} revision={settingsRevision} save={saveSettings} /></div></section> : <>
+        {reviewPanel || (view === "history" ? <History context={context} pending={pendingCount} review={() => void review()} /> : view === "settings" ? <section className="settings-page"><header className="page-header"><div><h2>Project settings</h2><p className="settings-context"><a href={repositoryUrl} target="_blank" rel="noreferrer">{context.owner}/{context.name}</a> · {context.projectPath} · <span className="inline-branch"><BranchIcon />{context.branch}</span></p></div><button onClick={download} disabled={busy || saving}><DownloadIcon />Download project</button></header><div className="settings-form" inert={busy || saving}><Settings settings={context.settings} revision={settingsRevision} save={saveSettings} /></div><LocalDrafts openName={local?.name} /></section> : <>
         <div className="list-toolbar">
           <div className="toolbar-row">
             <div className="toolbar-group">

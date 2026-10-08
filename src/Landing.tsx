@@ -43,7 +43,7 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
           </span>
           <span className="recent-state">{project.pending > 0 ? <span className="badge changed">{project.pending} unpushed</span> : <span className="recent-time">{timeAgo(project.openedAt)}</span>}</span>
         </button>
-        <button className="recent-remove" aria-label={`Remove ${project.owner}/${project.name} from recent projects`} title="Remove from list" onClick={() => forget(project)}>×</button>
+        <button className="recent-remove" aria-label={`Remove ${project.owner}/${project.name} and its local draft`} title="Remove and delete the local draft" onClick={() => forget(project)}>×</button>
       </article>)}</div>
     </section>}
 

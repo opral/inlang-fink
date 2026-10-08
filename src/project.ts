@@ -2,6 +2,7 @@ import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
 import { openProject, selectBundleNested, type InlangProject, type InlangPlugin, type ProjectSettings, type BundleNested } from "@inlang/sdk/browser";
 import { openLix } from "@lix-js/sdk";
 import { OpfsStorage } from "@lix-js/storage-opfs";
+import { draftName } from "./drafts";
 import i18next from "@inlang/plugin-i18next";
 import messageFormat from "@inlang/plugin-message-format";
 import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type Repo, type RepoTree } from "./repository";
@@ -9,7 +10,8 @@ import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type
 import { settingsSignature } from "./settingsData";
 
 const supported: InlangPlugin<any>[] = [i18next, messageFormat];
-export type LocalProject = { project: InlangProject; context: RepoContext; close: () => Promise<void> };
+/** An open draft; `name` is its OPFS database (see drafts.ts). */
+export type LocalProject = { project: InlangProject; context: RepoContext; name: string; close: () => Promise<void> };
 export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
   if (!settings.baseLocale || !Array.isArray(settings.locales) || !settings.locales.includes(settings.baseLocale)) throw new Error("This editor requires SDK v3 settings with baseLocale and locales.");
   const keys = Object.keys(settings).filter(key => key.startsWith("plugin.") && (settings[key] as { pathPattern?: unknown })?.pathPattern);
@@ -23,8 +25,7 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
 const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), mFunctionMatcher as InlangPlugin<any>];
 export const METADATA = "/fink-context.json";
 export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectPath: string, progress: (message: string) => void = () => {}): Promise<LocalProject> {
-  const key = [repo.owner.toLowerCase(), repo.name.toLowerCase(), tree.branch, projectPath].join("/");
-  const name = `fink-v3-${Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)))).map(x => x.toString(16).padStart(2, "0")).join("")}`;
+  const name = await draftName(repo.owner, repo.name, tree.branch, projectPath);
   progress("Opening local project…");
   const lix = await openLix({ storage: new OpfsStorage({ name }) });
   let project: InlangProject | undefined;
@@ -34,7 +35,7 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
       progress("Restoring saved draft…");
       const context: RepoContext = JSON.parse(new TextDecoder().decode(stored.rows[0].content));
       project = await openProject({ lix, providePlugins: editorPlugins(context.settings) });
-      return { project, context, close: async () => { await project!.close(); await lix.close(); } };
+      return { project, context, name, close: async () => { await project!.close(); await lix.close(); } };
     }
     progress("Reading project settings…");
     const rawSettings = await readRemoteFile(repo, tree, `${projectPath}/settings.json`);
@@ -49,7 +50,7 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     context.bundleBaseline = bundleSignatures(await readBundles(project));
     context.shas = fileShas(tree, context);
     await saveContext({ project, context });
-    return { project, context, close: async () => { await project!.close(); await lix.close(); } };
+    return { project, context, name, close: async () => { await project!.close(); await lix.close(); } };
   } catch (error) { if (project) await project.close(); await lix.close(); throw error; }
 }
 const readRemoteFile = async (repo: Repo, tree: RepoTree, path: string) => (await api<{ content: string }>(`github/file?${repoQuery({ ...repo, branch: tree.head })}&path=${encodeURIComponent(path)}`)).content;
