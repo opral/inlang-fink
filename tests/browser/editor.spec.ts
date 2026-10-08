@@ -151,6 +151,10 @@ test("To do filters and the language menu count work per language", async ({ pag
   await expect(translation(page, "items")).toBeFocused();
   await page.keyboard.type("Artikel");
   await expect(translation(page, "items")).toHaveText("Artikel");
+  // German "one" is exactly 1, so it may spell the number out (inlang SDK rule); the other form needs {count}.
+  await expect(page.locator('[data-bundle="items"] .message-status')).toHaveText("Edited");
+  await translation(page, "items", 1).click();
+  await page.keyboard.type("Artikel");
   // Now it needs {count} instead of a translation, and it stays put while the filter is unchanged.
   await expect(page.locator('[data-bundle="items"] .message-status')).toHaveText("Missing {count} in German");
   await expect(page.locator("[data-bundle]")).toHaveCount(1);

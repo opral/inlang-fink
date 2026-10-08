@@ -2,6 +2,10 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
-# Unreleased inlang packages from opral/inlang#4437 and #4438; every dependent uses the same SDK.
+# Unreleased inlang packages, linked to local checkouts of their pull requests until they are released:
+# @inlang/sdk from opral/inlang#4438 (branch codex/project-checks-fixes) in ../inlang-project-checks and
+# @inlang/editor-component from opral/inlang#4437 (codex/composable-editor-components) in
+# ../inlang-editor-components. Every dependent uses the same SDK. Replace the links with the released
+# versions once #4438 and #4437 ship: CI and the Worker deploy have no such checkouts.
 overrides:
-  "@inlang/sdk": "file:vendor/inlang-sdk-3.2.0-pr.4438.tgz"
+  "@inlang/sdk": "link:../inlang-project-checks/packages/sdk"

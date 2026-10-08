@@ -1,11 +1,9 @@
-import { requiredForms, selectorKeys, variableNames } from "@inlang/editor-component";
-import type { BundleNested, Declaration, MessageNested, Pattern } from "@inlang/sdk/browser";
+import { isPluralSelector, matchValue, requiredVariants, variableNames, type BundleNested, type Declaration, type MessageNested, type Pattern } from "@inlang/sdk/browser";
 
 // Pure helpers behind the translator flows for complex messages: markup, variables,
 // per-language selectors and starting a translation from the source text.
 
 type Variant = MessageNested["variants"][number];
-type Match = Variant["matches"][number];
 type Part = Pattern[number];
 type MarkupStart = Extract<Part, { type: "markup-start" }>;
 type MarkupStandalone = Extract<Part, { type: "markup-standalone" }>;
@@ -125,9 +123,9 @@ export function splitMessage(bundle: BundleNested, message: MessageNested, by: {
   } else selector = by.selector;
   const selectors = [{ type: "variable-reference" as const, name: selector }];
   const text = message.variants[0]?.pattern ?? [];
-  // Keys come from the locale's plural rules or from the other languages' variants.
-  const others = bundle.messages.flatMap(value => value.variants);
-  const forms = requiredForms({ selectors }, declarations, message.locale, others);
+  // The forms the inlang SDK requires: the locale's plural categories, or the values other languages use.
+  const others = bundle.messages.filter(value => value.id !== message.id).flatMap(value => value.variants);
+  const forms = requiredVariants({ locale: message.locale, selectors }, declarations, { referenceVariants: others });
   const variants = forms.map(matches => ({ id: crypto.randomUUID(), message_id: message.id, matches, pattern: structuredClone(text) }));
   return { declarations: declarations === bundle.declarations ? undefined : declarations, selectors, variants };
 }
@@ -145,8 +143,6 @@ export function joinMessage(bundle: BundleNested, message: MessageNested): Restr
   return { declarations, selectors: [], variants: [{ id: crypto.randomUUID(), message_id: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
 }
 
-const keyOf = (variant: Variant, selector: string) => { const match = variant.matches.find(value => value.key === selector); return match?.type === "literal-match" ? match.value : "*"; };
-
 /**
  * A new translation shaped like the source: the same selectors (minus plurals the language
  * doesn't need, e.g. Japanese), one variant per required form, with the source text copied
@@ -155,16 +151,17 @@ const keyOf = (variant: Variant, selector: string) => { const match = variant.ma
 export function messageFromSource(bundle: BundleNested, source: MessageNested | undefined, locale: string, messageId: string, copy: boolean): { selectors: MessageNested["selectors"]; variants: Variant[] } {
   if (!source || !source.selectors.length) return { selectors: [], variants: [{ id: crypto.randomUUID(), message_id: messageId, matches: [], pattern: copy ? structuredClone(source?.variants[0]?.pattern ?? []) : [] }] };
   const singular = pluralCategories(locale).length <= 1;
-  const selectors = source.selectors.filter(selector => !(singular && selectorKeys(selector.name, bundle.declarations, locale, source.variants).plural));
-  const forms = requiredForms({ selectors }, bundle.declarations, locale, source.variants);
+  const selectors = source.selectors.filter(selector => !(singular && isPluralSelector(selector.name, bundle.declarations)));
+  // The forms the inlang SDK requires in the locale, with the source's select values and exact numbers.
+  const forms = requiredVariants({ locale, selectors }, bundle.declarations, { referenceVariants: source.variants });
   const fallback = source.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? source.variants.at(-1);
   const variants = forms.map(matches => {
     // The source form with the same keys, else the one that would match ("other" for "*").
     const keys = matches.map(match => [match.key, match.type === "literal-match" ? match.value : "*"] as const);
-    const from = source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || (value === "*" && keyOf(variant, key) === "other")))
-      ?? source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || keyOf(variant, key) === "*"))
+    const from = source.variants.find(variant => keys.every(([key, value]) => matchValue(variant, key) === value || (value === "*" && matchValue(variant, key) === "other")))
+      ?? source.variants.find(variant => keys.every(([key, value]) => matchValue(variant, key) === value || matchValue(variant, key) === "*"))
       ?? fallback;
-    return { id: crypto.randomUUID(), message_id: messageId, matches: matches as Match[], pattern: copy ? structuredClone(from?.pattern ?? []) : [] };
+    return { id: crypto.randomUUID(), message_id: messageId, matches, pattern: copy ? structuredClone(from?.pattern ?? []) : [] };
   });
   return { selectors, variants };
 }

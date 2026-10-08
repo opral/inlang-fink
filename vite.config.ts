@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 // Lix's current engine exceeds Workers' per-asset limit. Serve a gzip asset and
 // decompress explicitly in the SDK's compiler; do not rely on CDN re-encoding.
@@ -26,9 +26,17 @@ const appVersion = `${JSON.parse(readFileSync(new URL("./package.json", import.m
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [react(), compressedLixWasm()],
-  resolve: { alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
+  resolve: {
+    alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }],
+    // The linked inlang packages (pnpm overrides) bring their own @inlang/sdk and Lix: use one instance of each.
+    dedupe: ["@inlang/sdk", "@lix-js/sdk"],
+  },
   worker: { format: "es", plugins: () => [compressedLixWasm()] },
   build: { target: "es2022" },
   optimizeDeps: { exclude: ["@inlang/sdk", "@lix-js/sdk", "@lix-js/storage-opfs"] },
-  server: { proxy: { "/api": "http://localhost:8787" } },
+  server: {
+    proxy: { "/api": "http://localhost:8787" },
+    // The linked checkouts of opral/inlang#4438 and #4437, see pnpm-workspace.yaml.
+    fs: { allow: [".", resolve("../inlang-project-checks"), resolve("../inlang-editor-components")] },
+  },
 });

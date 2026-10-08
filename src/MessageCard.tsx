@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createComponent } from "@lit/react";
-import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, selectorKeys, variableNames, type ChangeEventDetail, type Match } from "@inlang/editor-component";
-import type { BundleNested, CheckDiagnostic, Declaration, MessageNested, Pattern, ProjectSettings } from "@inlang/sdk/browser";
+import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
+import { isNumericKey, isPluralSelector, missingVariants, resolveInputVariable, selectorGroups, variableNames, type BundleNested, type CheckDiagnostic, type Declaration, type MessageNested, type Pattern, type ProjectSettings, type SelectorGroup } from "@inlang/sdk/browser";
 import { Editor } from "./Editor";
 import { Dropdown } from "./Menu";
 import { Modal } from "./Modal";
@@ -53,17 +53,15 @@ export function cardStatus(issues: { locale: string; issue: Issue }[], flags: { 
 const isSimple = (message: MessageNested) => !message.selectors.length && message.variants.length <= 1;
 /** The form that matches anything; shown when a message has several. */
 const defaultVariant = (message: MessageNested) => message.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? message.variants.at(-1);
-/** Selectors name local variables (countPlural); translators know the input (count). */
-function inputName(selector: string, declarations: Declaration[]) {
-  const declaration = declarations.find(value => value.name === selector);
-  return declaration?.type === "local-variable" && declaration.value.arg.type === "variable-reference" ? declaration.value.arg.name : selector;
-}
-// "one · female", "other" for a plural's catch-all, "default form" when nothing is matched.
+/** The label of a key of a selector group: "other" for a plural's catch-all, "any other" for a select's. */
+const keyLabel = (group: SelectorGroup, key: string) => key === "*" ? (group.isPlural ? "other" : "any other") : key;
+// "one · female", "0" for an ICU exact number, "other" for a plural's catch-all, "default form" when nothing is matched.
 const matchLabel = (variant: Variant, message: MessageNested, declarations: Declaration[]) => {
-  const plural = (key: string) => selectorKeys(key, declarations, message.locale, message.variants).plural;
-  if (variant.matches.every(match => match.type === "catchall-match" && !plural(match.key))) return "default form";
+  // The inlang SDK's selector groups: an exact number and the plural of the same input are one choice.
+  const groups = selectorGroups(message, declarations);
+  if (groups.every(group => !group.isPlural && group.keyOf(variant) === "*")) return "default form";
   // A non-plural catch-all names its input ("any actorGender"), so "any other · other" doesn't happen.
-  return variant.matches.map(match => match.type === "literal-match" ? match.value : plural(match.key) ? "other" : `any ${inputName(match.key, declarations)}`).join(" · ");
+  return groups.map(group => { const key = group.keyOf(variant); return key === "*" && !group.isPlural ? `any ${group.input}` : keyLabel(group, key); }).join(" · ");
 };
 
 /** Focuses an editor once it has rendered, e.g. after the button that was focused went away. */
@@ -87,33 +85,24 @@ function markupAction(name: string, variable: string) {
   return `Wrap {${variable}} in ${label}`;
 }
 
-/** Plural examples ("1, 21, 31…") for a selector, following its declaration to the plural annotation. */
-function examplesFor(selector: string, declarations: Declaration[], locale: string): Record<string, string> {
-  const declaration = declarations.find(value => value.name === selector);
-  if (declaration?.type !== "local-variable") return {};
-  const annotation = declaration.value.annotation;
-  if (annotation?.name !== "plural") return {};
-  const type = annotation.options?.find(option => option.name === "type")?.value;
-  return pluralExamples(locale, type?.type === "literal" && type.value === "ordinal" ? "ordinal" : "cardinal");
-}
-
 type FormRow = { key: string; label: string; hint?: string; variant?: Variant; matches: Match[]; required: boolean };
-/** One row per form of a single-selector message, in the locale's order, with the forms it still needs and the exact-number forms the reference has. */
-function formRows(message: MessageNested, declarations: Declaration[], required: boolean, referenceKeys: string[] = []): FormRow[] {
-  const name = message.selectors[0]!.name;
-  const { plural, keys } = selectorKeys(name, declarations, message.locale, message.variants);
-  const examples = plural ? examplesFor(name, declarations, message.locale) : {};
-  const keyOf = (variant: Variant) => { const match = variant.matches.find(value => value.key === name); return match?.type === "literal-match" ? match.value : "*"; };
-  const label = (key: string) => key === "*" ? (plural ? "other" : "any other") : key;
-  const hint = (key: string) => /^\d+$/.test(key) ? "exactly" : examples[key === "*" ? "other" : key];
+/**
+ * One row per form of a message with one selector group (one selector, or ICU's exact number + plural),
+ * in the inlang SDK's order: exact numbers, plural categories, other values, the catch-all. Forms the SDK
+ * requires but no variant covers (`missingVariants`, the `missing-variant` check) are rows without a variant.
+ */
+function formRows(message: MessageNested, declarations: Declaration[], group: SelectorGroup, referenceVariants?: Variant[]): FormRow[] {
+  const examples: Record<string, string> = group.plural ? pluralExamples(message.locale, group.plural.type) : {};
+  const hint = (key: string) => group.isPlural && isNumericKey(key) ? "exactly" : examples[key === "*" ? "other" : key];
+  const missing = new Map(missingVariants(message, declarations, { referenceVariants }).map(matches => [group.keyOf({ matches }), matches]));
   const rows: FormRow[] = [], used = new Set<Variant>();
-  const take = (key: string) => message.variants.find(variant => !used.has(variant) && (keyOf(variant) === key || (plural && key === "*" && keyOf(variant) === "other")));
-  const push = (key: string, variant: Variant | undefined, isRequired: boolean) => { if (variant) used.add(variant); rows.push({ key, label: label(key), hint: hint(key), variant, required: isRequired, matches: [key === "*" ? { type: "catchall-match", key: name } : { type: "literal-match", key: name, value: key }] }); };
-  // Exact numbers first (0, 1), including ones only the reference has: they're optional here.
-  const numbers = [...new Set([...message.variants.map(keyOf), ...(required && plural ? referenceKeys : [])].filter(key => /^\d+$/.test(key)))].sort((a, b) => Number(a) - Number(b));
-  for (const key of numbers) push(key, take(key), false);
-  for (const key of keys) { const variant = take(key); if (variant || required) push(key, variant, true); }
-  for (const variant of message.variants) if (!used.has(variant)) push(keyOf(variant), variant, false);
+  const push = (key: string, variant: Variant | undefined, matches: Match[]) => { if (variant) used.add(variant); rows.push({ key, label: keyLabel(group, key), hint: hint(key), variant, matches, required: group.requiredKeys.includes(key) || (group.isPlural && key === "other") }); };
+  for (const key of group.keys) {
+    const variant = message.variants.find(value => !used.has(value) && group.keyOf(value) === key);
+    if (variant) push(key, variant, variant.matches);
+    else if (missing.has(key)) push(key, undefined, missing.get(key)!);
+  }
+  for (const variant of message.variants) if (!used.has(variant)) push(group.keyOf(variant), variant, variant.matches);
   return rows;
 }
 
@@ -131,14 +120,14 @@ function formNotes(issues: Issue[], variantId: string, markup: ReturnType<typeof
   };
 }
 
-function ComplexTranslation({ bundle, message, source, issues, variants, addVariant, editorProps }: { bundle: BundleNested; message: MessageNested; source?: MessageNested; issues: Issue[]; variants: Map<string, Variant>; addVariant: Props["addVariant"]; editorProps: (pattern: Pattern) => Record<string, unknown> }) {
+function ComplexTranslation({ bundle, message, source, referenceVariants, issues, variants, addVariant, editorProps }: { bundle: BundleNested; message: MessageNested; source?: MessageNested; referenceVariants?: Variant[]; issues: Issue[]; variants: Map<string, Variant>; addVariant: Props["addVariant"]; editorProps: (pattern: Pattern) => Record<string, unknown> }) {
   const label = (variant: Variant) => matchLabel(variant, message, bundle.declarations);
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const selected = message.variants.find(variant => variant.id === selectedId) ?? defaultVariant(message);
   const missing = issues.filter(issue => issue.checkId === "missing-variant").length;
-  const by = message.selectors.map(selector => inputName(selector.name, bundle.declarations));
+  const by = selectorGroups(message, bundle.declarations).map(group => group.input);
   const isDefault = selected && selected === defaultVariant(message);
   const editor = useRef<InlangPatternEditor>(null), focusId = useRef<string | undefined>(undefined);
   useEffect(() => { if (focusId.current && selected?.id === focusId.current) { focusId.current = undefined; focusEditor(editor.current); } }, [selected]);
@@ -151,7 +140,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   return <>
     {selected && <p className="editing">{expanded || !isDefault ? <>Editing <b>{label(selected)}</b></> : "Default form"}</p>}
     {selected && <div className="field"><PatternEditor ref={editor} variant={variants.get(selected.id)} declarations={bundle.declarations} aria-label={`${languageName(message.locale)} translation of ${bundle.id}, form ${label(selected)}`} {...editorProps(selected.pattern)} /></div>}
-    {expanded && <Forms message={message} variants={message.variants} declarations={bundle.declarations} locale={message.locale} selectedVariantId={selected?.id ?? ""}
+    {expanded && <Forms message={message} variants={message.variants} declarations={bundle.declarations} locale={message.locale} referenceVariants={referenceVariants} selectedVariantId={selected?.id ?? ""}
       onSelectVariant={event => setSelectedId((event as CustomEvent<{ variantId: string }>).detail.variantId)}
       onAddVariant={event => add((event as CustomEvent<{ matches: Match[] }>).detail.matches)} />}
     <div className="form-actions">
@@ -231,12 +220,13 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     {locale === settings.baseLocale && <span className="ref-badge">ref</span>}
     {todo && <span className="todo-dot" aria-label="Needs work" />}
   </div>;
+  const sourceGroups = useMemo(() => source ? selectorGroups(source, bundle.declarations) : [], [source, bundle.declarations]);
   const sourceRow = () => source && <div className="message-row" key={`ref-${source.locale}`}>
     {localeCell(source.locale, false)}
     <div className="message-ref">
-      {isSimple(source) || source.selectors.length !== 1
+      {isSimple(source) || sourceGroups.length !== 1
         ? <div className="message-cell source"><PatternView pattern={defaultVariant(source)?.pattern ?? []} declarations={bundle.declarations} />{source.variants.length > 1 && <span className="form-count"> · {source.variants.length} forms</span>}</div>
-        : formRows(source, bundle.declarations, false).map(form => <div className="message-cell source form" key={form.variant!.id}>
+        : formRows(source, bundle.declarations, sourceGroups[0]!).filter(form => form.variant).map(form => <div className="message-cell source form" key={form.variant!.id}>
           <span className="form-label"><b>{form.label}</b>{form.hint && <small>{form.hint}</small>}</span><PatternView pattern={form.variant!.pattern} declarations={bundle.declarations} />
         </div>)}
     </div>
@@ -245,7 +235,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const start = (locale: string, copy: boolean) => {
     const id = crypto.randomUUID(), shape = messageFromSource(bundle, source, locale, id, copy);
     if (copy) for (const variant of shape.variants) seeded.set(variant.id, { words: words(variant.pattern), pattern: JSON.stringify(variant.pattern) });
-    focusKey.current = shape.selectors.length === 1 ? `${locale}:${shape.variants[0]!.id}` : locale;
+    focusKey.current = shape.selectors.length && selectorGroups({ locale, ...shape }, bundle.declarations).length === 1 ? `${locale}:${shape.variants[0]!.id}` : locale;
     addMessage(bundle, locale, { id, ...shape });
   };
   const row = (locale: string) => {
@@ -253,6 +243,9 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const localeIssues = locale === focus.source ? [] : issues[locale] ?? [];
     const name = languageName(locale), isTarget = locale !== focus.source;
     const sourceSplits = !!source?.selectors.length, targetSplits = !!message?.selectors.length;
+    // The reference's select values and exact numbers are needed in a translation too (inlang SDK selector rules).
+    const referenceVariants = isTarget && source ? source.variants : undefined;
+    const groups = message ? selectorGroups(message, bundle.declarations, { referenceVariants }) : [];
     const numberSplit = isTarget && message && isSimple(message) && !sourceSplits && pluralCategories(locale).length >= 3 ? numberInputs(message, bundle.declarations)[0] : undefined;
     let cells: React.ReactNode;
     if (!message) cells = <div className="message-cell missing-translation-row">
@@ -264,16 +257,15 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
       {editor(locale, variant, `${name} translation of ${bundle.id}`)}
       {notes(locale, variant, locale, false)}
       {numberSplit && <p className="field-note">{name} uses different words depending on the number ({pluralCategories(locale).length} forms). <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, { plural: numberSplit }))}>Split by {`{${numberSplit}}`}</button></p>}
-      {isTarget && sourceSplits && pluralCategories(locale).length <= 1 && source!.selectors.every(selector => selectorKeys(selector.name, bundle.declarations, locale, source!.variants).plural) && <p className="field-note">{name} uses the same words for every number, so one text covers all counts.</p>}
+      {isTarget && sourceSplits && pluralCategories(locale).length <= 1 && source!.selectors.every(selector => isPluralSelector(selector.name, bundle.declarations)) && <p className="field-note">{name} uses the same words for every number, so one text covers all counts.</p>}
     </div>);
-    else if (message.selectors.length === 1) {
-      const referenceKeys = source?.selectors.length === 1 ? source.variants.flatMap(variant => variant.matches.flatMap(match => match.type === "literal-match" ? [match.value] : [])) : [];
-      const rows = formRows(message, bundle.declarations, true, referenceKeys);
+    else if (groups.length === 1) {
+      const rows = formRows(message, bundle.declarations, groups[0]!, referenceVariants);
       const complete = isTarget && !localeIssues.length && rows.every(row => row.variant || !row.required) && !message.variants.some(variant => seeded.get(variant.id)?.pattern === JSON.stringify(variant.pattern));
       const tokens = source ? [...new Set(source.variants.flatMap(variant => variableNames(variant.pattern)))].map(value => `{${value}}`).concat(markup.paired.map(({ part }) => markupLabel(part.name).toLowerCase())) : [];
       cells = <>
         {rows.map((form, index) => {
-          const exact = /^\d+$/.test(form.key);
+          const exact = groups[0]!.isPlural && isNumericKey(form.key);
           if (!form.variant) return <div key={`missing-${form.key}`} className="message-cell form missing"><span className="form-label"><b>{form.label}</b>{form.hint && <small>{form.hint}</small>}</span>
             <button type="button" className="inline-link add-form" onClick={() => {
               // Start from the nearest form above (few for many), else below.
@@ -290,7 +282,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
             {!form.required && isTarget && <button type="button" className="inline-link remove-form" aria-label={`Remove the ${form.label} form`} onClick={() => removeVariant(bundle.id, variant.id)}>Remove</button>}
           </div>;
         })}
-        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${inputName(message.selectors[0]!.name, bundle.declarations)}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(bundle, message))}>Use one text again</button></div>}
+        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${groups[0]!.input}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(bundle, message))}>Use one text again</button></div>}
         <div className="message-cell actions">
           {complete && tokens.length > 0 && <span className="check">✓ {listOf(tokens)} {tokens.length === 1 ? "is" : "are"} in every form</span>}
           <button type="button" className="inline-link" aria-expanded={preview === locale} onClick={() => { setPreview(preview === locale ? undefined : locale); setMatched(undefined); }}>{preview === locale ? "Hide preview" : "Preview"}</button>
@@ -299,7 +291,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
           onVariantMatch={event => setMatched((event as CustomEvent<{ variantId?: string }>).detail.variantId)} /></div>}
       </>;
     }
-    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
+    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} referenceVariants={referenceVariants} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
     return <div className="message-row" key={locale}>
       {localeCell(locale, localeIssues.length > 0)}
       <div className="message-target">{cells}</div>
@@ -310,9 +302,9 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const message = bundle.messages.find(value => value.locale === locale);
     if (!message || !isSimple(message)) return [];
     const byNumber = pluralCategories(locale).length > 1 ? numberInputs(message, bundle.declarations).map(input => ({ label: `Split ${languageName(locale)} by {${input}}`, next: () => splitMessage(bundle, message, { plural: input }) })) : [];
-    const used = [...new Set(bundle.messages.flatMap(value => value.selectors.map(selector => selector.name)))]
-      .filter(selector => !selectorKeys(selector, bundle.declarations, locale, []).plural);
-    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${inputName(selector, bundle.declarations)}}`, next: () => splitMessage(bundle, message, { selector }) }));
+    // Selects other languages use; an exact number that belongs to a plural (ICU =0) is part of that plural.
+    const used = [...new Set(bundle.messages.flatMap(value => selectorGroups(value, bundle.declarations)).filter(group => !group.isPlural).map(group => group.selector))];
+    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${resolveInputVariable(selector, bundle.declarations)}}`, next: () => splitMessage(bundle, message, { selector }) }));
     return [...byNumber, ...bySelector].map(item => ({ ...item, message_id: message.id }));
   });
   return <article className="message-card" data-bundle={bundle.id} ref={root} aria-label={bundle.id}>

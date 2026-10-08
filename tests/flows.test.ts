@@ -85,3 +85,37 @@ describe("start from the source", () => {
     expect(untranslatedWords(seeded, [v("count"), t(" Einladungen sent to")])).toEqual(["sent"]);
   });
 });
+
+// The forms come from the inlang SDK's selector rules (requiredVariants), the same as its missing-variant check.
+describe("forms from the inlang SDK", () => {
+  const keys = (variants: { matches: MessageNested["variants"][number]["matches"] }[]) => variants.map(variant => variant.matches.map(match => match.type === "literal-match" ? match.value : "*").join());
+  it("treats an ICU exact number and the plural of the same input as one choice", () => {
+    // `{count, plural, =0 {…} one {…} other {…}}`: an exact-number selector on count next to countPlural.
+    const en: MessageNested = { id: "m-en", bundle_id: "files", locale: "en", selectors: [{ type: "variable-reference", name: "count" }, { type: "variable-reference", name: "countPlural" }], variants: [
+      { id: "en-0", message_id: "m-en", matches: [{ type: "literal-match", key: "count", value: "0" }, { type: "catchall-match", key: "countPlural" }], pattern: [t("No files")] },
+      { id: "en-one", message_id: "m-en", matches: [{ type: "catchall-match", key: "count" }, { type: "literal-match", key: "countPlural", value: "one" }], pattern: [t("One file")] },
+      { id: "en-other", message_id: "m-en", matches: [{ type: "catchall-match", key: "count" }, { type: "catchall-match", key: "countPlural" }], pattern: [v("count"), t(" files")] },
+    ] };
+    const files: BundleNested = { id: "files", declarations, messages: [en] };
+    const shape = messageFromSource(files, en, "ru", "m-ru", true);
+    // 0, Russian's categories and the catch-all; never "0 × one".
+    expect(keys(shape.variants)).toEqual(["0,*", "*,one", "*,few", "*,many", "*,*"]);
+    expect(shape.variants[0]!.pattern).toEqual([t("No files")]);
+    expect(shape.variants[2]!.pattern).toEqual(en.variants[2]!.pattern);
+  });
+
+  it("needs the source's select values, and splits by the values other languages use", () => {
+    const gender = [{ type: "variable-reference" as const, name: "gender" }];
+    const en: MessageNested = { id: "m-en", bundle_id: "invite", locale: "en", selectors: gender, variants: [
+      { id: "en-f", message_id: "m-en", matches: [{ type: "literal-match", key: "gender", value: "female" }], pattern: [t("her team")] },
+      { id: "en-m", message_id: "m-en", matches: [{ type: "literal-match", key: "gender", value: "male" }], pattern: [t("his team")] },
+      { id: "en-x", message_id: "m-en", matches: [{ type: "catchall-match", key: "gender" }], pattern: [t("their team")] },
+    ] };
+    const de: MessageNested = { id: "m-de", bundle_id: "invite", locale: "de", selectors: [], variants: [{ id: "de-1", message_id: "m-de", matches: [], pattern: [t("ihr Team")] }] };
+    const invite: BundleNested = { id: "invite", declarations: [{ type: "input-variable", name: "gender" }], messages: [en, de] };
+    expect(keys(messageFromSource(invite, en, "ja", "m-ja", false).variants)).toEqual(["female", "male", "*"]);
+    const split = splitMessage(invite, de, { selector: "gender" });
+    expect(keys(split.variants)).toEqual(["female", "male", "*"]);
+    expect(split.declarations).toBeUndefined();
+  });
+});
