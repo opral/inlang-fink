@@ -597,7 +597,7 @@ packages:
     os: [win32]
 
   '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0-pr.4437.tgz':
-    resolution: {integrity: sha512-m0FwUvTu5Gkj6D+DszwVC9iOCtYaTOu+dRsu8BEYtsHoBV925O2nZjCtpCg1Br+cAmuk8wfxM0SBc3bwGDktRw==, tarball: file:vendor/inlang-editor-component-13.0.0-pr.4437.tgz}
+    resolution: {integrity: sha512-GMaMAOuvSoSl+EPuUgDs6/fmcHr0IGOPqMygDVpyMmsnBGvrVNyODjbnOEgRS9br7yYhE4EYcOmOwiaEB8GWLQ==, tarball: file:vendor/inlang-editor-component-13.0.0-pr.4437.tgz}
     version: 13.0.0-pr.4437
     peerDependencies:
       '@inlang/sdk': 3.1.0
