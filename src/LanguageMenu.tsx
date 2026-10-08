@@ -2,10 +2,9 @@ import { useState } from "react";
 import { Chevron, CheckIcon, Dropdown } from "./Menu";
 import { languageName, type LanguageFocus } from "./languages";
 
-/** "English → Russian ▾": choose the source and the languages to translate into. */
-export function LanguageMenu({ locales, baseLocale, focus, onChange, todo }: { locales: string[]; baseLocale: string; focus: LanguageFocus; onChange: (focus: LanguageFocus) => void; todo: (locale: string) => number }) {
+/** "English → German ▾": the source is one select, the list is the languages to translate into, most work first. */
+export function LanguageMenu({ locales, baseLocale, focus, onChange, todo, total }: { locales: string[]; baseLocale: string; focus: LanguageFocus; onChange: (focus: LanguageFocus) => void; todo: (locale: string) => number; total: number }) {
   const [filter, setFilter] = useState("");
-  const [choosingSource, setChoosingSource] = useState(false);
   const label = focus.all ? "All languages" : focus.targets.map(languageName).join(", ") || "Choose a language";
   const matches = (locale: string) => `${locale} ${languageName(locale)}`.toLowerCase().includes(filter.trim().toLowerCase());
   // The new source can't also be a target; if it was the only one, translate into another language.
@@ -20,28 +19,35 @@ export function LanguageMenu({ locales, baseLocale, focus, onChange, todo }: { l
     const targets = focus.targets.includes(locale) ? focus.targets.filter(value => value !== locale) : [...focus.targets, locale];
     if (targets.length) onChange({ ...focus, targets }); // At least one language stays selected.
   };
-  return <Dropdown className="language-trigger" title="Choose languages" panelClassName="language-panel" onOpen={() => { setFilter(""); setChoosingSource(false); }}
+  const targets = locales.filter(locale => locale !== focus.source && matches(locale))
+    .map(locale => ({ locale, left: todo(locale) }))
+    .sort((a, b) => b.left - a.left || languageName(a.locale).localeCompare(languageName(b.locale)));
+  return <Dropdown className="language-trigger" title="Choose languages" panelClassName="language-panel" onOpen={() => setFilter("")}
     label={<><span className="language-from">{languageName(focus.source)}</span><span aria-hidden="true" className="language-arrow">→</span><strong>{label}</strong><Chevron /></>}>
     {close => <>
-      <input className="branch-filter" aria-label="Find a language" placeholder="Find a language…" value={filter} onChange={event => setFilter(event.target.value)} autoFocus />
-      <div className="dropdown-heading">Translate from</div>
-      {choosingSource
-        ? <div className="language-list" role="group" aria-label="Source language">{locales.filter(matches).map(locale => <button key={locale} type="button" className="menu-item" aria-current={locale === focus.source ? "true" : undefined} onClick={() => { onChange(withSource(locale)); setChoosingSource(false); }}>
-            <span className="menu-check">{locale === focus.source && <CheckIcon />}</span><span className="menu-text">{languageName(locale)} <span className="language-code">{locale}</span></span>{locale === baseLocale && <span className="menu-hint">reference</span>}
-          </button>)}</div>
-        : <button type="button" className="menu-item" onClick={() => setChoosingSource(true)}><span className="menu-check" /><span className="menu-text">{languageName(focus.source)} <span className="language-code">{focus.source}</span>{focus.source === baseLocale && <span className="menu-hint"> · reference</span>}</span><span className="menu-hint">Change</span></button>}
+      <label className="language-source"><span>From</span>
+        <select value={focus.source} onChange={event => onChange(withSource(event.target.value))}>
+          {locales.map(locale => <option key={locale} value={locale}>{languageName(locale)}{locale === baseLocale ? " · reference" : ""}</option>)}
+        </select>
+      </label>
+      <input className="language-search" aria-label="Find a language" placeholder="Find a language…" value={filter} onChange={event => setFilter(event.target.value)} autoFocus />
       <div className="dropdown-heading">Translate into</div>
       <div className="language-list" role="group" aria-label="Target languages">
-        {locales.filter(locale => locale !== focus.source && matches(locale)).map(locale => {
-          const count = todo(locale), on = !focus.all && focus.targets.includes(locale);
-          return <button key={locale} type="button" role="checkbox" aria-checked={on} className={on ? "menu-item on" : "menu-item"} onClick={() => toggle(locale)}>
+        {targets.map(({ locale, left }) => {
+          const on = !focus.all && focus.targets.includes(locale), done = total ? Math.round(((total - left) / total) * 100) : 100;
+          return <button key={locale} type="button" role="checkbox" aria-checked={on} className={on ? "language-item on" : "language-item"} onClick={() => toggle(locale)}>
             <span className={on ? "language-box on" : "language-box"} aria-hidden="true">{on && <CheckIcon />}</span>
-            <span className="menu-text">{languageName(locale)} <span className="language-code">{locale}</span></span>
-            <span className={count ? "language-count todo" : "language-count"}>{count ? `${count} to do` : "done"}</span>
+            <span className="language-name">{languageName(locale)} <span className="language-code">{locale}</span></span>
+            <span className="language-bar" aria-hidden="true"><span style={{ width: `${done}%` }} /></span>
+            <span className={left ? "language-count todo" : "language-count"}>{left ? `${left} to do` : "done"}</span>
           </button>;
         })}
+        {!targets.length && <p className="dropdown-empty">No language matches “{filter}”.</p>}
       </div>
-      <p className="dropdown-note"><button type="button" className="link-button" aria-pressed={focus.all} onClick={() => { onChange({ ...focus, all: true }); close(); }}>Review all languages</button></p>
+      <div className="language-foot">
+        <button type="button" className="link-button" aria-pressed={focus.all} onClick={() => { onChange({ ...focus, all: true }); close(); }}>Review all languages</button>
+        <button type="button" className="primary" onClick={close}>Done</button>
+      </div>
     </>}
   </Dropdown>;
 }

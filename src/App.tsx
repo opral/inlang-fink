@@ -520,7 +520,7 @@ export default function App() {
         <div className="list-toolbar">
           <div className="toolbar-row">
             <div className="toolbar-group">
-              {focus && <LanguageMenu locales={context.settings.locales} baseLocale={context.settings.baseLocale} focus={focus} onChange={changeFocus} todo={todoIn} />}
+              {focus && <LanguageMenu locales={context.settings.locales} baseLocale={context.settings.baseLocale} focus={focus} onChange={changeFocus} todo={todoIn} total={bundles.length} />}
               <div className="segmented" role="group" aria-label="Show">
                 {([["all", "All", counts.all], ["todo", "To do", counts.todo], ["edited", "Edited", counts.edited]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setTodoKind("all"); }}>{label}<span className="count">{count}</span></button>)}
               </div>
