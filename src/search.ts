@@ -39,3 +39,23 @@ export function highlightMatches(root: Element | null, terms: string[]) {
   }
   CSS.highlights.set(HIGHLIGHT, new Highlight(...ranges));
 }
+
+const UNTRANSLATED = "inlang-untranslated";
+/** Underlines words still in the source language in forms started from it (`data-untranslated="word|word"`). */
+export function markUntranslated(root: Element | null) {
+  if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
+  const ranges: Range[] = [];
+  for (const cell of root?.querySelectorAll<HTMLElement>("[data-untranslated]") ?? []) {
+    const list = cell.dataset.untranslated!.split("|").filter(Boolean);
+    const editable = cell.querySelector("[contenteditable]");
+    if (!editable || !list.length) continue;
+    const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT, { acceptNode: node => node.parentElement?.closest("[data-inlang-token]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      for (const match of node.data.matchAll(/\p{L}[\p{L}'’-]+/gu)) {
+        if (!list.includes(match[0])) continue;
+        const range = new Range(); range.setStart(node, match.index!); range.setEnd(node, match.index! + match[0].length); ranges.push(range);
+      }
+    }
+  }
+  if (ranges.length) CSS.highlights.set(UNTRANSLATED, new Highlight(...ranges)); else CSS.highlights.delete(UNTRANSLATED);
+}

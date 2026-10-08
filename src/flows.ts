@@ -1,0 +1,180 @@
+import { requiredForms, selectorKeys, variableNames } from "@inlang/editor-component";
+import type { BundleNested, Declaration, MessageNested, Pattern } from "@inlang/sdk/browser";
+
+// Pure helpers behind the translator flows for complex messages: markup, variables,
+// per-language selectors and starting a translation from the source text.
+
+type Variant = MessageNested["variants"][number];
+type Match = Variant["matches"][number];
+type Part = Pattern[number];
+type MarkupStart = Extract<Part, { type: "markup-start" }>;
+type MarkupStandalone = Extract<Part, { type: "markup-standalone" }>;
+
+/** "Link", "Bold", "Italic" or the tag itself for other markup. */
+export function markupLabel(name: string): string {
+  const lower = name.toLowerCase();
+  if (["a", "link"].includes(lower)) return "Link";
+  if (["b", "strong", "bold"].includes(lower)) return "Bold";
+  if (["i", "em", "italic"].includes(lower)) return "Italic";
+  if (["u", "underline"].includes(lower)) return "Underline";
+  if (["br", "linebreak", "line-break"].includes(lower)) return "Line break";
+  return `<${name}>`;
+}
+
+/** Plain text of a pattern, with variables written as {name}. */
+export function patternText(pattern: Pattern): string {
+  return pattern.map(part => part.type === "text" ? part.value : part.type === "expression" ? `{${part.arg.type === "variable-reference" ? part.arg.name : part.arg.value}}` : "").join("");
+}
+
+/** The text inside the first `<name>…</name>` of a pattern, e.g. "docs" for a link. */
+export function markupText(pattern: Pattern, name: string): string {
+  const start = pattern.findIndex(part => part.type === "markup-start" && part.name === name);
+  if (start === -1) return "";
+  const end = pattern.findIndex((part, index) => index > start && part.type === "markup-end" && part.name === name);
+  return patternText(pattern.slice(start + 1, end === -1 ? undefined : end)).trim();
+}
+
+/** Markup a translation can use: the reference's paired tags (with options) and standalone tags. */
+export function referenceMarkup(source: MessageNested | undefined): { paired: { part: MarkupStart; label: string; text: string }[]; standalone: { part: MarkupStandalone; label: string }[] } {
+  const paired: { part: MarkupStart; label: string; text: string }[] = [], standalone: { part: MarkupStandalone; label: string }[] = [];
+  for (const variant of source?.variants ?? []) for (const part of variant.pattern) {
+    if (part.type === "markup-start" && !paired.some(value => value.part.name === part.name)) {
+      const text = markupText(variant.pattern, part.name);
+      paired.push({ part, text, label: text ? `${markupLabel(part.name)} like “${text}”` : markupLabel(part.name) });
+    }
+    if (part.type === "markup-standalone" && !standalone.some(value => value.part.name === part.name)) standalone.push({ part, label: markupLabel(part.name) });
+  }
+  return { paired, standalone };
+}
+
+/** Variables to suggest after "{": the reference's missing ones first, then used ones, then other inputs. */
+export function variableSuggestions(source: MessageNested | undefined, target: Pattern, declarations: Declaration[]): { name: string; hint?: string }[] {
+  const reference = [...new Set((source?.variants ?? []).flatMap(variant => variableNames(variant.pattern)))];
+  const used = new Set(variableNames(target));
+  const inputs = declarations.filter(declaration => declaration.type === "input-variable").map(declaration => declaration.name);
+  const missing = reference.filter(name => !used.has(name)).map(name => ({ name, hint: "missing" }));
+  const present = reference.filter(name => used.has(name)).map(name => ({ name, hint: "used" }));
+  const others = inputs.filter(name => !reference.includes(name)).map(name => ({ name }));
+  return [...missing, ...present, ...others];
+}
+
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    let previous = row[0]!; row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const current = row[j]!;
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, previous + (a[i - 1]!.toLowerCase() === b[j - 1]!.toLowerCase() ? 0 : 1));
+      previous = current;
+    }
+  }
+  return row[b.length]!;
+}
+
+/** The candidate a misspelled name most likely meant ("totl" → "total"), if it is close. */
+export function closestName(name: string, candidates: string[]): string | undefined {
+  let best: string | undefined, score = Infinity;
+  for (const candidate of candidates) {
+    const value = distance(name, candidate);
+    if (value < score) { best = candidate; score = value; }
+  }
+  return best !== undefined && score <= Math.max(2, Math.floor(best.length / 3)) ? best : undefined;
+}
+
+/** Replaces (or, without `to`, removes) every `{from}` in a pattern. */
+export function renameVariable(pattern: Pattern, from: string, to?: string): Pattern {
+  const result: Pattern = [];
+  for (const part of pattern) {
+    if (part.type === "expression" && part.arg.type === "variable-reference" && part.arg.name === from) {
+      if (to) result.push({ ...structuredClone(part), arg: { type: "variable-reference", name: to } });
+      continue;
+    }
+    const last = result.at(-1);
+    if (part.type === "text" && last?.type === "text") last.value += part.value;
+    else result.push(structuredClone(part));
+  }
+  return result;
+}
+
+/** CLDR plural categories of a locale ("other" only for languages without plural forms). */
+export function pluralCategories(locale: string): string[] {
+  try { return new Intl.PluralRules(locale).resolvedOptions().pluralCategories; } catch { return ["other"]; }
+}
+
+/** The plural selector name for an input, if the bundle declares one (`local countPlural = count: plural`). */
+function pluralDeclarationFor(input: string, declarations: Declaration[]): string | undefined {
+  return declarations.find(declaration => declaration.type === "local-variable" && declaration.value.annotation?.name === "plural" && declaration.value.arg.type === "variable-reference" && declaration.value.arg.name === input)?.name;
+}
+
+/** Inputs a message could be split by number: declared as number/plural, or named like a count. */
+export function numberInputs(message: MessageNested, declarations: Declaration[]): string[] {
+  const used = new Set(message.variants.flatMap(variant => variableNames(variant.pattern)));
+  return [...used].filter(name => {
+    const typed = declarations.some(declaration => declaration.type === "local-variable" && declaration.value.arg.type === "variable-reference" && declaration.value.arg.name === name && ["plural", "number", "integer"].includes(declaration.value.annotation?.name ?? ""));
+    return typed || /^(count|n|num|number|total|amount|quantity)$|(count|total|number|amount)$/i.test(name);
+  });
+}
+
+export type Restructure = { declarations?: Declaration[]; selectors: MessageNested["selectors"]; variants: Variant[] };
+
+/**
+ * Splits a single-text message by a selector: by number (a plural of `input`) or by the keys
+ * other languages already use for that selector. Every new form starts with the current text.
+ */
+export function splitMessage(bundle: BundleNested, message: MessageNested, by: { plural: string } | { selector: string }): Restructure {
+  let declarations = bundle.declarations, selector: string;
+  if ("plural" in by) {
+    selector = pluralDeclarationFor(by.plural, declarations) ?? `${by.plural}Plural`;
+    if (!declarations.some(declaration => declaration.name === selector)) {
+      declarations = [...declarations, { type: "local-variable", name: selector, value: { type: "expression", arg: { type: "variable-reference", name: by.plural }, annotation: { type: "function-reference", name: "plural", options: [] } } }];
+    }
+  } else selector = by.selector;
+  const selectors = [{ type: "variable-reference" as const, name: selector }];
+  const text = message.variants[0]?.pattern ?? [];
+  // Keys come from the locale's plural rules or from the other languages' variants.
+  const others = bundle.messages.flatMap(value => value.variants);
+  const forms = requiredForms({ selectors }, declarations, message.locale, others);
+  const variants = forms.map(matches => ({ id: crypto.randomUUID(), messageId: message.id, matches, pattern: structuredClone(text) }));
+  return { declarations: declarations === bundle.declarations ? undefined : declarations, selectors, variants };
+}
+
+/** Undoes a split: one text for every case, taken from the default form. */
+export function joinMessage(message: MessageNested): Restructure {
+  const fallback = message.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? message.variants.at(-1);
+  return { selectors: [], variants: [{ id: crypto.randomUUID(), messageId: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
+}
+
+const keyOf = (variant: Variant, selector: string) => { const match = variant.matches.find(value => value.key === selector); return match?.type === "literal-match" ? match.value : "*"; };
+
+/**
+ * A new translation shaped like the source: the same selectors (minus plurals the language
+ * doesn't need, e.g. Japanese), one variant per required form, with the source text copied
+ * (`copy`) or empty.
+ */
+export function messageFromSource(bundle: BundleNested, source: MessageNested | undefined, locale: string, messageId: string, copy: boolean): { selectors: MessageNested["selectors"]; variants: Variant[] } {
+  if (!source || !source.selectors.length) return { selectors: [], variants: [{ id: crypto.randomUUID(), messageId, matches: [], pattern: copy ? structuredClone(source?.variants[0]?.pattern ?? []) : [] }] };
+  const singular = pluralCategories(locale).length <= 1;
+  const selectors = source.selectors.filter(selector => !(singular && selectorKeys(selector.name, bundle.declarations, locale, source.variants).plural));
+  const forms = requiredForms({ selectors }, bundle.declarations, locale, source.variants);
+  const fallback = source.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? source.variants.at(-1);
+  const variants = forms.map(matches => {
+    // The source form with the same keys, else the one that would match ("other" for "*").
+    const keys = matches.map(match => [match.key, match.type === "literal-match" ? match.value : "*"] as const);
+    const from = source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || (value === "*" && keyOf(variant, key) === "other")))
+      ?? source.variants.find(variant => keys.every(([key, value]) => keyOf(variant, key) === value || keyOf(variant, key) === "*"))
+      ?? fallback;
+    return { id: crypto.randomUUID(), messageId, matches: matches as Match[], pattern: copy ? structuredClone(from?.pattern ?? []) : [] };
+  });
+  return { selectors, variants };
+}
+
+/** Words of a pattern's text (letters only, 2+ characters). */
+export function words(pattern: Pattern): string[] {
+  return pattern.flatMap(part => part.type === "text" ? part.value.match(/\p{L}[\p{L}'’-]+/gu) ?? [] : []);
+}
+
+/** Source words still present in a translation that was started from the source text. */
+export function untranslatedWords(seeded: string[], pattern: Pattern): string[] {
+  const left = new Set(words(pattern));
+  return [...new Set(seeded.filter(word => left.has(word)))];
+}

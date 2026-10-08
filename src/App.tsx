@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
+import type { BundleNested, MessageNested, ProjectSettings } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
 import { RichDiff } from "./DiffBundleView";
 import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
@@ -7,6 +7,7 @@ import { validateSettingsEdit } from "./settingsData";
 import { LixFloat } from "./LixFloat";
 import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
+import type { Restructure } from "./flows";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
 import { issueKind, messageIssues, type Issue, type IssueKind } from "./issues";
@@ -15,7 +16,7 @@ import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcases";
-import { highlightMatches, searchTerms, searchText } from "./search";
+import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
 import { isUnused, scanUsages, type UsageIndex } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
@@ -251,6 +252,40 @@ export default function App() {
       await refresh(local, bundle.id);
     });
   }, [enqueue, refresh]);
+  /** Adds a translation with its forms in one step (empty forms are not a change until text is typed). */
+  const addMessage = useCallback((bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: MessageNested["variants"] }) => {
+    const local = localRef.current;
+    if (!local) return;
+    enqueue(async () => {
+      await local.project.db.transaction().execute(async tx => {
+        await tx.insertInto("message").values({ id: shape.id, bundleId: bundle.id, locale, selectors: shape.selectors }).execute();
+        if (shape.variants.length) await tx.insertInto("variant").values(shape.variants).execute();
+      });
+      await refresh(local, bundle.id);
+    });
+  }, [enqueue, refresh]);
+  /** Replaces a translation's selectors and forms (split by count or gender, or back to one text). */
+  const restructure = useCallback((bundleId: string, messageId: string, next: Restructure) => {
+    const local = localRef.current;
+    if (!local) return;
+    enqueue(async () => {
+      await local.project.db.transaction().execute(async tx => {
+        if (next.declarations) await tx.updateTable("bundle").set({ declarations: next.declarations }).where("id", "=", bundleId).execute();
+        await tx.updateTable("message").set({ selectors: next.selectors }).where("id", "=", messageId).execute();
+        await tx.deleteFrom("variant").where("messageId", "=", messageId).execute();
+        if (next.variants.length) await tx.insertInto("variant").values(next.variants).execute();
+      });
+      await refresh(local, bundleId);
+    });
+  }, [enqueue, refresh]);
+  const removeVariant = useCallback((bundleId: string, variantId: string) => {
+    const local = localRef.current;
+    if (!local) return;
+    enqueue(async () => {
+      await local.project.db.deleteFrom("variant").where("id", "=", variantId).execute();
+      await refresh(local, bundleId);
+    });
+  }, [enqueue, refresh]);
   const addVariant = useCallback((bundleId: string, variant: BundleNested["messages"][number]["variants"][number]) => {
     const local = localRef.current;
     if (!local) return;
@@ -434,6 +469,15 @@ export default function App() {
     for (const bundle of result) ids.add(bundle.id);
     return result;
   }, [searched, filter, todoKind, kindsOf, dirtyCount, targetLocales, terms]);
+  // Words still in the source language, in forms started from it.
+  useEffect(() => {
+    const root = table.current;
+    if (!root) return;
+    let frame = requestAnimationFrame(() => markUntranslated(root));
+    const observer = new MutationObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => markUntranslated(root)); });
+    observer.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["data-untranslated"] });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [local, view, focus?.source]);
   useEffect(() => {
     const root = table.current;
     highlightMatches(root, terms);
@@ -539,7 +583,7 @@ export default function App() {
           <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

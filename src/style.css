@@ -310,6 +310,14 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .form-label b { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 .form-label small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .add-form { color: #92400e; font-weight: 500; font-size: 13px; }
+.form-body { flex: 1; min-width: 0; }
+.message-cell.form.new { background: #fffbeb; }
+.message-cell.form.matched { background: #eff6ff; }
+.remove-form { font-size: 12px; color: var(--muted); align-self: center; }
+.message-cell .field-note { margin-top: 4px; }
+.message-cell.actions { display: flex; align-items: center; gap: 14px; color: var(--text-2); }
+.check { color: #166534; font-size: 13px; }
+::highlight(inlang-untranslated) { text-decoration: underline dotted #d97706; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .message-cell.actions { padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
 .message-ref inlang-pattern-view { font-size: 15px; }
 .message-foot { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-top: 1px solid #efeff1; font-size: 13px; color: var(--text-2); }
