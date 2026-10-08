@@ -161,6 +161,30 @@ test("To do filters and the language menu count work per language", async ({ pag
   await expect(page.getByRole("button", { name: /English.*French/ })).toBeVisible({ timeout: 60_000 });
 });
 
+test("links a German word like the English text and removes the link again", async ({ page }) => {
+  const files = { ...resources,
+    "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]!), api_hint: "Learn more in the {#link}docs{/link}." }),
+    "messages/de.json": JSON.stringify({ ...JSON.parse(resources["messages/de.json"]!), api_hint: "Mehr in der Dokumentation." }),
+  };
+  await stubApi(page, files);
+  await openRepository(page);
+  const card = page.locator('[data-bundle="api_hint"]');
+  await expect(card.locator(".message-status")).toHaveText("Link missing in German", { timeout: 90_000 });
+  await translation(page, "api_hint").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+  for (let i = 0; i < "Dokumentation".length; i++) await page.keyboard.press("Shift+ArrowLeft");
+  await card.getByRole("button", { name: "Link like “docs”" }).click();
+  await expect(card.locator(".message-status")).toHaveText("Edited");
+  // Inside the link, the toolbar offers to remove it; the words stay.
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await card.getByRole("button", { name: "Remove link" }).click();
+  await expect(card.locator(".message-status")).toHaveText("Link missing in German");
+  await expect(translation(page, "api_hint")).toHaveText("Mehr in der Dokumentation.");
+});
+
 test("machine translation asks the translator to email us to activate it", async ({ page }) => {
   await stubApi(page);
   await openRepository(page);
