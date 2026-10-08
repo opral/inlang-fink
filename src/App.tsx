@@ -138,7 +138,7 @@ export default function App() {
       setInitializing(false);
       if (repository && project) void openLocation(repository, params.get("branch") ?? "", project);
     })();
-    return () => { void queue.current.then(() => localRef.current?.close()).catch(report); };
+    return () => { flushRef.current(); void queue.current.then(() => localRef.current?.close()).catch(report); };
   }, []);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current) { event.preventDefault(); event.returnValue = ""; } };
@@ -151,7 +151,7 @@ export default function App() {
   // records the commit it produced, and anything else that commits (sync, settings) resets the stack.
   const undoState = useRef({ head: "", undo: 0, redo: 0 });
   const [undoVersion, setUndoVersion] = useState(0);
-  const enqueue = useCallback((task: () => Promise<void>, undoable = true) => {
+  const enqueueNow = useCallback((task: () => Promise<void>, undoable = true) => {
     pending.current++;
     setSaving(true);
     queue.current = queue.current.then(async () => {
@@ -161,11 +161,19 @@ export default function App() {
       if (!project) return;
       state.head = await headCommit(project);
       if (undoable) { state.undo++; state.redo = 0; } else { state.undo = 0; state.redo = 0; }
-    }).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0); });
+    }).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0 || pendingWrites.current.size > 0); });
   }, [report]);
+  // Typing is written once it pauses: one commit (and one undo step) per pause, not per keystroke.
+  const pendingWrites = useRef(new Map<string, ChangeEventDetail>());
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flushRef = useRef<() => void>(() => {});
+  /** Other draft operations first write pending text, so they see it and stay in order. */
+  const enqueue = useCallback((task: () => Promise<void>, undoable = true) => { flushRef.current(); enqueueNow(task, undoable); }, [enqueueNow]);
+  const settle = useCallback(async () => { flushRef.current(); await queue.current; }, []);
   const stepHistory = useCallback((direction: "undo" | "redo") => {
     const current = localRef.current;
     if (!current) return;
+    flushRef.current();
     queue.current = queue.current.then(async () => {
       const state = undoState.current;
       if ((await headCommit(current.project)) !== state.head || !(direction === "undo" ? state.undo : state.redo)) return;
@@ -209,7 +217,7 @@ export default function App() {
     return request;
   };
   const loadProject = async (repository: Repo, nextTree: RepoTree, projectPath: string, repositoryUrl: string) => {
-    await queue.current;
+    await settle();
     if (failure.current) throw new Error("Resolve the failed save before switching projects. Your current draft remains open.");
     if (!nextTree.projects.includes(projectPath)) throw new Error("This project does not exist on the selected branch.");
     if (loading.current) throw new Error("Another project is still opening.");
@@ -260,7 +268,7 @@ export default function App() {
   });
   const goHome = () => void run(async () => {
     if (loading.current) return;
-    await queue.current;
+    await settle();
     if (failure.current) throw new Error("Resolve the failed save before closing the project. Your current draft remains open.");
     const current = localRef.current;
     localRef.current = undefined; setLocal(undefined); setBundles([]); setReviewState(undefined); setTree(undefined); setView("edit");
@@ -268,29 +276,70 @@ export default function App() {
     await current?.close();
     setRecent(readRecent()); history.replaceState(null, "", "/");
   });
-  const change = useCallback((detail: ChangeEventDetail) => {
-    const local = localRef.current;
-    if (!local) return;
-    enqueue(async () => {
-      const data = detail.newData;
-      const bundleId = detail.entity === "bundle" ? detail.entityId : owners.current.get(`${detail.entity}:${detail.entityId}`) ?? (detail.entity === "message" && data ? (data as BundleNested["messages"][number]).bundle_id : detail.entity === "variant" && data ? owners.current.get(`message:${(data as BundleNested["messages"][number]["variants"][number]).message_id}`) : undefined);
-      if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
-      if (data) {
-        // Strip nested UI data; the SDK stores three separate tables.
-        if (detail.entity === "bundle") {
-          const value = data as BundleNested;
-          await local.project.db.insertInto("inlang_bundle").values({ id: value.id, declarations: value.declarations }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations })).execute();
-        } else if (detail.entity === "message") {
-          const value = data as BundleNested["messages"][number];
-          await local.project.db.insertInto("inlang_message").values({ id: value.id, bundle_id: value.bundle_id, locale: value.locale, selectors: value.selectors }).onConflict(oc => oc.column("id").doUpdateSet({ selectors: value.selectors })).execute();
-        } else {
-          const value = data as BundleNested["messages"][number]["variants"][number];
-          await local.project.db.insertInto("inlang_variant").values(value).onConflict(oc => oc.column("id").doUpdateSet({ pattern: value.pattern, matches: value.matches })).execute();
+  /** The bundle an edited entity belongs to. */
+  const ownerOf = (detail: ChangeEventDetail) => {
+    const data = detail.newData;
+    return detail.entity === "bundle" ? detail.entityId : owners.current.get(`${detail.entity}:${detail.entityId}`) ?? (detail.entity === "message" && data ? (data as BundleNested["messages"][number]).bundle_id : detail.entity === "variant" && data ? owners.current.get(`message:${(data as BundleNested["messages"][number]["variants"][number]).message_id}`) : undefined);
+  };
+  const write = async (db: LocalProject["project"]["db"], detail: ChangeEventDetail) => {
+    const data = detail.newData;
+    if (!data) { await db.deleteFrom(`inlang_${detail.entity}` as const).where("id", "=", detail.entityId).execute(); return; }
+    // Strip nested UI data; the SDK stores three separate tables.
+    if (detail.entity === "bundle") {
+      const value = data as BundleNested;
+      await db.insertInto("inlang_bundle").values({ id: value.id, declarations: value.declarations }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations })).execute();
+    } else if (detail.entity === "message") {
+      const value = data as BundleNested["messages"][number];
+      await db.insertInto("inlang_message").values({ id: value.id, bundle_id: value.bundle_id, locale: value.locale, selectors: value.selectors }).onConflict(oc => oc.column("id").doUpdateSet({ selectors: value.selectors })).execute();
+    } else {
+      const value = data as BundleNested["messages"][number]["variants"][number];
+      await db.insertInto("inlang_variant").values(value).onConflict(oc => oc.column("id").doUpdateSet({ pattern: value.pattern, matches: value.matches })).execute();
+    }
+  };
+  const flushWrites = useCallback(() => {
+    clearTimeout(writeTimer.current); writeTimer.current = undefined;
+    const local = localRef.current, details = [...pendingWrites.current.values()];
+    pendingWrites.current.clear();
+    if (!local || !details.length) return;
+    enqueueNow(async () => {
+      const ids = new Set<string>();
+      await local.project.db.transaction().execute(async tx => {
+        for (const detail of details) {
+          const bundleId = ownerOf(detail);
+          if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
+          ids.add(bundleId);
+          await write(tx as unknown as LocalProject["project"]["db"], detail);
         }
-      } else await local.project.db.deleteFrom(`inlang_${detail.entity}` as const).where("id", "=", detail.entityId).execute();
+      });
+      for (const id of ids) await refresh(local, id);
+    });
+  }, [enqueueNow, refresh]);
+  flushRef.current = flushWrites;
+  const change = useCallback((detail: ChangeEventDetail, immediate = false) => {
+    if (!localRef.current) return;
+    if (detail.entity === "variant" && detail.newData) {
+      pendingWrites.current.set(detail.entityId, detail);
+      setSaving(true);
+      clearTimeout(writeTimer.current);
+      if (immediate) flushWrites(); else writeTimer.current = setTimeout(flushWrites, 700);
+      return;
+    }
+    const local = localRef.current;
+    enqueue(async () => {
+      const bundleId = ownerOf(detail);
+      if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
+      await write(local.project.db, detail);
       await refresh(local, bundleId);
     });
-  }, [enqueue, refresh]);
+  }, [enqueue, flushWrites, refresh]);
+  // Leaving a field or the page writes what was typed right away.
+  useEffect(() => {
+    const flush = () => flushWrites();
+    const hidden = () => { if (document.visibilityState === "hidden") flushWrites(); };
+    document.addEventListener("focusout", flush, true);
+    document.addEventListener("visibilitychange", hidden);
+    return () => { document.removeEventListener("focusout", flush, true); document.removeEventListener("visibilitychange", hidden); };
+  }, [flushWrites]);
   const addLocale = useCallback((bundle: BundleNested, locale: string) => {
     const local = localRef.current;
     if (!local) return;
@@ -444,7 +493,7 @@ export default function App() {
     if (!local) return;
     setError("");
     try {
-      await queue.current;
+      await settle();
       if (failure.current) throw new Error("A local save failed. Reload the page to inspect the persisted state before pushing.");
       const ids = [...dirty.current];
       // These immutable bundles already came from Lix through the SDK. Review
@@ -458,7 +507,7 @@ export default function App() {
   const publish = () => run(async () => {
     const current = localRef.current;
     if (!current || (!dirty.current.size && !settingsChanges(current))) return;
-    await queue.current;
+    await settle();
     if (failure.current) throw new Error("A local save failed. Reload the page before pushing.");
     const repository = { owner: current.context.owner, name: current.context.name }, replaced: string[] = [];
     // Edits replaced by newer GitHub changes are reported together with the push result.
@@ -575,7 +624,7 @@ export default function App() {
   const currentPage = Math.min(page, totalPages - 1);
   const download = () => void run(async () => {
     if (!local) return;
-    await queue.current;
+    await settle();
     if (failure.current) throw new Error("Resolve the failed save before downloading.");
     const blob = await new Response(local.project.lix.exportSnapshot()).blob();
     const href = URL.createObjectURL(blob);

@@ -192,14 +192,16 @@ test("undo and redo step through the draft's Lix history", async ({ page }) => {
   await expect(field).toHaveText("Hallo", { timeout: 90_000 });
   await field.click();
   await page.keyboard.press("End");
-  await page.keyboard.press("x");
+  // Typing is written once it pauses, so the whole word is one undo step.
+  for (const key of "xyz") await page.keyboard.press(key);
+  await expect(page.locator(".save-status")).toHaveText("Saving…");
   await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveText("Edited");
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
   await page.keyboard.press("Control+z");
   await expect(translation(page, "hello")).toHaveText("Hallo");
   await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveCount(0);
   await page.keyboard.press("Control+Shift+z");
-  await expect(translation(page, "hello")).toHaveText("Hallox");
+  await expect(translation(page, "hello")).toHaveText("Halloxyz");
   // Nothing before this session's edits is undone.
   await page.keyboard.press("Control+z");
   await page.keyboard.press("Control+z");

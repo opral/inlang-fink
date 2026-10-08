@@ -26,7 +26,8 @@ type Props = {
   /** This bundle's inlang SDK diagnostics (checkProject), compared with the focused source language. */
   diagnostics?: CheckDiagnostic[];
   usages?: Usage[]; code?: { url: string; scope: string }; replaced?: boolean; edited?: boolean; unused?: boolean;
-  change: (detail: ChangeEventDetail) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
+  /** Saves an edit; typing is debounced, `immediate` writes right away (one-click fixes). */
+  change: (detail: ChangeEventDetail, immediate?: boolean) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
   addVariant: (bundleId: string, variant: Variant) => void; removeVariant: (bundleId: string, variantId: string) => void;
   addMessage: (bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: Variant[] }) => void;
   restructure: (bundleId: string, messageId: string, next: Restructure) => void;
@@ -206,7 +207,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const editorProps = (pattern: Pattern) => ({ markupOptions, variables: variableSuggestions(source, pattern, bundle.declarations) });
   const editor = (key: string, variant: Variant, label: string) => <PatternEditor key={`${variant.id}:${undoVersion}`} ref={element => { if (element) editors.current.set(key, element); else editors.current.delete(key); }}
     variant={variants.get(variant.id)} declarations={bundle.declarations} aria-label={label} {...editorProps(variant.pattern)} />;
-  const setPattern = (variant: Variant, pattern: Pattern) => change({ entity: "variant", entityId: variant.id, newData: { ...variant, pattern } } as ChangeEventDetail);
+  const setPattern = (variant: Variant, pattern: Pattern) => change({ entity: "variant", entityId: variant.id, newData: { ...variant, pattern } } as ChangeEventDetail, true);
   const notes = (key: string, variant: Variant, locale: string, exactNumber: boolean) => {
     const found = locale === focus.source ? undefined : formNotes(issues[locale] ?? [], variant.id, markup);
     const target = () => editors.current.get(key);
