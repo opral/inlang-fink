@@ -127,7 +127,7 @@ test("To do filters and the language menu count work per language", async ({ pag
     "project.inlang/settings.json": JSON.stringify({ ...settings, locales: ["en", "de", "fr"] }),
     "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]!), usage: "{used} of {total} used" }),
     "messages/de.json": JSON.stringify({ hello: "Hallo", usage: "{used} verwendet" }),
-    "messages/fr.json": JSON.stringify({ hello: "Bonjour", usage: "{used} sur {total}", items: [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["countPlural"], match: { "countPlural=one": "Un article", "countPlural=many": "{count} d’articles", "countPlural=other": "{count} articles", "countPlural=*": "{count} articles" } }] }),
+    "messages/fr.json": JSON.stringify({ hello: "Bonjour", usage: "{used} sur {total}", items: [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["countPlural"], match: { "countPlural=one": "{count} article", "countPlural=many": "{count} d’articles", "countPlural=other": "{count} articles", "countPlural=*": "{count} articles" } }] }),
   };
   await stubApi(page, files);
   await openRepository(page);

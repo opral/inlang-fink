@@ -262,19 +262,20 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .field { font-size: 15px; line-height: 1.55; border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 10px; background: var(--surface); min-height: 38px; }
 .field:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px #2563eb33; }
 .field inlang-pattern-editor { display: block; }
-.field .inlang-pattern-editor-wrapper { min-height: 0; }
-.field .inlang-pattern-editor-contenteditable { padding: 0; min-height: 26px; background: transparent; font-size: 15px; line-height: 1.55; color: var(--text); }
-.field .inlang-pattern-editor-contenteditable:hover { background: transparent; color: var(--text); }
-.field .inlang-pattern-editor-contenteditable:focus { box-shadow: none; }
-.field .inlang-pattern-editor-placeholder { top: 0; left: 0; }
-.field .inlang-pattern-editor-contenteditable p, .field .inlang-pattern-editor-contenteditable div { font-size: 15px; }
+.message-card { --inlang-text: var(--text); --inlang-text-muted: var(--muted); --inlang-text-subtle: var(--muted); --inlang-border: var(--border); --inlang-border-strong: var(--border-strong); --inlang-surface: var(--surface); --inlang-surface-muted: var(--bg); --inlang-hover: var(--subtle); --inlang-accent: var(--focus); --inlang-accent-soft: #eff6ff; --inlang-warning: #b45309; --inlang-radius: 8px; --inlang-font-mono: var(--mono); --inlang-variable-color: var(--blue); }
+/* Fink draws the field border; the editor inside has no padding of its own. */
+.field { --inlang-pattern-padding: 0; --inlang-pattern-min-height: 24px; --inlang-pattern-background: transparent; --inlang-pattern-hover-background: transparent; --inlang-pattern-font-size: 15px; --inlang-pattern-line-height: 1.55; --inlang-pattern-color: var(--text); --inlang-pattern-focus-ring: none; }
+.message-ref inlang-pattern-view { font-size: 15px; }
+.editing { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-2); }
+.caption { margin: -2px 0 0; font-size: 12px; color: var(--muted); }
+.form-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.form-actions .todo { color: #b45309; font-weight: 500; }
+.form-actions .inline-link { color: var(--text); }
+.message-target inlang-message-forms, .message-target inlang-message-preview { display: block; }
 .field.empty { width: 100%; justify-content: flex-start; color: var(--muted); border-style: dashed; border-color: #a1a1aa; font-weight: 400; box-shadow: none; }
 .field.empty:hover { color: var(--text); border-color: var(--text-2); background: var(--surface); }
 .field-note { margin: 0; font-size: 13px; color: var(--muted); }
 .field-note.defect { color: #b91c1c; }
-.token { font-family: var(--mono); font-size: .86em; color: var(--blue); }
-.markup-tag, .markup { font-family: var(--mono); font-size: .8em; color: var(--muted); }
-.forms-legacy { display: block; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
 .message-others { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--subtle); padding-top: 8px; margin-top: 2px; }
 .others-state::before { content: "· "; }
 .others-state.todo { color: #b45309; }

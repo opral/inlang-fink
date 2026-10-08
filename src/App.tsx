@@ -250,6 +250,14 @@ export default function App() {
       await refresh(local, bundle.id);
     });
   }, [enqueue, refresh]);
+  const addVariant = useCallback((bundleId: string, variant: BundleNested["messages"][number]["variants"][number]) => {
+    const local = localRef.current;
+    if (!local) return;
+    enqueue(async () => {
+      await local.project.db.insertInto("variant").values(variant).execute();
+      await refresh(local, bundleId);
+    });
+  }, [enqueue, refresh]);
   const removeBundle = useCallback((id: string) => {
     const local = localRef.current;
     if (!local || !confirm(`Delete message ${id} in every locale?`)) return;
@@ -516,7 +524,7 @@ export default function App() {
         </div>
         <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

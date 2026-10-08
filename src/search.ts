@@ -20,7 +20,8 @@ export function highlightMatches(root: Element | null, terms: string[]) {
   if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
   if (!root || !terms.length) { CSS.highlights.delete(HIGHLIGHT); return; }
   const ranges: Range[] = [];
-  for (const editor of root.querySelectorAll("inlang-pattern-editor")) {
+  // Only the editable text: the editor also renders its scoped <style> in light DOM.
+  for (const editor of root.querySelectorAll("inlang-pattern-editor [contenteditable]")) {
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
       const text = node.data.toLowerCase();

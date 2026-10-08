@@ -4,18 +4,13 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@inlang/editor-component@12.0.0':
-    hash: 64ee9e5ef83415d07b367cc37ec8d55326ce8279799f3f580710ae1332d16513
-    path: patches/@inlang__editor-component@12.0.0.patch
-
 importers:
 
   .:
     dependencies:
       '@inlang/editor-component':
-        specifier: 12.0.0
-        version: 12.0.0(patch_hash=64ee9e5ef83415d07b367cc37ec8d55326ce8279799f3f580710ae1332d16513)(@inlang/sdk@3.1.0)(@types/react@19.3.0)
+        specifier: file:vendor/inlang-editor-component-13.0.0.tgz
+        version: file:vendor/inlang-editor-component-13.0.0.tgz(@inlang/sdk@3.1.0)(@types/react@19.3.0)
       '@inlang/plugin-i18next':
         specifier: 6.3.0
         version: 6.3.0
@@ -601,8 +596,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@inlang/editor-component@12.0.0':
-    resolution: {integrity: sha512-GEWF5ou+qfQ6YZUn/uKSNwvepvPCcgapkGNkfpHf/3XVNO25QYqa0LY5a01oYcI7rlmR+Q3UajMiljGjRCKozQ==}
+  '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0.tgz':
+    resolution: {integrity: sha512-iaNKRWia1GeFpZ7VNnjuUu1xOs94RwJrzfVG6HszGzYBPXZUlMV9NuOXBLrbz6bXaH8b9u4hxruIKMfl5TN1bg==, tarball: file:vendor/inlang-editor-component-13.0.0.tgz}
+    version: 13.0.0
     peerDependencies:
       '@inlang/sdk': 3.1.0
 
@@ -1950,7 +1946,7 @@ snapshots:
   '@img/sharp-win32-x64@0.35.4':
     optional: true
 
-  '@inlang/editor-component@12.0.0(patch_hash=64ee9e5ef83415d07b367cc37ec8d55326ce8279799f3f580710ae1332d16513)(@inlang/sdk@3.1.0)(@types/react@19.3.0)':
+  '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0.tgz(@inlang/sdk@3.1.0)(@types/react@19.3.0)':
     dependencies:
       '@inlang/sdk': 3.1.0
       '@lexical/plain-text': 0.16.1
@@ -1960,6 +1956,7 @@ snapshots:
       '@sinclair/typebox': 0.31.28
       chroma-js: 2.6.0
       lexical: 0.16.1
+      lit: 3.3.3
       uuid: 11.1.1
     transitivePeerDependencies:
       - '@types/react'
