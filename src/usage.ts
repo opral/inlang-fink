@@ -145,3 +145,31 @@ export async function scanUsages(files: Record<string, string>): Promise<UsageIn
  * is looked up dynamically (m[key]); anything less certain is not flagged.
  */
 export const isUnused = (index: UsageIndex, bundleId: string) => !index.dynamic && /^[A-Za-z_$][\w$]*$/.test(bundleId) && !index.usages.has(bundleId) && !index.words.has(bundleId);
+
+const humanize = (segment: string) => segment.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, char => char.toUpperCase());
+/** Where in the app a file renders, as a breadcrumb: routes/settings/admin/+page.svelte → "Settings › Admin". */
+export function pageOf(path: string): { page?: string; component?: string } {
+  const parts = path.split("/");
+  const root = parts.findIndex(part => part === "routes" || part === "pages" || part === "app");
+  if (root >= 0) {
+    const segments: string[] = [];
+    for (const part of parts.slice(root + 1)) {
+      if (part.includes(".") || ["components", "forms", "_components", "lib", "ui", "utils", "hooks"].includes(part)) break;
+      if (/^\(.*\)$/.test(part) || /^\[.*\]$/.test(part) || part.startsWith("@")) continue;
+      segments.push(humanize(part));
+    }
+    return segments.length ? { page: segments.join(" › ") } : { page: "Home" };
+  }
+  const file = parts.at(-1) ?? path;
+  return { component: humanize(file.replace(/\.(svelte|vue|astro|[cm]?[jt]sx?)$/, "")).toLowerCase() };
+}
+/** "A button on Settings › Profile", "A toast in the copy to clipboard component", "Part of refresh_failed". */
+export function describeUsage(usage: Usage): string {
+  const where = pageOf(usage.path), role = usage.role;
+  const place = where.page ? `on ${where.page}` : `in the ${where.component} component`;
+  if (!role) return where.page ? `Used on ${where.page}` : `Used in the ${where.component} component`;
+  if (role.startsWith("Part of ")) return `${role} · ${place}`;
+  if (role.startsWith("In <")) return `Inside ${role.slice(3)} ${place}`;
+  const noun = role.toLowerCase();
+  return `${/^[aeiou]/.test(noun) ? "An" : "A"} ${noun} ${place}`;
+}

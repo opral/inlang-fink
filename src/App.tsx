@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
 import type { ChangeEventDetail } from "@inlang/editor-component";
-import { LanguageFilter } from "./LanguageFilter";
 import { RichDiff } from "./DiffBundleView";
 import { Settings, SettingsDiff, type SettingsChange } from "./Settings";
 import { validateSettingsEdit } from "./settingsData";
 import { LixFloat } from "./LixFloat";
-import { Editor } from "./Editor";
+import { MessageCard } from "./MessageCard";
+import { LanguageMenu } from "./LanguageMenu";
+import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
+import { issueKind, messageIssues, type Issue, type IssueKind } from "./issues";
 import { Landing } from "./Landing";
 import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
@@ -31,7 +33,10 @@ export default function App() {
   const [bundles, setBundles] = useState<BundleNested[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [missing, setMissing] = useState(false);
+  const [filter, setFilter] = useState<"all" | "todo" | "edited">("all");
+  const [todoKind, setTodoKind] = useState<"all" | IssueKind>("all");
+  const [focus, setFocus] = useState<LanguageFocus>();
+  const [replacedIds, setReplacedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [user, setUser] = useState<{ login: string } | null>(null);
   const [progress, setProgress] = useState("");
@@ -46,7 +51,6 @@ export default function App() {
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
   const [newId, setNewId] = useState("");
   const [view, setView] = useState<"edit" | "settings" | "history">("edit");
-  const [selectedLocales, setSelectedLocales] = useState<string[]>([]);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [dirtyCount, setDirtyCount] = useState(0);
@@ -126,7 +130,7 @@ export default function App() {
     const warn = (event: BeforeUnloadEvent) => { if (saving || failure.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
-  useEffect(() => setPage(0), [search, missing, selectedLocales]);
+  useEffect(() => setPage(0), [search, filter, todoKind, focus]);
   // Filtering re-renders up to 25 editor web components; wait until typing pauses.
   useEffect(() => { const timer = setTimeout(() => setSearch(searchInput.trim()), 150); return () => clearTimeout(timer); }, [searchInput]);
   const enqueue = useCallback((task: () => Promise<void>) => {
@@ -168,13 +172,13 @@ export default function App() {
       let synced: { replaced: string[] } | undefined;
       try { synced = await syncWithRemote(next, repository, nextTree, setProgress); }
       catch (error) { console.error("Sync with GitHub failed", error); setNotice("Couldn't check GitHub for newer changes. Your draft is open, and Fink will check again before pushing."); }
-      if (synced?.replaced.length) setNotice(replacedNotice(synced.replaced));
+      if (synced?.replaced.length) { setNotice(replacedNotice(synced.replaced)); setReplacedIds(new Set(synced.replaced)); }
       if (previous && !same) { localRef.current = undefined; await previous.close(); }
       localRef.current = next; await refresh(next); setLocal(next);
     } finally { loading.current = false; }
     await navigator.storage.persist();
-    setPage(0); setView("edit"); setReviewState(undefined); setSelectedLocales([]); setTree(undefined); setProjects(nextTree.projects);
-    setSearchInput(""); setSearch(""); setMissing(false); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
+    setPage(0); setView("edit"); setReviewState(undefined); setTree(undefined); setProjects(nextTree.projects);
+    setSearchInput(""); setSearch(""); setFilter("all"); setTodoKind("all"); setFocus(undefined); setReplacedIds(new Set()); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
   };
@@ -280,7 +284,8 @@ export default function App() {
         await saveContext(current);
         setSettingsDirty(!!settingsChanges(current));
         setLocal({ ...current });
-        setSelectedLocales(previous => previous.filter(locale => settings.locales.includes(locale)));
+        // Drop removed languages from the focus; re-derive it if the source itself was removed.
+        setFocus(previous => !previous || !settings.locales.includes(previous.source) ? undefined : { ...previous, targets: previous.targets.filter(locale => settings.locales.includes(locale)), all: previous.all || !previous.targets.some(locale => settings.locales.includes(locale)) });
       } finally { setSettingsRevision(value => value + 1); }
     });
   };
@@ -332,6 +337,7 @@ export default function App() {
       if (remote.head !== current.context.head) {
         const synced = await syncWithRemote(current, repository, remote, setProgress);
         for (const id of synced.replaced) if (!replaced.includes(id)) replaced.push(id);
+        setReplacedIds(new Set(replaced));
         await refresh(current); setLocal({ ...current });
         const ids = [...dirty.current];
         setReviewState(previous => previous && { ids, settings: settingsChanges(current), bundles: ids.flatMap(id => { const bundle = bundleIndex.current.get(id); return bundle ? [bundle] : []; }) });
@@ -365,14 +371,49 @@ export default function App() {
     setMessage(messages && settings ? `Update ${messages} and project settings` : messages ? `Update ${messages}` : settings ? "Update project settings" : DEFAULT_MESSAGE);
   };
   const terms = useMemo(() => searchTerms(search), [search]);
-  const visible = useMemo(() => bundles.filter(bundle => {
-    if (terms.length) {
-      let text = searchIndex.current.get(bundle);
-      if (text === undefined) { text = searchText(bundle); searchIndex.current.set(bundle, text); }
-      if (!terms.every(term => text.includes(term))) return false;
+  // Issues per bundle and locale; bundles are immutable snapshots, so results are cached per object.
+  const issueCache = useRef(new WeakMap<BundleNested, Map<string, Issue[]>>());
+  const issuesOf = useCallback((bundle: BundleNested, locale: string) => {
+    let byLocale = issueCache.current.get(bundle);
+    if (!byLocale) { byLocale = new Map(); issueCache.current.set(bundle, byLocale); }
+    const reference = focus?.source ?? local?.context.settings.baseLocale ?? locale, key = `${reference}|${locale}`;
+    let issues = byLocale.get(key);
+    if (!issues) { issues = messageIssues(bundle, locale, reference); byLocale.set(key, issues); }
+    return issues;
+  }, [focus?.source, local]);
+  const todoCounts = useMemo(() => new Map<string, number>(), [bundles, issuesOf]);
+  const todoIn = useCallback((locale: string) => {
+    let count = todoCounts.get(locale);
+    if (count === undefined) { count = bundles.filter(bundle => issuesOf(bundle, locale).length).length; todoCounts.set(locale, count); }
+    return count;
+  }, [bundles, issuesOf, todoCounts]);
+  const projectKey = local ? `${local.context.owner}/${local.context.name}/${local.context.projectPath}` : "";
+  useEffect(() => {
+    if (!local || focus || !bundles.length) return;
+    setFocus(readFocus(projectKey, local.context.settings.locales, local.context.settings.baseLocale, todoIn));
+  }, [local, focus, bundles.length, projectKey, todoIn]);
+  const changeFocus = (next: LanguageFocus) => { setFocus(next); writeFocus(projectKey, next); };
+  const targetLocales = useMemo(() => !local || !focus ? [] : focus.all ? local.context.settings.locales.filter(locale => locale !== focus.source) : focus.targets, [local, focus]);
+  const kindsOf = useCallback((bundle: BundleNested) => new Set(targetLocales.flatMap(locale => issuesOf(bundle, locale).map(issueKind))), [targetLocales, issuesOf]);
+  const searched = useMemo(() => bundles.filter(bundle => {
+    if (!terms.length) return true;
+    let text = searchIndex.current.get(bundle);
+    if (text === undefined) { text = searchText(bundle); searchIndex.current.set(bundle, text); }
+    return terms.every(term => text.includes(term));
+  }), [bundles, terms]);
+  const counts = useMemo(() => {
+    const result = { all: searched.length, todo: 0, edited: 0, "missing-translation": 0, "missing-form": 0, placeholder: 0 };
+    for (const bundle of searched) {
+      const kinds = kindsOf(bundle);
+      if (kinds.size) result.todo++;
+      for (const kind of kinds) result[kind]++;
+      if (dirty.current.has(bundle.id)) result.edited++;
     }
-    return !missing || local?.context.settings.locales.some(locale => !bundle.messages.some(message => message.locale === locale));
-  }), [bundles, terms, missing, local]);
+    return result;
+  }, [searched, kindsOf, dirtyCount]);
+  const visible = useMemo(() => searched.filter(bundle =>
+    filter === "all" ? true : filter === "edited" ? dirty.current.has(bundle.id) : todoKind === "all" ? kindsOf(bundle).size > 0 : kindsOf(bundle).has(todoKind)
+  ), [searched, filter, todoKind, kindsOf, dirtyCount]);
   useEffect(() => {
     const root = table.current;
     highlightMatches(root, terms);
@@ -458,10 +499,24 @@ export default function App() {
         status={<>{error && <div role="alert" className="error">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{notice && <p role="status" className="notice">{notice}</p>}</>} />}
       {context && <>
         {reviewPanel || (view === "history" ? <History context={context} pending={pendingCount} review={() => void review()} /> : view === "settings" ? <section className="settings-page"><header className="page-header"><div><h2>Project settings</h2><p className="settings-context"><a href={repositoryUrl} target="_blank" rel="noreferrer">{context.owner}/{context.name}</a> · {context.projectPath} · <span className="inline-branch"><BranchIcon />{context.branch}</span></p></div><button onClick={download} disabled={busy || saving}><DownloadIcon />Download project</button></header><div className="settings-form" inert={busy || saving}><Settings settings={context.settings} revision={settingsRevision} save={saveSettings} /></div></section> : <>
-        <div className="filter-section"><div className="filter-buttons"><LanguageFilter locales={context.settings.locales} baseLocale={context.settings.baseLocale} selected={selectedLocales} onChange={setSelectedLocales} /><button className={missing ? "filter-active" : ""} aria-pressed={missing} onClick={() => setMissing(!missing)}>Missing translations</button></div><input className="search-input" type="search" aria-label="Search messages" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search…" /></div>
-        <div className="table-header"><span>{visible.length} {visible.length === 1 ? "Bundle" : "Bundles"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add new bundle</button></div>
+        <div className="list-toolbar">
+          <div className="toolbar-row">
+            <div className="toolbar-group">
+              {focus && <LanguageMenu locales={context.settings.locales} baseLocale={context.settings.baseLocale} focus={focus} onChange={changeFocus} todo={todoIn} />}
+              <div className="segmented" role="group" aria-label="Show">
+                {([["all", "All", counts.all], ["todo", "To do", counts.todo], ["edited", "Edited", counts.edited]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setTodoKind("all"); }}>{label}<span className="count">{count}</span></button>)}
+              </div>
+            </div>
+            <input className="search-input" type="search" aria-label="Search messages" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search messages and keys" />
+          </div>
+          {filter === "todo" && <div className="chips" role="group" aria-label="Kind of work">
+            {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
+          </div>}
+          {focus && <div className="column-heads" aria-hidden="true"><span>{languageName(focus.source)}{focus.source === context.settings.baseLocale ? " · reference" : ""}</span><span>{focus.all ? "All languages" : focus.targets.map(languageName).join(", ")}</span></div>}
+        </div>
+        <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span><button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <Editor key={bundle.id} bundle={bundle} settings={context.settings} locales={selectedLocales} change={change} addLocale={addLocale} removeBundle={removeBundle} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} issuesOf={issuesOf} change={change} addLocale={addLocale} removeBundle={removeBundle} code={usageIndex && code} usages={usageIndex?.usages.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={!!usageIndex && bundle.id in baseline.current && isUnused(usageIndex, bundle.id)} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}
