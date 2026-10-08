@@ -102,6 +102,11 @@ describe("forms from the inlang SDK", () => {
     expect(keys(shape.variants)).toEqual(["0,*", "*,one", "*,few", "*,many", "*,*"]);
     expect(shape.variants[0]!.pattern).toEqual([t("No files")]);
     expect(shape.variants[2]!.pattern).toEqual(en.variants[2]!.pattern);
+    // Japanese has no plural categories but keeps the exact number: 0 and the catch-all, copied from their English forms.
+    const japanese = messageFromSource(files, en, "ja", "m-ja", true);
+    expect(japanese.selectors).toEqual(en.selectors);
+    expect(keys(japanese.variants)).toEqual(["0,*", "*,*"]);
+    expect(japanese.variants.map(variant => variant.pattern)).toEqual([en.variants[0]!.pattern, en.variants[2]!.pattern]);
   });
 
   it("needs the source's select values, and splits by the values other languages use", () => {

@@ -1,4 +1,4 @@
-import { isPluralSelector, matchValue, requiredVariants, variableNames, type BundleNested, type Declaration, type MessageNested, type Pattern } from "@inlang/sdk/browser";
+import { matchValue, requiredVariants, selectorGroups, variableNames, type BundleNested, type Declaration, type MessageNested, type Pattern } from "@inlang/sdk/browser";
 
 // Pure helpers behind the translator flows for complex messages: markup, variables,
 // per-language selectors and starting a translation from the source text.
@@ -150,8 +150,10 @@ export function joinMessage(bundle: BundleNested, message: MessageNested): Restr
  */
 export function messageFromSource(bundle: BundleNested, source: MessageNested | undefined, locale: string, messageId: string, copy: boolean): { selectors: MessageNested["selectors"]; variants: Variant[] } {
   if (!source || !source.selectors.length) return { selectors: [], variants: [{ id: crypto.randomUUID(), message_id: messageId, matches: [], pattern: copy ? structuredClone(source?.variants[0]?.pattern ?? []) : [] }] };
+  // A plural the language doesn't need is dropped, unless it has exact numbers (ICU =0): those stay one choice.
   const singular = pluralCategories(locale).length <= 1;
-  const selectors = source.selectors.filter(selector => !(singular && isPluralSelector(selector.name, bundle.declarations)));
+  const dropped = singular ? selectorGroups(source, bundle.declarations).filter(group => group.isPlural && !group.exactSelector).flatMap(group => group.names) : [];
+  const selectors = source.selectors.filter(selector => !dropped.includes(selector.name));
   // The forms the inlang SDK requires in the locale, with the source's select values and exact numbers.
   const forms = requiredVariants({ locale, selectors }, bundle.declarations, { referenceVariants: source.variants });
   const fallback = source.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? source.variants.at(-1);

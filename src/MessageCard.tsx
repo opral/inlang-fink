@@ -262,7 +262,10 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     else if (groups.length === 1) {
       const rows = formRows(message, bundle.declarations, groups[0]!, referenceVariants);
       const complete = isTarget && !localeIssues.length && rows.every(row => row.variant || !row.required) && !message.variants.some(variant => seeded.get(variant.id)?.pattern === JSON.stringify(variant.pattern));
-      const tokens = source ? [...new Set(source.variants.flatMap(variant => variableNames(variant.pattern)))].map(value => `{${value}}`).concat(markup.paired.map(({ part }) => markupLabel(part.name).toLowerCase())) : [];
+      // The reference's variables and markup this translation has in every form; forms for one number may spell it out.
+      const inEvery = (has: (variant: Variant) => boolean) => message.variants.every(has);
+      const tokens = source ? [...new Set(source.variants.flatMap(variant => variableNames(variant.pattern)))].filter(value => inEvery(variant => variableNames(variant.pattern).includes(value))).map(value => `{${value}}`)
+        .concat(markup.paired.filter(({ part }) => inEvery(variant => variant.pattern.some(item => item.type === "markup-start" && item.name === part.name))).map(({ part }) => markupLabel(part.name).toLowerCase())) : [];
       cells = <>
         {rows.map((form, index) => {
           const exact = groups[0]!.isPlural && isNumericKey(form.key);

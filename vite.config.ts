@@ -2,7 +2,8 @@ import { execSync } from "node:child_process";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 // Lix's current engine exceeds Workers' per-asset limit. Serve a gzip asset and
 // decompress explicitly in the SDK's compiler; do not rely on CDN re-encoding.
@@ -37,6 +38,6 @@ export default defineConfig({
   server: {
     proxy: { "/api": "http://localhost:8787" },
     // The linked checkouts of opral/inlang#4438 and #4437, see pnpm-workspace.yaml.
-    fs: { allow: [".", resolve("../inlang-project-checks"), resolve("../inlang-editor-components")] },
+    fs: { allow: [".", ...["../inlang-project-checks", "../inlang-editor-components"].map(path => fileURLToPath(new URL(path, import.meta.url)))] },
   },
 });
