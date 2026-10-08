@@ -61,7 +61,8 @@ function inputName(selector: string, declarations: Declaration[]) {
 const matchLabel = (variant: Variant, message: MessageNested, declarations: Declaration[]) => {
   const plural = (key: string) => selectorKeys(key, declarations, message.locale, message.variants).plural;
   if (variant.matches.every(match => match.type === "catchall-match" && !plural(match.key))) return "default form";
-  return variant.matches.map(match => match.type === "literal-match" ? match.value : plural(match.key) ? "other" : "any other").join(" · ");
+  // A non-plural catch-all names its input ("any actorGender"), so "any other · other" doesn't happen.
+  return variant.matches.map(match => match.type === "literal-match" ? match.value : plural(match.key) ? "other" : `any ${inputName(match.key, declarations)}`).join(" · ");
 };
 
 /** Focuses an editor once it has rendered, e.g. after the button that was focused went away. */
@@ -201,7 +202,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const target = () => editors.current.get(key);
     const copy = copied[variant.id];
     return <>
-      {copy && copy.pattern === JSON.stringify(variant.pattern) && <p className="field-note">Copied from <b>{copy.from}</b>.{copy.hint && ` Check the words for ${copy.hint}.`}</p>}
+      {copy && copy.pattern === JSON.stringify(variant.pattern) && <p className="field-note">Copied from <b>{copy.from}</b>.{copy.hint && ` Check the words for ${copy.hint.replace(/…$/, "")}.`}</p>}
       {found?.missing.map(name => <p key={`m-${name}`} className="field-note defect">{`{${name}}`} is missing. <button type="button" className="inline-link" onClick={() => { const editor = target(); editor?.insertExpression(name); focusEditor(editor); }}>Insert {`{${name}}`}</button></p>)}
       {found?.extra.map(({ name, suggestion }) => <p key={`e-${name}`} className="field-note defect">{`{${name}}`} isn't a variable in {sourceName}.{suggestion
         ? <> Did you mean {`{${suggestion}}`}? <button type="button" className="inline-link" onClick={() => setPattern(variant, renameVariable(variant.pattern, name, suggestion))}>Replace</button></>
@@ -254,7 +255,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     else if (message.selectors.length === 1) {
       const referenceKeys = source?.selectors.length === 1 ? source.variants.flatMap(variant => variant.matches.flatMap(match => match.type === "literal-match" ? [match.value] : [])) : [];
       const rows = formRows(message, bundle.declarations, true, referenceKeys);
-      const complete = isTarget && !localeIssues.length && rows.every(row => row.variant || !row.required);
+      const complete = isTarget && !localeIssues.length && rows.every(row => row.variant || !row.required) && !message.variants.some(variant => seeded.get(variant.id)?.pattern === JSON.stringify(variant.pattern));
       const tokens = source ? [...new Set(source.variants.flatMap(variant => variableNames(variant.pattern)))].map(value => `{${value}}`).concat(markup.paired.map(({ part }) => markupLabel(part.name).toLowerCase())) : [];
       cells = <>
         {rows.map((form, index) => {
@@ -265,7 +266,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
               const near = rows.slice(0, index).reverse().find(value => value.variant) ?? rows.slice(index + 1).find(value => value.variant);
               const id = crypto.randomUUID(), pattern = structuredClone(near?.variant?.pattern ?? defaultVariant(message)?.pattern ?? []);
               focusKey.current = `${locale}:${id}`;
-              if (near) setCopied(value => ({ ...value, [id]: { from: near.label, hint: form.hint, pattern: JSON.stringify(pattern) } }));
+              if (near) setCopied(value => ({ ...value, [id]: { from: near.label, hint: exact ? form.key : form.hint, pattern: JSON.stringify(pattern) } }));
               addVariant(bundle.id, { id, message_id: message.id, matches: form.matches, pattern });
             }}>{exact ? `+ Add a form for ${form.key}` : `+ Add ${form.label} form`}</button></div>;
           const variant = form.variant, key = `${locale}:${variant.id}`, fresh = copied[variant.id]?.pattern === JSON.stringify(variant.pattern);
@@ -275,7 +276,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
             {!form.required && isTarget && <button type="button" className="inline-link remove-form" aria-label={`Remove the ${form.label} form`} onClick={() => removeVariant(bundle.id, variant.id)}>Remove</button>}
           </div>;
         })}
-        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${inputName(message.selectors[0]!.name, bundle.declarations)}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(message))}>Use one text again</button></div>}
+        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${inputName(message.selectors[0]!.name, bundle.declarations)}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(bundle, message))}>Use one text again</button></div>}
         <div className="message-cell actions">
           {complete && tokens.length > 0 && <span className="check">✓ {listOf(tokens)} {tokens.length === 1 ? "is" : "are"} in every form</span>}
           <button type="button" className="inline-link" aria-expanded={preview === locale} onClick={() => { setPreview(preview === locale ? undefined : locale); setMatched(undefined); }}>{preview === locale ? "Hide preview" : "Preview"}</button>

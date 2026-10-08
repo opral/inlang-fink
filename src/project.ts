@@ -281,12 +281,19 @@ export function changedLocales(base: Record<string, string>, current: BundleNest
     if (bundle && bundleSignature(bundle) === original) continue;
     const before = original ? JSON.parse(original) as { declarations: unknown; messages: MessageShape[] } : undefined;
     const after = (bundle?.messages ?? []).filter(message => !isBlankMessage(message)), all = new Set([...(before?.messages ?? []).map(message => message.locale), ...after.map(message => message.locale)]);
-    // Added, deleted, or re-declared bundles touch every locale they have messages in.
-    if (!before || !bundle || JSON.stringify(before.declarations) !== JSON.stringify(bundle.declarations)) { for (const locale of all) locales.add(locale); continue; }
-    for (const locale of all) {
+    // Added or deleted bundles touch every locale they have messages in.
+    if (!before || !bundle) { for (const locale of all) locales.add(locale); continue; }
+    const changed = [...all].filter(locale => {
       const a = before.messages.find(message => message.locale === locale), b = after.find(message => message.locale === locale);
-      if ((a && messageSignature(a)) !== (b && messageSignature(b))) locales.add(locale);
-    }
+      return (a && messageSignature(a)) !== (b && messageSignature(b));
+    });
+    for (const locale of changed) locales.add(locale);
+    // Plugins merge a bundle's declarations from every locale file on import, so added declarations
+    // only need the locales that changed. A removed declaration must leave every file.
+    const names = (declarations: unknown) => (declarations as { name: string }[]).map(declaration => JSON.stringify(declaration));
+    const kept = new Set(names(bundle.declarations));
+    const removed = names(before.declarations).some(declaration => !kept.has(declaration));
+    if (removed || (!changed.length && JSON.stringify(before.declarations) !== JSON.stringify(bundle.declarations))) for (const locale of all) locales.add(locale);
   }
   return locales;
 }

@@ -47,9 +47,12 @@ describe("per-language selectors", () => {
     expect(split.declarations?.at(-1)).toMatchObject({ type: "local-variable", name: "countPlural" });
     expect(split.variants.map(variant => variant.matches.map(match => match.type === "literal-match" ? match.value : "*").join())).toEqual(["one", "few", "many", "*"]);
     expect(split.variants.every(variant => JSON.stringify(variant.pattern) === JSON.stringify(russian.variants[0]!.pattern))).toBe(true);
-    const joined = joinMessage({ ...russian, selectors: split.selectors, variants: split.variants });
+    const splitBundle = { ...files, declarations: split.declarations!, messages: [{ ...russian, selectors: split.selectors, variants: split.variants }] };
+    const joined = joinMessage(splitBundle, splitBundle.messages[0]!);
     expect(joined.selectors).toEqual([]);
     expect(joined.variants).toHaveLength(1);
+    // The declaration the split added goes again, so split + join is no change.
+    expect(joined.declarations).toEqual(files.declarations);
   });
 });
 
@@ -71,6 +74,6 @@ describe("start from the source", () => {
   it("tracks which source words are left", () => {
     const seeded = words(english.variants[1]!.pattern);
     expect(seeded).toEqual(["invitations", "sent", "to"]);
-    expect(untranslatedWords(seeded, [v("count"), t(" Einladungen sent to")])).toEqual(["sent", "to"]);
+    expect(untranslatedWords(seeded, [v("count"), t(" Einladungen sent to")])).toEqual(["sent"]);
   });
 });

@@ -259,6 +259,10 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-table > .empty { background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 10px; margin: 0; }
 /* Message cards: the key in a grey header, languages stacked as rows (like the Changes view). */
 .message-card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+/* Editor popups (formatting toolbar, variable suggestions) may extend past the card while editing. */
+.message-card:focus-within { overflow: visible; position: relative; z-index: 5; }
+.message-card > :first-child { border-radius: 9px 9px 0 0; }
+.message-card > :last-child { border-radius: 0 0 9px 9px; }
 .message-head { background: var(--subtle); border-bottom: 1px solid var(--border); padding: 9px 10px 9px 16px; display: flex; flex-direction: column; gap: 1px; }
 .message-title { display: flex; align-items: center; gap: 10px; min-height: 30px; }
 .message-key { margin: 0; font-family: var(--mono); font-size: 16px; font-weight: 600; letter-spacing: -.01em; color: var(--text); overflow-wrap: anywhere; min-width: 0; }
@@ -325,7 +329,7 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .chev { display: inline-block; margin-right: 6px; color: #a1a1aa; transition: transform .12s; }
 .chev.open { transform: rotate(90deg); }
 .others-state::before { content: "· "; }
-.others-state.todo { color: #92400e; }
+.others-state.todo { color: var(--text-2); }
 .message-note { margin: 0; padding: 8px 16px; border-top: 1px solid #efeff1; font-size: 13px; color: var(--text-2); }
 .message-card > .usage-code-block { background: var(--bg); border-bottom: 1px solid var(--border); padding: 6px 0 8px; gap: 2px; }
 .message-card > .usage-code-block .usage-code { border-radius: 0; background: transparent; }
@@ -351,7 +355,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .field.empty { width: 100%; justify-content: flex-start; color: var(--muted); border-style: dashed; border-color: #a1a1aa; font-weight: 400; box-shadow: none; }
 .field.empty:hover { color: var(--text); border-color: var(--text-2); background: var(--surface); }
 .field-note { margin: 0; font-size: 13px; color: var(--muted); }
-.field-note.defect { color: var(--text-2); }
+.field-note.defect { color: #92400e; }
+.field-note.defect .inline-link { color: var(--text); }
 .usage-code-block { display: flex; flex-direction: column; gap: 4px; }
 .usage-code { margin: 0; padding: 6px 0; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre; tab-size: 2; overflow-x: auto; background: var(--bg); border-radius: 8px; }
 .usage-code:focus-visible { outline-offset: -2px; }
@@ -386,12 +391,15 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
   .message-locale { border-right: 0; border-bottom: 1px solid #f4f4f5; padding: 6px 16px; }
   .message-locale .todo-dot { margin-top: 0; align-self: center; }
   .message-cell.form { flex-direction: column; gap: 2px; }
-  .missing-translation-row .mt-button { font-size: 0; width: 34px; padding: 0; gap: 0; }
+  .message-cell.missing-translation-row { flex-wrap: wrap; padding-bottom: 8px; }
+  .missing-translation-row .empty { flex-basis: 100%; }
+  .missing-translation-row .mt-button { margin-left: 16px; }
+  .missing-translation-row .mt-button + .mt-button { margin-left: 0; }
   .list-head .mt-bulk { font-size: 0; gap: 0; padding: 6px 8px; }
   .form-label { flex: none; }
   .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .chips button { flex-shrink: 0; }
-  .message-target inlang-message-forms { overflow-x: auto; }
+  .message-target inlang-message-forms { overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; background: linear-gradient(to left, #0000000d, transparent 24px) right / 24px 100% no-repeat local, linear-gradient(to left, #00000014, transparent 16px) right / 16px 100% no-repeat scroll; }
   .usage-code { white-space: pre-wrap; overflow-wrap: anywhere; }
   .usage-code .ln { position: static; width: auto; min-width: 28px; }
   .search-input { width: 100%; }

@@ -88,7 +88,8 @@ export function numberInputs(message: MessageNested, declarations: Declaration[]
   const used = new Set(message.variants.flatMap(variant => variableNames(variant.pattern)));
   return [...used].filter(name => {
     const typed = declarations.some(declaration => declaration.type === "local-variable" && declaration.value.arg.type === "variable-reference" && declaration.value.arg.name === name && ["plural", "number", "integer"].includes(declaration.value.annotation?.name ?? ""));
-    return typed || /^(count|n|num|number|total|amount|quantity)$|(count|total|number|amount)$/i.test(name);
+    // Names that count things; totals and amounts are usually sizes or money, not counts.
+    return typed || /^(count|n|num|number|quantity)$|count$/i.test(name);
   });
 }
 
@@ -115,10 +116,17 @@ export function splitMessage(bundle: BundleNested, message: MessageNested, by: {
   return { declarations: declarations === bundle.declarations ? undefined : declarations, selectors, variants };
 }
 
-/** Undoes a split: one text for every case, taken from the default form. */
-export function joinMessage(message: MessageNested): Restructure {
+/**
+ * Undoes a split: one text for every case, taken from the default form. A plural declaration
+ * the split added (`countPlural`) goes too once nothing else selects on it.
+ */
+export function joinMessage(bundle: BundleNested, message: MessageNested): Restructure {
   const fallback = message.variants.find(variant => variant.matches.every(match => match.type === "catchall-match")) ?? message.variants.at(-1);
-  return { selectors: [], variants: [{ id: crypto.randomUUID(), message_id: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
+  const stillSelected = new Set(bundle.messages.filter(value => value.id !== message.id).flatMap(value => value.selectors.map(selector => selector.name)));
+  const used = new Set(bundle.messages.flatMap(value => value.variants.flatMap(variant => variableNames(variant.pattern))));
+  const unused = message.selectors.map(selector => selector.name).filter(name => !stillSelected.has(name) && !used.has(name) && bundle.declarations.some(declaration => declaration.name === name && declaration.type === "local-variable"));
+  const declarations = unused.length ? bundle.declarations.filter(declaration => !unused.includes(declaration.name)) : undefined;
+  return { declarations, selectors: [], variants: [{ id: crypto.randomUUID(), message_id: message.id, matches: [], pattern: structuredClone(fallback?.pattern ?? []) }] };
 }
 
 const keyOf = (variant: Variant, selector: string) => { const match = variant.matches.find(value => value.key === selector); return match?.type === "literal-match" ? match.value : "*"; };
@@ -153,5 +161,6 @@ export function words(pattern: Pattern): string[] {
 /** Source words still present in a translation that was started from the source text. */
 export function untranslatedWords(seeded: string[], pattern: Pattern): string[] {
   const left = new Set(words(pattern));
-  return [...new Set(seeded.filter(word => left.has(word)))];
+  // Short words ("in", "to") are often the same in both languages; only longer ones are flagged.
+  return [...new Set(seeded.filter(word => word.length >= 4 && left.has(word)))];
 }

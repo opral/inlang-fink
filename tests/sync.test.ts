@@ -61,3 +61,14 @@ test("only locales whose messages changed are pushed", () => {
   // A translation added for a locale counts as a change in that locale.
   expect(changedLocales(bundleSignatures([bundle("hello", { en: "Hello" })]), [bundle("hello", { en: "Hello", it: "Ciao" })])).toEqual(new Set(["it"]));
 });
+
+test("a declaration added for one language only exports that language; a removed one exports all", () => {
+  const before = bundle("files", { en: "Files: x", ru: "файлов" });
+  const base = bundleSignatures([before]);
+  const plural = { type: "local-variable" as const, name: "countPlural", value: { type: "expression" as const, arg: { type: "variable-reference" as const, name: "count" }, annotation: { type: "function-reference" as const, name: "plural", options: [] } } };
+  const split: BundleNested = { ...structuredClone(before), declarations: [plural] };
+  split.messages[1]!.selectors = [{ type: "variable-reference", name: "countPlural" }];
+  expect(changedLocales(base, [split])).toEqual(new Set(["ru"]));
+  const withDeclaration = bundleSignatures([{ ...before, declarations: [plural] }]);
+  expect(changedLocales(withDeclaration, [before])).toEqual(new Set(["en", "ru"]));
+});
