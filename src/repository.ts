@@ -1,8 +1,8 @@
 import type { ExportFile, ProjectSettings } from "@inlang/sdk/browser";
 
 export type Repo = { owner: string; name: string; branch?: string; projectPath?: string };
-export type RepoTree = { head: string; tree: string; branch: string; paths: string[]; projects: string[] };
-export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string> };
+export type RepoTree = { head: string; tree: string; branch: string; paths: string[]; projects: string[]; shas?: Record<string, string> };
+export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string>; shas?: Record<string, string> };
 export function parseRepository(input: string): Repo {
   const url = new URL(input.includes("://") ? input : `https://github.com/${input}`);
   if (url.protocol !== "https:" || url.hostname !== "github.com" || url.username || url.password) throw new Error("Use a github.com repository URL.");
@@ -41,8 +41,8 @@ export function outputPath(settings: ProjectSettings, pluginKey: string, output:
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/${path}`, { method: body === undefined ? "GET" : "POST", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   let result: T & { error?: string };
-  try { result = await response.json(); } catch { throw new Error(`Request failed (${response.status}). Try again.`); }
-  if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status}).`);
+  try { result = await response.json(); } catch { throw Object.assign(new Error(`Request failed (${response.status}). Try again.`), { status: response.status }); }
+  if (!response.ok) throw Object.assign(new Error(result.error ?? `Request failed (${response.status}).`), { status: response.status });
   return result as T;
 }
 export function repoQuery(repo: Repo): string { return new URLSearchParams({ owner: repo.owner, repo: repo.name, ...(repo.branch ? { branch: repo.branch } : {}) }).toString(); }

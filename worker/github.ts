@@ -18,7 +18,7 @@ export async function github<T>(path: string, token?: string, body?: unknown, me
   const response = await fetch(`https://api.github.com${path}`, { method: method ?? (body === undefined ? "GET" : "POST"), headers: { Accept: "application/vnd.github+json", "User-Agent": "inlang-fink", "X-GitHub-Api-Version": "2022-11-28", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), redirect: "manual" });
   if (!response.ok) {
     // Never echo upstream messages that could contain credential or private content.
-    throw new HttpError(response.status === 422 ? 409 : response.status, response.status === 404 ? "Repository or file not found. Check GitHub App access." : response.status === 422 ? "The branch changed or GitHub rejected the commit. Reload the remote state before pushing." : `GitHub request failed (${response.status}). Check permissions and rate limits.`);
+    throw new HttpError(response.status === 422 ? 409 : response.status, response.status === 404 ? "Repository or file not found. Check GitHub App access." : response.status === 422 ? "GitHub rejected the commit because the branch changed. Try again." : `GitHub request failed (${response.status}). Check permissions and rate limits.`);
   }
   return boundedJson<T>(response);
 }
@@ -37,7 +37,7 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
   const base = repoBase(input.owner, input.repo);
   const refPath = `${base}/git/refs/heads/${input.branch.split("/").map(encodeURIComponent).join("/")}`;
   const ref = await github<{ object: { sha: string } }>(refPath, token);
-  if (ref.object.sha !== input.head) throw new HttpError(409, "The branch has changed since this project was opened. Your draft is saved locally; reload and reconcile before pushing.");
+  if (ref.object.sha !== input.head) throw new HttpError(409, "The branch changed on GitHub while pushing.");
   const settingsFile = await github<{ encoding: string; content: string; size: number }>(`${base}/contents/${input.projectPath.split("/").map(encodeURIComponent).join("/")}/settings.json?ref=${input.head}`, token);
   if (settingsFile.encoding !== "base64" || settingsFile.size > 1024 * 1024) throw new HttpError(400, "Invalid project settings.");
   const settings = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(settingsFile.content.replace(/\s/g, "")), char => char.charCodeAt(0))));

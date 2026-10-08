@@ -315,3 +315,94 @@ test("shows where each message is used in code above its translations", async ({
   await expect(items.locator(".usage-code")).toBeVisible();
   await expect(page.locator('[data-bundle="legacy_banner"] .usage-peek')).toContainText("Not used in code");
 });
+
+// A mutable GitHub: tests advance the branch between page loads and pushes.
+async function stubRemote(page: import("@playwright/test").Page, remote: { head: string; files: Record<string, string>; shas: Record<string, string>; pushes: unknown[]; rejectNextPush?: boolean }) {
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    let data: unknown;
+    if (url.pathname === "/api/user") data = { login: "translator" };
+    else if (url.pathname === "/api/github/tree") data = { head: remote.head, tree: "b".repeat(40), branch: "main", paths: Object.keys(remote.files), shas: remote.shas, projects: ["project.inlang"] };
+    else if (url.pathname === "/api/github/branches") data = ["main"];
+    else if (url.pathname === "/api/github/file") data = { content: remote.files[url.searchParams.get("path")!] };
+    else if (url.pathname === "/api/github/source") data = { files: {} };
+    else if (url.pathname === "/api/github/push") {
+      const body = route.request().postDataJSON();
+      if (remote.rejectNextPush || body.head !== remote.head) { remote.rejectNextPush = false; remote.head = "e".repeat(40); return route.fulfill({ status: 409, json: { error: "The branch changed on GitHub while pushing." } }); }
+      remote.pushes.push(body); remote.head = "c".repeat(40);
+      data = { head: remote.head, tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" };
+    } else throw new Error(`Unexpected request ${url}`);
+    await route.fulfill({ json: data });
+  });
+}
+const shasOf = (files: Record<string, string>) => Object.fromEntries(Object.keys(files).map(path => [path, `sha-${path}-${files[path]!.length}`]));
+
+test("a newer GitHub branch is applied automatically: code-only commits move the base, translation commits merge", async ({ page }) => {
+  const files = { ...resources };
+  const remote = { head: "a".repeat(40), files, shas: shasOf(files), pushes: [] as unknown[] };
+  await stubRemote(page, remote);
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const german = page.locator('[data-bundle="hello"] inlang-pattern-editor').nth(1).locator("[contenteditable]");
+  await expect(german).toBeVisible({ timeout: 90_000 });
+  await german.fill("Hallo aus Fink"); await german.press("Tab");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("1 change");
+
+  // Someone pushes code only: the base moves silently and the draft stays.
+  remote.head = "f".repeat(40);
+  await page.reload();
+  await expect(page.locator(".based-on")).toContainText("fffffff", { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').nth(1)).toContainText("Hallo aus Fink");
+  await expect(page.getByText(/reconcile|advanced/i)).toHaveCount(0);
+
+  // Someone changes English and the same German message: English applies, GitHub wins for German.
+  remote.files = { ...files, "messages/en.json": JSON.stringify({ ...JSON.parse(files["messages/en.json"]!), hello: "Hello there" }), "messages/de.json": JSON.stringify({ hello: "Servus" }) };
+  remote.shas = shasOf(remote.files); remote.head = "9".repeat(40);
+  await page.reload();
+  await expect(page.locator(".based-on")).toContainText("9999999", { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').first()).toContainText("Hello there");
+  await expect(page.locator('[data-bundle="hello"] inlang-pattern-editor').nth(1)).toContainText("Servus");
+  await expect(page.getByRole("status").filter({ hasText: "Your edit to hello was replaced by newer changes on GitHub." })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).not.toBeVisible();
+});
+
+test("pushing after GitHub moved syncs the draft and retries without asking", async ({ page }) => {
+  const files = { ...resources };
+  const remote = { head: "a".repeat(40), files, shas: shasOf(files), pushes: [] as { head: string; files: Record<string, string> }[], rejectNextPush: false };
+  await stubRemote(page, remote);
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const english = page.locator('[data-bundle="hello"] inlang-pattern-editor').first().locator("[contenteditable]");
+  await expect(english).toBeVisible({ timeout: 90_000 });
+  await english.fill("Hello from Fink"); await english.press("Tab");
+  // GitHub advances between the pre-push check and the push itself.
+  remote.rejectNextPush = true;
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
+  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await expect(page.getByText(/Pushed to main/)).toBeVisible({ timeout: 60_000 });
+  expect(remote.pushes).toHaveLength(1);
+  expect(remote.pushes[0]!.head).toBe("e".repeat(40));
+  expect(JSON.parse(remote.pushes[0]!.files["messages/en.json"]!).hello).toBe("Hello from Fink");
+  await expect(page.getByText(/reconcile/i)).toHaveCount(0);
+});
+
+test("a push after GitHub replaced an edit still tells the translator", async ({ page }) => {
+  const files = { ...resources };
+  const remote = { head: "a".repeat(40), files, shas: shasOf(files), pushes: [] as { files: Record<string, string> }[] };
+  await stubRemote(page, remote);
+  await page.goto("/");
+  await page.getByLabel("GitHub repository").fill("https://github.com/example/repo");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  const pattern = (index: number) => page.locator('[data-bundle="hello"] inlang-pattern-editor').nth(index).locator("[contenteditable]");
+  await expect(pattern(0)).toBeVisible({ timeout: 90_000 });
+  await pattern(0).fill("Hello from Fink"); await pattern(0).press("Tab");
+  await pattern(1).fill("Hallo aus Fink"); await pattern(1).press("Tab");
+  // Meanwhile GitHub changes the same German message.
+  remote.files = { ...files, "messages/de.json": JSON.stringify({ hello: "Servus" }) }; remote.shas = shasOf(remote.files); remote.head = "9".repeat(40);
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
+  await page.getByRole("button", { name: "Commit and push to main" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Your edit to hello was replaced by newer changes on GitHub. Pushed to main." })).toBeVisible({ timeout: 60_000 });
+  expect(Object.keys(remote.pushes[0]!.files)).toEqual(["messages/en.json"]);
+});

@@ -76,10 +76,12 @@ export default {
       if (url.pathname === "/api/github/tree") {
         const branch = url.searchParams.get("branch") || (await github<{ default_branch: string }>(base, token)).default_branch;
         const commit = await github<{ sha: string; commit: { tree: { sha: string } } }>(`${base}/commits/${encodeURIComponent(branch)}`, token);
-        const tree = await github<{ truncated: boolean; tree: { path: string; type: string; mode: string }[] }>(`${base}/git/trees/${commit.commit.tree.sha}?recursive=1`, token);
+        const tree = await github<{ truncated: boolean; tree: { path: string; type: string; mode: string; sha: string }[] }>(`${base}/git/trees/${commit.commit.tree.sha}?recursive=1`, token);
         if (tree.truncated) throw new HttpError(413, "GitHub returned an incomplete repository tree. Choose a smaller repository.");
-        const paths = tree.tree.filter(entry => entry.type === "blob" && entry.mode !== "120000").map(entry => entry.path);
-        return json({ branch, head: commit.sha, tree: commit.commit.tree.sha, paths, projects: paths.filter(path => path.endsWith(".inlang/settings.json")).map(path => path.slice(0, -14)) });
+        const blobs = tree.tree.filter(entry => entry.type === "blob" && entry.mode !== "120000"), paths = blobs.map(entry => entry.path);
+        // Blob hashes of JSON files let the editor skip re-importing when only code changed.
+        const shas = Object.fromEntries(blobs.filter(entry => entry.path.endsWith(".json")).map(entry => [entry.path, entry.sha]));
+        return json({ branch, head: commit.sha, tree: commit.commit.tree.sha, paths, shas, projects: paths.filter(path => path.endsWith(".inlang/settings.json")).map(path => path.slice(0, -14)) });
       }
       if (url.pathname === "/api/github/source") {
                 const ref = url.searchParams.get("ref") ?? "", scope = url.searchParams.get("path") ?? "";

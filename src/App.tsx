@@ -15,10 +15,11 @@ import type { Showcase } from "./showcases";
 import { highlightMatches, searchTerms, searchText } from "./search";
 import { isUnused, scanUsages, type UsageIndex } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
-import { preparePush, openRepositoryProject, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
+import { preparePush, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
 const DEFAULT_MESSAGE = "Update translations with Fink";
+const replacedNotice = (ids: string[]) => `${ids.length === 1 ? `Your edit to ${ids[0]} was` : `${ids.length} of your edits (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""}) were`} replaced by newer changes on GitHub.`;
 export default function App() {
   const [url, setUrl] = useState(() => new URLSearchParams(location.search).get("repo") ?? "");
   const [repo, setRepo] = useState<Repo>();
@@ -163,16 +164,19 @@ export default function App() {
       const same = previous && previous.context.owner === repository.owner && previous.context.name === repository.name && previous.context.branch === nextTree.branch && previous.context.projectPath === projectPath;
       if (previous && same) { localRef.current = undefined; setLocal(undefined); setBundles([]); await previous.close(); }
       const next = await openRepositoryProject(repository, nextTree, projectPath, setProgress);
+      // GitHub is the source of truth: a restored draft is brought up to date before it is shown.
+      let synced: { replaced: string[] } | undefined;
+      try { synced = await syncWithRemote(next, repository, nextTree, setProgress); }
+      catch { setNotice("Couldn't check GitHub for newer changes. Your draft is open, and Fink will check again before pushing."); }
+      if (synced?.replaced.length) setNotice(replacedNotice(synced.replaced));
       if (previous && !same) { localRef.current = undefined; await previous.close(); }
       localRef.current = next; await refresh(next); setLocal(next);
     } finally { loading.current = false; }
-    const next = localRef.current!;
     await navigator.storage.persist();
     setPage(0); setView("edit"); setReviewState(undefined); setSelectedLocales([]); setTree(undefined); setProjects(nextTree.projects);
     setSearchInput(""); setSearch(""); setMissing(false); setNewId(""); setShowNewMessage(false); setMessage(DEFAULT_MESSAGE); messageTouched.current = false;
     history.replaceState(null, "", `/?${new URLSearchParams({ repo: repositoryUrl, branch: nextTree.branch, project: projectPath })}`);
     rememberRecent({ owner: repository.owner, name: repository.name, branch: nextTree.branch, projectPath }); setRecent(readRecent());
-    if (next.context.head !== nextTree.head) setNotice("Restored your local draft. The remote branch has advanced; pushing will ask you to reconcile first.");
   };
   const open = () => run(async () => {
     if (!repo || !path) return;
@@ -313,19 +317,45 @@ export default function App() {
     } catch (error) { report(error); }
   };
   const publish = () => run(async () => {
-    if (!local || (!dirty.current.size && !settingsChanges(local))) return;
+    const current = localRef.current;
+    if (!current || (!dirty.current.size && !settingsChanges(current))) return;
     await queue.current;
     if (failure.current) throw new Error("A local save failed. Reload the page before pushing.");
-    setProgress("Preparing files for GitHub…");
-    const { files, resources } = await preparePush(local);
-    if (!Object.keys(files).length) { setNotice("No resource changes to push."); return; }
-    setProgress("Pushing changes…");
-    const result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: local.context.owner, repo: local.context.name, branch: local.context.branch, projectPath: local.context.projectPath, head: local.context.head, files, message: message.trim() });
-    local.context.head = result.head; local.context.tree = result.tree;
-    Object.assign(local.context.original, files); local.context.baseline = resources;
-    local.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
-    baseline.current = local.context.bundleBaseline; dirty.current.clear();
-    await saveContext(local); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); messageTouched.current = false; setNotice(`Pushed to ${local.context.branch}. Commit: ${result.url}`);
+    const repository = { owner: current.context.owner, name: current.context.name }, replaced: string[] = [];
+    // Edits replaced by newer GitHub changes are reported together with the push result.
+    const withReplaced = (text: string) => replaced.length ? `${replacedNotice(replaced)} ${text}` : text;
+    for (let attempt = 0; ; attempt++) {
+      // GitHub is the source of truth: bring the draft up to date before every push, and again
+      // if someone pushed in between.
+      setProgress("Checking GitHub for newer changes…");
+      const remote = await api<RepoTree>(`github/tree?${repoQuery({ ...repository, branch: current.context.branch })}`);
+      if (remote.head !== current.context.head) {
+        const synced = await syncWithRemote(current, repository, remote, setProgress);
+        for (const id of synced.replaced) if (!replaced.includes(id)) replaced.push(id);
+        await refresh(current); setLocal({ ...current });
+        const ids = [...dirty.current];
+        setReviewState(previous => previous && { ids, settings: settingsChanges(current), bundles: ids.flatMap(id => { const bundle = bundleIndex.current.get(id); return bundle ? [bundle] : []; }) });
+        if (!dirty.current.size && !settingsChanges(current)) { setReviewState(undefined); setView("edit"); setNotice(withReplaced(replaced.length ? "Nothing left to push." : "Your changes are already on GitHub.")); return; }
+      }
+      setProgress("Preparing files for GitHub…");
+      const { files, resources } = await preparePush(current);
+      if (!Object.keys(files).length) { setNotice(withReplaced("No resource changes to push.")); return; }
+      setProgress("Pushing changes…");
+      let result: { head: string; tree: string; url: string };
+      try {
+        result = await api<{ head: string; tree: string; url: string }>("github/push", { owner: current.context.owner, repo: current.context.name, branch: current.context.branch, projectPath: current.context.projectPath, head: current.context.head, files, message: message.trim() });
+      } catch (error) {
+        if ((error as { status?: number }).status === 409 && attempt < 2) continue;
+        throw error;
+      }
+      current.context.head = result.head; current.context.tree = result.tree;
+      Object.assign(current.context.original, files); current.context.baseline = resources;
+      if (current.context.shas) Object.assign(current.context.shas, Object.fromEntries(await Promise.all(Object.entries(files).map(async ([path, content]) => [path, await gitBlobSha(content)]))));
+      current.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
+      baseline.current = current.context.bundleBaseline; dirty.current.clear();
+      await saveContext(current); setLocal({ ...current }); setReviewState(undefined); setDirtyCount(0); setSettingsDirty(false); setView("edit"); messageTouched.current = false; setNotice(withReplaced(`Pushed to ${current.context.branch}. Commit: ${result.url}`));
+      return;
+    }
   });
   // Pre-fill the commit message from what changed, until the user edits it.
   const suggestMessage = () => {
