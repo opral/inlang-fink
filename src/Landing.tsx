@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from "react";
 import { Showcases } from "./Showcases";
-import type { Showcase } from "./showcases";
+import type { Showcase } from "./showcaseList";
 import type { RepoTree } from "./repository";
 import { recentKey, timeAgo, type RecentProject } from "./recent";
 import { BranchIcon, GitHubIcon } from "./Menu";

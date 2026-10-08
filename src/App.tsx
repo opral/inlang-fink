@@ -17,7 +17,7 @@ import { History } from "./History";
 import { BranchMenu } from "./BranchMenu";
 import { StarButton } from "./StarButton";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
-import type { Showcase } from "./showcases";
+import type { Showcase } from "./showcaseList";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
 import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
 import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";

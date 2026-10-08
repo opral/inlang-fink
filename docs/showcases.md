@@ -13,7 +13,7 @@ Reviewed on 2026-10-07 using GitHub's code search, repository metadata, contribu
 
 Contributor counts are GitHub's reported repository-wide counts and can include bots. They are not counts of translators. Activity is the first 100 commits on the default branch since 2026-09-07 UTC; 100+ means the sample reached its cap. Recent human author counts in these samples were 7, 4, 3, 3, 3, and 10 respectively. These counts help distinguish activity from stars, but are not a census of recent contributors.
 
-All six chosen projects have `baseLocale`, `locales`, and a supported message-format resource pattern. Their base-locale files exist and are valid JSON. TanStack is labeled as an integration example; it does not represent a translated TanStack product. Project paths and counts live in `src/showcases.ts`, bundled into the SPA rather than fetched on every visit.
+All six chosen projects have `baseLocale`, `locales`, and a supported message-format resource pattern. Their base-locale files exist and are valid JSON. TanStack is labeled as an integration example; it does not represent a translated TanStack product. Project paths and counts live in `src/showcaseList.ts`, bundled into the SPA rather than fetched on every visit.
 
 AppFlowy (77,169 stars / 363 contributors) is a strong community lead, but its [current settings](https://github.com/AppFlowy-IO/AppFlowy/blob/main/project.inlang/settings.json) use `sourceLanguageTag` / `languageTags`. Scanopy and AdminJS also have legacy settings. They are excluded from the clickable SDK v3 showcases. Documenso and OpenStatus are active projects, but their default-branch trees did not contain a matching `.inlang/settings.json`; they are not included based on reputation alone.
 
