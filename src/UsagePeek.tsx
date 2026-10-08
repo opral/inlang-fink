@@ -3,7 +3,6 @@ import type { Usage } from "./usage";
 
 // Messages collapsed in this session stay collapsed while paging through the catalog.
 const collapsedBundles = new Set<string>();
-const CodeIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6" /><path d="m8 6-6 6 6 6" /></svg>;
 const Arrow = ({ d }: { d: string }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
 
 /** A short peek at where a message is used in the app's code, shown above its translations. */
@@ -18,7 +17,6 @@ export function UsagePeek({ bundleId, usages, unused, codeUrl, scope }: { bundle
     if (pre && mark) pre.scrollLeft = Math.max(0, mark.offsetLeft - pre.clientWidth / 3);
   }, [index, collapsed, usages]);
   if (unused) return <div slot="message" className="usage-peek unused" role="note" aria-label={`Usage of ${bundleId} in code`}>
-    <span className="usage-toggle static" aria-hidden="true"><CodeIcon /></span>
     <span className="usage-role unused">Not used in code</span>
     <span className="usage-note">No reference in the app's code at this commit. Check with a developer before deleting it.</span>
   </div>;
@@ -29,7 +27,6 @@ export function UsagePeek({ bundleId, usages, unused, codeUrl, scope }: { bundle
   const slash = shown.lastIndexOf("/"), page = (step: number) => setIndex((current + step + usages.length) % usages.length);
   return <div slot="message" className={collapsed ? "usage-peek collapsed" : "usage-peek"} role="group" aria-label={`Usage of ${bundleId} in code`}>
     <div className="usage-bar">
-      <span className="usage-toggle static" aria-hidden="true"><CodeIcon /></span>
       {usage.role && <span className="usage-role">{usage.role}</span>}
       <a className="usage-path" href={`${codeUrl}/${encodeURI(usage.path).replace(/[#?]/g, encodeURIComponent)}#L${usage.line}`} target="_blank" rel="noreferrer" aria-label={`${usage.path}, line ${usage.line}, open on GitHub (new tab)`}>{slash >= 0 && <span className="dir">{shown.slice(0, slash + 1)}</span>}<span className="file">{shown.slice(slash + 1)}:{usage.line}</span></a>
       <span className="usage-actions">

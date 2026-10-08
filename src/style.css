@@ -240,8 +240,6 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .usage-peek.collapsed .usage-bar { padding-bottom: 8px; }
 .usage-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; padding: 8px 12px 0; font-size: 12px; }
 .usage-peek.unused { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; font-size: 12px; }
-.usage-toggle { display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 6px; border: 1px solid var(--border); background: var(--surface); border-radius: 5px; color: var(--text-2); box-shadow: none; flex-shrink: 0; }
-.usage-toggle.static { border-color: transparent; background: transparent; color: var(--muted); padding: 0 2px; }
 .usage-role { flex-shrink: 0; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
 .usage-role.unused { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
 .usage-path { display: flex; flex: 1 1 18ch; min-width: 0; overflow: hidden; font-family: var(--mono); color: #52525b; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
