@@ -248,8 +248,10 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .usage-path .dir { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usage-path .file { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usage-path:hover { color: var(--blue); text-decoration-color: currentColor; }
-.usage-pager, .usage-count { margin-left: auto; display: flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.usage-pager button { width: 26px; height: 26px; padding: 0; box-shadow: none; border-color: var(--border); }
+.usage-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.usage-pager, .usage-count { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-collapse { width: 26px; height: 26px; padding: 0; box-shadow: none; border-color: var(--border); color: var(--text-2); }
+.usage-pager button, .usage-collapse { width: 26px; height: 26px; padding: 0; box-shadow: none; border-color: var(--border); }
 .usage-code { margin: 0; padding: 6px 0 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.75; color: var(--muted); white-space: pre; tab-size: 2; overflow-x: auto; background: var(--bg); }
 .usage-code:focus-visible { outline-offset: -2px; }
 .usage-code > code { display: inline-block; min-width: 100%; font: inherit; background: none; border: 0; padding: 0; }

@@ -29,14 +29,17 @@ export function UsagePeek({ bundleId, usages, unused, codeUrl, scope }: { bundle
   const slash = shown.lastIndexOf("/"), page = (step: number) => setIndex((current + step + usages.length) % usages.length);
   return <div slot="message" className={collapsed ? "usage-peek collapsed" : "usage-peek"} role="group" aria-label={`Usage of ${bundleId} in code`}>
     <div className="usage-bar">
-      <button className="usage-toggle" aria-expanded={!collapsed} aria-label="Usage in code" title={collapsed ? "Show usage in code" : "Hide usage in code"} onClick={toggle}><CodeIcon /><Arrow d={collapsed ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} /></button>
+      <span className="usage-toggle static" aria-hidden="true"><CodeIcon /></span>
       {usage.role && <span className="usage-role">{usage.role}</span>}
       <a className="usage-path" href={`${codeUrl}/${encodeURI(usage.path).replace(/[#?]/g, encodeURIComponent)}#L${usage.line}`} target="_blank" rel="noreferrer" aria-label={`${usage.path}, line ${usage.line}, open on GitHub (new tab)`}>{slash >= 0 && <span className="dir">{shown.slice(0, slash + 1)}</span>}<span className="file">{shown.slice(slash + 1)}:{usage.line}</span></a>
-      {usages.length > 1 && (collapsed ? <span className="usage-count">{usages.length} usages</span> : <span className="usage-pager" role="group" aria-label="Usages">
-        <span aria-live="polite">{current + 1} of {usages.length}</span>
-        <button aria-label="Previous usage" onClick={() => page(-1)}><Arrow d="m15 18-6-6 6-6" /></button>
-        <button aria-label="Next usage" onClick={() => page(1)}><Arrow d="m9 18 6-6-6-6" /></button>
-      </span>)}
+      <span className="usage-actions">
+        {usages.length > 1 && (collapsed ? <span className="usage-count">{usages.length} usages</span> : <span className="usage-pager" role="group" aria-label="Usages">
+          <span aria-live="polite">{current + 1} of {usages.length}</span>
+          <button aria-label="Previous usage" onClick={() => page(-1)}><Arrow d="m15 18-6-6 6-6" /></button>
+          <button aria-label="Next usage" onClick={() => page(1)}><Arrow d="m9 18 6-6-6-6" /></button>
+        </span>)}
+        <button className="usage-collapse" aria-expanded={!collapsed} aria-label="Usage in code" title={collapsed ? "Show usage in code" : "Hide usage in code"} onClick={toggle}><Arrow d={collapsed ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"} /></button>
+      </span>
     </div>
     {!collapsed && <pre className="usage-code" ref={code} tabIndex={0} aria-label={`Code in ${usage.path}, line ${usage.line}`}><code>{usage.snippet.lines.map((text, offset) => {
       const line = usage.snippet.start + offset;
