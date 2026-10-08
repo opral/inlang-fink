@@ -167,7 +167,7 @@ export default function App() {
       // GitHub is the source of truth: a restored draft is brought up to date before it is shown.
       let synced: { replaced: string[] } | undefined;
       try { synced = await syncWithRemote(next, repository, nextTree, setProgress); }
-      catch { setNotice("Couldn't check GitHub for newer changes. Your draft is open, and Fink will check again before pushing."); }
+      catch (error) { console.error("Sync with GitHub failed", error); setNotice("Couldn't check GitHub for newer changes. Your draft is open, and Fink will check again before pushing."); }
       if (synced?.replaced.length) setNotice(replacedNotice(synced.replaced));
       if (previous && !same) { localRef.current = undefined; await previous.close(); }
       localRef.current = next; await refresh(next); setLocal(next);
@@ -338,7 +338,7 @@ export default function App() {
         if (!dirty.current.size && !settingsChanges(current)) { setReviewState(undefined); setView("edit"); setNotice(withReplaced(replaced.length ? "Nothing left to push." : "Your changes are already on GitHub.")); return; }
       }
       setProgress("Preparing files for GitHub…");
-      const { files, resources } = await preparePush(current);
+      const { files } = await preparePush(current);
       if (!Object.keys(files).length) { setNotice(withReplaced("No resource changes to push.")); return; }
       setProgress("Pushing changes…");
       let result: { head: string; tree: string; url: string };
@@ -349,7 +349,7 @@ export default function App() {
         throw error;
       }
       current.context.head = result.head; current.context.tree = result.tree;
-      Object.assign(current.context.original, files); current.context.baseline = resources;
+      Object.assign(current.context.original, files);
       if (current.context.shas) Object.assign(current.context.shas, Object.fromEntries(await Promise.all(Object.entries(files).map(async ([path, content]) => [path, await gitBlobSha(content)]))));
       current.context.bundleBaseline = bundleSignatures([...bundleIndex.current.values()]);
       baseline.current = current.context.bundleBaseline; dirty.current.clear();

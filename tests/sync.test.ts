@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { BundleNested, ProjectSettings } from "@inlang/sdk/browser";
-import { bundleSignatures, mergeBundles, mergeSettings } from "../src/project";
+import { bundleSignatures, changedLocales, mergeBundles, mergeSettings } from "../src/project";
 
 let ids = 0;
 const bundle = (id: string, texts: Record<string, string>): BundleNested => ({ id, declarations: [], messages: Object.entries(texts).map(([locale, text]) => {
@@ -50,4 +50,14 @@ test("merged settings are always valid and keep locales added on either side", (
   expect(mergeSettings(base, { ...base, locales: ["en", "de", "fr"] } as ProjectSettings, { ...base, locales: ["en", "de", "es"] } as ProjectSettings).locales).toEqual(["en", "de", "es", "fr"]);
   // Local removed de while GitHub added es.
   expect(mergeSettings(base, { ...base, locales: ["en"] } as ProjectSettings, { ...base, locales: ["en", "de", "es"] } as ProjectSettings).locales).toEqual(["en", "es"]);
+});
+
+test("only locales whose messages changed are pushed", () => {
+  const base = bundleSignatures([bundle("hello", { en: "Hello", de: "Hallo", fr: "Bonjour" }), bundle("gone", { en: "Gone", de: "Weg" })]);
+  expect(changedLocales(base, [bundle("hello", { en: "Hello", de: "Hallo", fr: "Bonjour" }), bundle("gone", { en: "Gone", de: "Weg" })])).toEqual(new Set());
+  expect(changedLocales(base, [bundle("hello", { en: "Hello", de: "Servus", fr: "Bonjour" }), bundle("gone", { en: "Gone", de: "Weg" })])).toEqual(new Set(["de"]));
+  // A deleted bundle touches the locales it had; a new bundle the locales it has.
+  expect(changedLocales(base, [bundle("hello", { en: "Hello", de: "Hallo", fr: "Bonjour" }), bundle("new", { fr: "Nouveau" })])).toEqual(new Set(["en", "de", "fr"]));
+  // A translation added for a locale counts as a change in that locale.
+  expect(changedLocales(bundleSignatures([bundle("hello", { en: "Hello" })]), [bundle("hello", { en: "Hello", it: "Ciao" })])).toEqual(new Set(["it"]));
 });

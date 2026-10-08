@@ -43,7 +43,6 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     const context: RepoContext = { ...repo, branch: tree.branch, projectPath, head: tree.head, tree: tree.tree, settings, original: { [`${projectPath}/settings.json`]: rawSettings }, baseline: {} };
     await importResources(project, repo, tree, context, progress);
     progress("Preparing editor…");
-    context.baseline = await exportResources({ project, context });
     context.bundleBaseline = bundleSignatures(await readBundles(project));
     context.shas = fileShas(tree, context);
     await saveContext({ project, context });
@@ -197,22 +196,25 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
     const next = new Set(bundles.map(bundle => bundle.id));
     const changed = bundles.filter(bundle => current.get(bundle.id) !== bundleSignature(bundle));
     const removedIds = [...current.keys()].filter(id => !next.has(id));
+    // Batched: one statement per chunk instead of one round trip to the Lix worker per row.
+    const chunks = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
+    const rewritten = [...removedIds, ...changed.map(bundle => bundle.id)];
+    const messages = changed.flatMap(bundle => bundle.messages.map(message => ({ id: message.id, bundleId: bundle.id, locale: message.locale, selectors: message.selectors })));
+    const variants = changed.flatMap(bundle => bundle.messages.flatMap(message => message.variants.map(variant => ({ id: variant.id, messageId: message.id, matches: variant.matches, pattern: variant.pattern }))));
     await local.project.db.transaction().execute(async tx => {
-      for (const id of [...removedIds, ...changed.map(bundle => bundle.id)]) {
-        const messages = await tx.selectFrom("message").select("id").where("bundleId", "=", id).execute();
-        for (const message of messages) await tx.deleteFrom("variant").where("messageId", "=", message.id).execute();
-        await tx.deleteFrom("message").where("bundleId", "=", id).execute();
-        await tx.deleteFrom("bundle").where("id", "=", id).execute();
+      // Lix supports IN with value lists but not subqueries, so message ids are read first.
+      for (const ids of chunks(rewritten, 500)) {
+        const messageIds = (await tx.selectFrom("message").select("id").where("bundleId", "in", ids).execute()).map(row => row.id);
+        for (const chunk of chunks(messageIds, 500)) await tx.deleteFrom("variant").where("messageId", "in", chunk).execute();
+        await tx.deleteFrom("message").where("bundleId", "in", ids).execute();
+        await tx.deleteFrom("bundle").where("id", "in", ids).execute();
       }
-      for (const bundle of changed) {
-        await tx.insertInto("bundle").values({ id: bundle.id, declarations: bundle.declarations }).execute();
-        for (const message of bundle.messages) {
-          await tx.insertInto("message").values({ id: message.id, bundleId: bundle.id, locale: message.locale, selectors: message.selectors }).execute();
-          for (const variant of message.variants) await tx.insertInto("variant").values({ id: variant.id, messageId: message.id, matches: variant.matches, pattern: variant.pattern }).execute();
-        }
-      }
+      for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("bundle").values(rows).execute();
+      for (const rows of chunks(messages, 500)) await tx.insertInto("message").values(rows).execute();
+      for (const rows of chunks(variants, 500)) await tx.insertInto("variant").values(rows).execute();
     });
-    Object.assign(context, { head: tree.head, tree: tree.tree, settings, original: remote.original, baseline: await exportResources({ project: remoteProject, context: remote }), bundleBaseline: bundleSignatures(remoteBundles), shas: fileShas(tree, remote) });
+    progress("Preparing editor…");
+    Object.assign(context, { head: tree.head, tree: tree.tree, settings, original: remote.original, baseline: {}, bundleBaseline: bundleSignatures(remoteBundles), shas: fileShas(tree, remote) });
     await saveContext(local);
     return { replaced };
   } finally { if (remoteProject) await remoteProject.close(); await lix.close(); }
@@ -254,7 +256,8 @@ export async function getBaselineSignatures(local: LocalProject): Promise<Record
     for (const plugin of plugins) {
       const plans = await plugin.toBeImportedFiles!({ settings });
       const files = plans.flatMap(plan => {
-        const content = local.context.baseline[resolveResourcePath(local.context.projectPath, plan.path)];
+        const path = resolveResourcePath(local.context.projectPath, plan.path);
+        const content = local.context.baseline?.[path] ?? local.context.original[path];
         return content === undefined ? [] : [{ locale: plan.locale, content: new TextEncoder().encode(content), toBeImportedFilesMetadata: plan.metadata }];
       });
       await baseline.importFiles({ pluginKey: plugin.key, files });
@@ -264,13 +267,35 @@ export async function getBaselineSignatures(local: LocalProject): Promise<Record
     return local.context.bundleBaseline;
   } finally { if (baseline) await baseline.close(); await lix.close(); }
 }
-export async function exportResources(local: Pick<LocalProject, "project" | "context">): Promise<Record<string, string>> {
+/** Locales whose messages differ between the baseline signatures and the current bundles. */
+export function changedLocales(base: Record<string, string>, current: BundleNested[]): Set<string> {
+  const locales = new Set<string>(), byId = new Map(current.map(bundle => [bundle.id, bundle]));
+  for (const id of new Set([...Object.keys(base), ...byId.keys()])) {
+    const bundle = byId.get(id), original = base[id];
+    if (bundle && bundleSignature(bundle) === original) continue;
+    const before = original ? JSON.parse(original) as { declarations: unknown; messages: MessageShape[] } : undefined;
+    const after = bundle?.messages ?? [], all = new Set([...(before?.messages ?? []).map(message => message.locale), ...after.map(message => message.locale)]);
+    // Added, deleted, or re-declared bundles touch every locale they have messages in.
+    if (!before || !bundle || JSON.stringify(before.declarations) !== JSON.stringify(bundle.declarations)) { for (const locale of all) locales.add(locale); continue; }
+    for (const locale of all) {
+      const a = before.messages.find(message => message.locale === locale), b = after.find(message => message.locale === locale);
+      if ((a && messageSignature(a)) !== (b && messageSignature(b))) locales.add(locale);
+    }
+  }
+  return locales;
+}
+/** Exports the resource files of `locales`; a file that existed but has no messages left becomes "{}". */
+export async function exportResources(local: Pick<LocalProject, "project" | "context">, locales: Set<string>): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
-  for (const path of Object.keys(local.context.original)) {
-    if (!path.endsWith(".inlang/settings.json")) files[path] = "{}";
+  for (const plugin of pluginsFor(local.context.settings)) {
+    for (const plan of await plugin.toBeImportedFiles!({ settings: local.context.settings })) {
+      const path = resolveResourcePath(local.context.projectPath, plan.path);
+      if (locales.has(plan.locale) && local.context.original[path] !== undefined) files[path] = "{}";
+    }
   }
   for (const plugin of pluginsFor(local.context.settings)) {
     for (const file of await local.project.exportFiles({ pluginKey: plugin.key })) {
+      if (!locales.has(file.locale)) continue;
       const path = resolveResourcePath(local.context.projectPath, outputPath(local.context.settings, plugin.key, file));
       const content = new TextDecoder().decode(file.content);
       if (files[path] !== undefined && files[path] !== "{}") throw new Error(`Multiple outputs target ${path}.`);
@@ -283,12 +308,10 @@ export function settingsChanges(local: Pick<LocalProject, "context">) {
   const before: ProjectSettings = JSON.parse(local.context.original[`${local.context.projectPath}/settings.json`]!);
   return settingsSignature(before) === settingsSignature(local.context.settings) ? undefined : { before, after: structuredClone(local.context.settings) };
 }
-export async function preparePush(local: LocalProject): Promise<{ files: Record<string, string>; resources: Record<string, string> }> {
-  const changes: Record<string, string> = {};
-  const resources = await exportResources(local);
-  for (const [path, content] of Object.entries(resources)) {
-    if (content !== local.context.baseline[path]) changes[path] = content;
-  }
-  if (settingsChanges(local)) changes[`${local.context.projectPath}/settings.json`] = JSON.stringify(local.context.settings, null, 2) + "\n";
-  return { files: changes, resources };
+/** Files to commit: only the locales whose messages changed, plus settings. Untouched files are never rewritten. */
+export async function preparePush(local: LocalProject): Promise<{ files: Record<string, string> }> {
+  const locales = changedLocales(await getBaselineSignatures(local), await readBundles(local.project));
+  const files = locales.size ? await exportResources(local, locales) : {};
+  if (settingsChanges(local)) files[`${local.context.projectPath}/settings.json`] = JSON.stringify(local.context.settings, null, 2) + "\n";
+  return { files };
 }
