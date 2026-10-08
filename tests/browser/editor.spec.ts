@@ -185,6 +185,42 @@ test("links a German word like the English text and removes the link again", asy
   await expect(translation(page, "api_hint")).toHaveText("Mehr in der Dokumentation.");
 });
 
+test("undo and redo step through the draft's Lix history", async ({ page }) => {
+  await stubApi(page);
+  await openRepository(page);
+  const field = translation(page, "hello");
+  await expect(field).toHaveText("Hallo", { timeout: 90_000 });
+  await field.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("x");
+  await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveText("Edited");
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.keyboard.press("Control+z");
+  await expect(translation(page, "hello")).toHaveText("Hallo");
+  await expect(page.locator('[data-bundle="hello"] .message-status')).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+z");
+  await expect(translation(page, "hello")).toHaveText("Hallox");
+  // Nothing before this session's edits is undone.
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await expect(translation(page, "hello")).toHaveText("Hallo");
+});
+
+test("makes the translation's variable bold like the reference", async ({ page }) => {
+  const files = { ...resources,
+    "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]!), access: "{#b}{client}{/b} wants access" }),
+    "messages/de.json": JSON.stringify({ ...JSON.parse(resources["messages/de.json"]!), access: "{client} möchte Zugriff" }),
+  };
+  await stubApi(page, files);
+  await openRepository(page);
+  const card = page.locator('[data-bundle="access"]');
+  await expect(card.locator(".message-status")).toHaveText("Bold missing in German", { timeout: 90_000 });
+  await card.getByRole("button", { name: "Make {client} bold" }).click();
+  await expect(card.locator(".message-status")).toHaveText("Edited");
+  await expect(translation(page, "access")).toHaveText("<b>{client}</b> möchte Zugriff");
+});
+
 test("machine translation asks the translator to email us to activate it", async ({ page }) => {
   await stubApi(page);
   await openRepository(page);

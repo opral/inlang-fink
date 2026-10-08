@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BundleNested, Declaration, MessageNested } from "@inlang/sdk/browser";
-import { joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words } from "../src/flows";
+import { markupVariable, wrapVariable, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words } from "../src/flows";
 
 const v = (name: string) => ({ type: "expression" as const, arg: { type: "variable-reference" as const, name } });
 const t = (value: string) => ({ type: "text" as const, value });
@@ -26,6 +26,14 @@ describe("markup", () => {
     expect(markupLabel("icon")).toBe("<icon>");
     const markup = referenceMarkup(english);
     expect(markup.paired.map(item => item.label)).toEqual(["Bold like “{count} invitation”", "Link like “{email}”"]);
+  });
+});
+
+describe("markup around a variable", () => {
+  it("wraps the translation's variable like the reference", () => {
+    expect(markupVariable(english, "link")).toBe("email");
+    expect(markupVariable(english, "b")).toBeUndefined();
+    expect(wrapVariable([v("client"), t(" ønsker adgang")], { type: "markup-start", name: "b" }, "client")).toEqual([{ type: "markup-start", name: "b" }, v("client"), { type: "markup-end", name: "b" }, t(" ønsker adgang")]);
   });
 });
 

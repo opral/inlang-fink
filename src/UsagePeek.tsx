@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import type { Usage } from "./usage";
+import { highlight, splitAt } from "./highlight";
 
 const Arrow = ({ d }: { d: string }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
 
@@ -16,11 +17,18 @@ export function UsageCode({ usages, codeUrl, scope }: { usages: Usage[]; codeUrl
   const shown = scope && usage.path.startsWith(`${scope}/`) ? usage.path.slice(scope.length + 1) : usage.path;
   const page = (step: number) => setIndex((current + step + usages.length) % usages.length);
   return <div className="usage-code-block">
-    <pre className="usage-code" ref={code} tabIndex={0} aria-label={`Code in ${usage.path}, line ${usage.line}`}><code>{usage.snippet.lines.map((text, offset) => {
-      const line = usage.snippet.start + offset;
-      return line === usage.line
-        ? <span key={line} className="hit"><span className="ln" aria-hidden="true">{line}</span>{text.slice(0, usage.from)}<mark>{text.slice(usage.from, usage.to)}</mark>{text.slice(usage.to)}</span>
-        : <span key={line}><span className="ln" aria-hidden="true">{line}</span>{text || " "}</span>;
+    <pre className="usage-code" ref={code} tabIndex={0} aria-label={`Code in ${usage.path}, line ${usage.line}`} style={{ "--ln-width": `${String(usage.snippet.start + usage.snippet.lines.length - 1).length}ch` } as React.CSSProperties}><code>{usage.snippet.lines.map((text, offset) => {
+      const line = usage.snippet.start + offset, hit = line === usage.line;
+      const parts = splitAt(highlight(text), hit ? usage.from : -1, hit ? usage.to : -1);
+      // The call itself is one mark; the rest of the line keeps its highlighting.
+      const markedText = parts.filter(part => part.marked).map(part => part.token.text).join("");
+      let marked = false;
+      return <span key={line} className={hit ? "hit" : undefined}><span className="ln" aria-hidden="true">{line}</span>{text ? parts.map((part, index) => {
+        if (!part.marked) return <span key={index} className={part.token.kind && `tk-${part.token.kind}`}>{part.token.text}</span>;
+        if (marked) return null;
+        marked = true;
+        return <mark key={index}>{markedText}</mark>;
+      }) : " "}</span>;
     })}</code></pre>
     <div className="usage-code-foot">
       <a className="usage-path" href={`${codeUrl}/${encodeURI(usage.path).replace(/[#?]/g, encodeURIComponent)}#L${usage.line}`} target="_blank" rel="noreferrer" aria-label={`${usage.path}, line ${usage.line}, open on GitHub (new tab)`}>{shown}:{usage.line}</a>

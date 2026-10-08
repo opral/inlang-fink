@@ -47,6 +47,22 @@ export function referenceMarkup(source: MessageNested | undefined): { paired: { 
   return { paired, standalone };
 }
 
+/** The variable a reference markup wraps on its own (`<b>{client}</b>` → "client"), if any. */
+export function markupVariable(source: MessageNested | undefined, name: string): string | undefined {
+  for (const variant of source?.variants ?? []) {
+    const start = variant.pattern.findIndex(part => part.type === "markup-start" && part.name === name);
+    const inner = variant.pattern[start + 1], end = variant.pattern[start + 2];
+    if (start !== -1 && inner?.type === "expression" && inner.arg.type === "variable-reference" && end?.type === "markup-end" && end.name === name) return inner.arg.name;
+  }
+}
+
+/** Wraps the first `{variable}` of a pattern in markup, e.g. makes `{client}` bold like the reference. */
+export function wrapVariable(pattern: Pattern, start: MarkupStart, variable: string): Pattern {
+  const index = pattern.findIndex(part => part.type === "expression" && part.arg.type === "variable-reference" && part.arg.name === variable);
+  if (index === -1) return pattern;
+  return [...pattern.slice(0, index), structuredClone(start), pattern[index]!, { type: "markup-end", name: start.name }, ...pattern.slice(index + 1)];
+}
+
 /** Variables to suggest after "{": the reference's missing ones first, then used ones, then other inputs. */
 export function variableSuggestions(source: MessageNested | undefined, target: Pattern, declarations: Declaration[]): { name: string; hint?: string }[] {
   const reference = [...new Set((source?.variants ?? []).flatMap(variant => variableNames(variant.pattern)))];

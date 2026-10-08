@@ -24,6 +24,13 @@ import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree
 
 const DEFAULT_MESSAGE = "Update translations with Fink";
 const replacedNotice = (ids: string[]) => `${ids.length === 1 ? `Your edit to ${ids[0]} was` : `${ids.length} of your edits (${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ", …" : ""}) were`} replaced by newer changes on GitHub.`;
+/** The commit the active branch points at, to tell Fink's own edits from other writes. */
+async function headCommit(project: InlangProject): Promise<string> {
+  const branch = await project.lix.activeBranchId();
+  const result = await project.lix.execute("SELECT commit_id FROM lix_branch WHERE id = $1", [branch]);
+  return String((result.rows[0] as { commit_id?: unknown } | undefined)?.commit_id ?? "");
+}
+
 export default function App() {
   const [url, setUrl] = useState(() => new URLSearchParams(location.search).get("repo") ?? "");
   const [repo, setRepo] = useState<Repo>();
@@ -140,11 +147,50 @@ export default function App() {
   useEffect(() => setPage(0), [search, filter, todoKind, focus]);
   // Filtering re-renders up to 25 editor web components; wait until typing pauses.
   useEffect(() => { const timer = setTimeout(() => setSearch(searchInput.trim()), 150); return () => clearTimeout(timer); }, [searchInput]);
-  const enqueue = useCallback((task: () => Promise<void>) => {
+  // Undo and redo use Lix's history (lix_undo/lix_redo), limited to the edits made here: each edit
+  // records the commit it produced, and anything else that commits (sync, settings) resets the stack.
+  const undoState = useRef({ head: "", undo: 0, redo: 0 });
+  const [undoVersion, setUndoVersion] = useState(0);
+  const enqueue = useCallback((task: () => Promise<void>, undoable = true) => {
     pending.current++;
     setSaving(true);
-    queue.current = queue.current.then(task).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0); });
+    queue.current = queue.current.then(async () => {
+      const project = localRef.current?.project, state = undoState.current;
+      if (project && (await headCommit(project)) !== state.head) { state.undo = 0; state.redo = 0; }
+      await task();
+      if (!project) return;
+      state.head = await headCommit(project);
+      if (undoable) { state.undo++; state.redo = 0; } else { state.undo = 0; state.redo = 0; }
+    }).catch(error => { failure.current = true; report(error); }).finally(() => { pending.current--; setSaving(pending.current > 0); });
   }, [report]);
+  const stepHistory = useCallback((direction: "undo" | "redo") => {
+    const current = localRef.current;
+    if (!current) return;
+    queue.current = queue.current.then(async () => {
+      const state = undoState.current;
+      if ((await headCommit(current.project)) !== state.head || !(direction === "undo" ? state.undo : state.redo)) return;
+      await current.project.lix.execute(`SELECT commit_id FROM lix_${direction}()`);
+      state.head = await headCommit(current.project);
+      if (direction === "undo") { state.undo--; state.redo++; } else { state.redo--; state.undo++; }
+      await refresh(current);
+      // Editors ignore patterns they emitted themselves; after undo they must show the restored text.
+      setUndoVersion(value => value + 1);
+    }).catch(report);
+  }, [refresh, report]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase(), redo = (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+      if (key !== "z" && !redo) return;
+      // Ordinary inputs keep their own undo; translations and the page use the draft's history.
+      if ((event.target as Element | null)?.closest?.("input, textarea, select, dialog") || !local || view !== "edit" || reviewState) return;
+      event.preventDefault();
+      event.stopPropagation();
+      stepHistory(redo ? "redo" : "undo");
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [stepHistory, local, view, reviewState]);
   const discover = () => run(async () => {
     const parsed = parseRepository(url); parsed.branch = branch || undefined;
     const next = await api<RepoTree>(`github/tree?${repoQuery(parsed)}`);
@@ -336,7 +382,7 @@ export default function App() {
         // Drop removed languages from the focus; re-derive it if the source itself was removed.
         setFocus(previous => !previous || !settings.locales.includes(previous.source) ? undefined : { ...previous, targets: previous.targets.filter(locale => settings.locales.includes(locale)), all: previous.all || !previous.targets.some(locale => settings.locales.includes(locale)) });
       } finally { setSettingsRevision(value => value + 1); }
-    });
+    }, false);
   };
   useEffect(() => { if (local) setRecentPending(local.context, pendingCount); }, [local, pendingCount]);
   // Where each message is used in the app's code, at the commit the draft is based on. The bundled
@@ -620,7 +666,7 @@ export default function App() {
           <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} undoVersion={undoVersion} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

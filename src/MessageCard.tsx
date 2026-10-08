@@ -9,7 +9,7 @@ import { UsageCode } from "./UsagePeek";
 import { describeUsage, type Usage } from "./usage";
 import { languageName, type LanguageFocus } from "./languages";
 import { SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
-import { joinMessage, markupLabel, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
+import { joinMessage, markupLabel, markupVariable, wrapVariable, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
 import { seeded } from "./seeded";
 import { isMissing, type Issue } from "./issues";
 
@@ -31,6 +31,8 @@ type Props = {
   addMessage: (bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: Variant[] }) => void;
   restructure: (bundleId: string, messageId: string, next: Restructure) => void;
   machineTranslate: (request: MachineTranslationRequest) => void;
+  /** Changes after undo/redo so editors show the restored text. */
+  undoVersion?: number;
 };
 
 /** One status per card, most urgent first. */
@@ -76,6 +78,14 @@ function markupVerb(name: string, text: string) {
   if (label === "Bold") return `makes ${quoted} bold`;
   if (label === "Italic") return `puts ${quoted} in italics`;
   return `uses ${label} on ${quoted}`;
+}
+
+/** The one-click fix for markup around a variable: "Make {client} bold", "Link {email}". */
+function markupAction(name: string, variable: string) {
+  const label = markupLabel(name);
+  if (label === "Link") return `Link {${variable}}`;
+  if (label === "Bold" || label === "Italic" || label === "Underline") return `Make {${variable}} ${label.toLowerCase()}`;
+  return `Wrap {${variable}} in ${label}`;
 }
 
 /** Plural examples ("1, 21, 31…") for a selector, following its declaration to the plural annotation. */
@@ -155,7 +165,7 @@ function ComplexTranslation({ bundle, message, source, issues, variants, addVari
   </>;
 }
 
-export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
+export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate, undoVersion = 0 }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
@@ -194,7 +204,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const othersTodo = others.filter(locale => issues[locale]?.length).length;
   const usage = usages?.[0];
   const editorProps = (pattern: Pattern) => ({ markupOptions, variables: variableSuggestions(source, pattern, bundle.declarations) });
-  const editor = (key: string, variant: Variant, label: string) => <PatternEditor ref={element => { if (element) editors.current.set(key, element); else editors.current.delete(key); }}
+  const editor = (key: string, variant: Variant, label: string) => <PatternEditor key={`${variant.id}:${undoVersion}`} ref={element => { if (element) editors.current.set(key, element); else editors.current.delete(key); }}
     variant={variants.get(variant.id)} declarations={bundle.declarations} aria-label={label} {...editorProps(variant.pattern)} />;
   const setPattern = (variant: Variant, pattern: Pattern) => change({ entity: "variant", entityId: variant.id, newData: { ...variant, pattern } } as ChangeEventDetail);
   const notes = (key: string, variant: Variant, locale: string, exactNumber: boolean) => {
@@ -207,7 +217,12 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
       {found?.extra.map(({ name, suggestion }) => <p key={`e-${name}`} className="field-note defect">{`{${name}}`} isn't a variable in {sourceName}.{suggestion
         ? <> Did you mean {`{${suggestion}}`}? <button type="button" className="inline-link" onClick={() => setPattern(variant, renameVariable(variant.pattern, name, suggestion))}>Replace</button></>
         : <> <button type="button" className="inline-link" onClick={() => setPattern(variant, renameVariable(variant.pattern, name))}>Remove</button></>}</p>)}
-      {found?.markup.map(({ part, text }) => <p key={`k-${part.name}`} className="field-note defect">{sourceName} {markupVerb(part.name, text)}. Select the {languageName(locale)} words, then choose <b>{markupLabel(part.name)}</b>. <button type="button" className="inline-link" onClick={() => { target()?.wrapSelection(part, text || "text"); }}>Add {markupLabel(part.name).toLowerCase()} at the cursor</button></p>)}
+      {found?.markup.map(({ part, text }) => {
+        // Markup around a single variable the translation already has: wrap that variable.
+        const variable = markupVariable(source, part.name);
+        if (variable && variableNames(variant.pattern).includes(variable)) return <p key={`k-${part.name}`} className="field-note defect">{sourceName} {markupVerb(part.name, text)}. <button type="button" className="inline-link" onClick={() => setPattern(variant, wrapVariable(variant.pattern, part, variable))}>{markupAction(part.name, variable)}</button></p>;
+        return <p key={`k-${part.name}`} className="field-note defect">{sourceName} {markupVerb(part.name, text)}. Select the {languageName(locale)} words, then choose <b>{markupLabel(part.name)}</b>. <button type="button" className="inline-link" onClick={() => { target()?.wrapSelection(part, text || "text"); }}>Add {markupLabel(part.name).toLowerCase()} at the cursor</button></p>;
+      })}
       {found?.standalone.map(part => <p key={`s-${part.name}`} className="field-note defect">{sourceName} has a {markupLabel(part.name).toLowerCase()} here. <button type="button" className="inline-link" onClick={() => target()?.insertMarkup(part)}>Insert {markupLabel(part.name).toLowerCase()}</button></p>)}
     </>;
   };
@@ -285,7 +300,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
           onVariantMatch={event => setMatched((event as CustomEvent<{ variantId?: string }>).detail.variantId)} /></div>}
       </>;
     }
-    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
+    else cells = <div className="message-cell edit complex"><ComplexTranslation key={undoVersion} bundle={bundle} message={message} source={source} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
     return <div className="message-row" key={locale}>
       {localeCell(locale, localeIssues.length > 0)}
       <div className="message-target">{cells}</div>

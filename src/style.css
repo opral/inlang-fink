@@ -335,7 +335,17 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-card > .usage-code-block .usage-code { border-radius: 0; background: transparent; }
 .message-card > .usage-code-block .usage-code > code > span { background: var(--bg); }
 .message-card > .usage-code-block .usage-code > code > .hit { background: var(--subtle); }
-.message-card > .usage-code-block .usage-code .ln { width: 24px; padding: 0 14px 0 16px; }
+.message-card > .usage-code-block .usage-code .ln { box-sizing: content-box; width: var(--ln-width, 3ch); padding: 0 14px 0 16px; }
+/* Code peek syntax colours, kept quiet so the marked call stands out. */
+.usage-code .tk-comment { color: #a1a1aa; font-style: italic; }
+.usage-code .tk-string { color: #15803d; }
+.usage-code .tk-tag { color: #9333ea; }
+.usage-code .tk-attr { color: #b45309; }
+.usage-code .tk-keyword { color: #be185d; }
+.usage-code .tk-number { color: #0369a1; }
+.usage-code .tk-call { color: #1e40af; }
+.usage-code .tk-punct { color: #71717a; }
+.usage-code > code > span { color: #3f3f46; }
 .message-card > .usage-code-block .usage-code-foot { padding: 0 16px; }
 .inline-link { border: 0; background: transparent; box-shadow: none; padding: 4px 2px; margin: -4px 0; font: inherit; font-size: inherit; font-weight: 400; color: inherit; text-decoration: underline; text-decoration-color: #a1a1aa; text-underline-offset: 2px; }
 .inline-link:hover { background: transparent; color: var(--text); }
@@ -401,7 +411,7 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
   .chips button { flex-shrink: 0; }
   .message-target inlang-message-forms { overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; background: linear-gradient(to left, #0000000d, transparent 24px) right / 24px 100% no-repeat local, linear-gradient(to left, #00000014, transparent 16px) right / 16px 100% no-repeat scroll; }
   .usage-code { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .usage-code .ln { position: static; width: auto; min-width: 28px; }
+  .usage-code .ln { position: static; }
   .search-input { width: 100%; }
   .language-trigger { max-width: 100%; }
 }
