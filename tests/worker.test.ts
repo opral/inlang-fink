@@ -74,6 +74,20 @@ test("OAuth uses PKCE and relays sessions only to the preview that initiated log
   const rejected = await worker.fetch(new Request(`${origin}/api/auth/complete`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: "fink_oauth=wrong-nonce" }, body }), env);
   expect(rejected.status).toBe(403);
 });
+test("fink.inlang.com completes GitHub login on itself; workers.dev origins use the stable callback Worker", async () => {
+  const env = { GITHUB_CLIENT_ID: "test-client", GITHUB_CLIENT_SECRET: "test-secret", SESSION_SECRET: "a secure test secret with at least 32 characters", GITHUB_CALLBACK_ORIGIN: "https://fink-migration-preview.opral.workers.dev", WORKERS_SUBDOMAIN: "opral" } as Env;
+  const redirect = async (origin: string) => new URL(new URL((await worker.fetch(new Request(`${origin}/api/auth/login`), env)).headers.get("Location")!).searchParams.get("redirect_uri")!);
+  expect((await redirect("https://fink.inlang.com")).href).toBe("https://fink.inlang.com/api/auth/callback");
+  expect((await redirect("https://fink.opral.workers.dev")).href).toBe("https://fink-migration-preview.opral.workers.dev/api/auth/callback");
+  expect((await redirect("https://fink-migration-preview.opral.workers.dev")).href).toBe("https://fink-migration-preview.opral.workers.dev/api/auth/callback");
+  expect((await worker.fetch(new Request("https://fink.example.com/api/auth/login"), env)).status).toBe(403);
+  const login = await worker.fetch(new Request("https://fink.inlang.com/api/auth/login"), env);
+  const state = new URL(login.headers.get("Location")!).searchParams.get("state")!;
+  const exchange = vi.fn().mockResolvedValue(Response.json({ access_token: "private-test-token" })); vi.stubGlobal("fetch", exchange);
+  const callback = await worker.fetch(new Request(`https://fink.inlang.com/api/auth/callback?${new URLSearchParams({ state, code: "test-code" })}`), env);
+  expect(JSON.parse(exchange.mock.calls[0][1].body).redirect_uri).toBe("https://fink.inlang.com/api/auth/callback");
+  expect(new URL(callback.headers.get("Location")!).origin).toBe("https://fink.inlang.com");
+});
 test("push accepts core settings and new locale resources together, rejects plugin path edits", async () => {
   const before = { baseLocale: "en", locales: ["en"], modules: ["https://example.com/plugin.js"], "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } };
   const settingsFile = { encoding: "base64", size: 150, content: btoa(JSON.stringify(before)) };

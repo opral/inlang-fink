@@ -52,3 +52,8 @@ test("invalid targets and missing credentials fail before invoking Wrangler", ()
   expect(result.stderr).toContain("Missing GITHUB_CLIENT_SECRET");
   expect(existsSync(capture)).toBe(false);
 });
+test("wrangler.jsonc attaches no route or custom domain, because every Fink Worker deploys with it", () => {
+  // PR previews and the callback Worker deploy with this file too, and Wrangler in CI overrides
+  // existing domains and DNS records without asking. fink.inlang.com is attached to `fink` only.
+  expect(readFileSync(resolve("wrangler.jsonc"), "utf8")).not.toMatch(/"(routes?|domains?)"\s*:/);
+});

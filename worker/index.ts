@@ -4,11 +4,21 @@ import { extractSource, isSourcePath } from "./source";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 type LoginState = { purpose: "oauth"; expires: number; nonce: string; origin: string; verifier: string };
 type Relay = { purpose: "relay"; expires: number; nonce: string; session: string; origin: string };
-function callbackOrigin(request: Request, env: Env) { return env.GITHUB_CALLBACK_ORIGIN || new URL(request.url).origin; }
+/** Production custom domain. Its own `/api/auth/callback` must be a callback URL of the GitHub App. */
+const PRODUCTION_ORIGIN = "https://fink.inlang.com";
+/**
+ * The production domain completes GitHub login on itself. Every other origin (workers.dev URLs,
+ * PR previews) uses the stable callback Worker in GITHUB_CALLBACK_ORIGIN, which relays the sealed
+ * session back to the origin that started the login. So DNS can move without a config change.
+ */
+function callbackOrigin(request: Request, env: Env) {
+  const origin = new URL(request.url).origin;
+  return origin === PRODUCTION_ORIGIN ? origin : env.GITHUB_CALLBACK_ORIGIN || origin;
+}
 function allowedOrigin(origin: string, request: Request, env: Env) {
   if (origin === callbackOrigin(request, env)) return true;
   const url = new URL(origin);
-  if (url.protocol === "https:" && (url.hostname === "fink.inlang.com" || (!!env.WORKERS_SUBDOMAIN && url.hostname === `fink.${env.WORKERS_SUBDOMAIN}.workers.dev`))) return true;
+  if (url.protocol === "https:" && (url.origin === PRODUCTION_ORIGIN || (!!env.WORKERS_SUBDOMAIN && url.hostname === `fink.${env.WORKERS_SUBDOMAIN}.workers.dev`))) return true;
   return url.protocol === "https:" && !!env.WORKERS_SUBDOMAIN && new RegExp(`^fink-pr-[0-9]+\\.${String(env.WORKERS_SUBDOMAIN).replace(/\./g, "\\.")}\\.workers\\.dev$`).test(url.hostname);
 }
 async function auth(request: Request, env: Env, url: URL): Promise<Response | undefined> {
