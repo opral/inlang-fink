@@ -1,14 +1,19 @@
 import type { SourceFile, UsageReference } from "@inlang/sdk/browser";
+import { isGeneratedPath, isMarkup, mayCallMessages, mentionsMessages } from "./sourcePaths";
 
 // Where messages are used in the app's code. The inlang SDK finds the references
 // (`findUsages`, from the m-function matcher's analysis); Fink adds a snippet and a role for translators.
 export type Usage = { path: string; line: number; from: number; to: number; snippet: { start: number; lines: string[] }; role?: string };
 const SNIPPET_WIDTH = 240;
 
-/** Code a usage analysis can read; generated Paraglide output and dependencies are left out. */
+/**
+ * The files a usage analysis gets: code, and markup that mentions messages (the analysis reports
+ * it as unsupported, so unused messages aren't claimed). Generated Paraglide output, build output
+ * and dependencies are left out.
+ */
 export function sourceSnapshot(files: Record<string, string>): SourceFile[] {
   return Object.entries(files)
-    .filter(([path]) => /\.(?:[cm]?[jt]sx?|svelte|vue|astro)$/i.test(path) && !/\.d\.[cm]?ts$/i.test(path) && !/(^|\/)(node_modules|paraglide|dist|build|\.svelte-kit)\//.test(path))
+    .filter(([path, content]) => mayCallMessages(path) && !isGeneratedPath(path) && (!isMarkup(path) || mentionsMessages(content)))
     .map(([path, content]) => ({ path, content }));
 }
 

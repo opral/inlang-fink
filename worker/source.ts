@@ -1,13 +1,14 @@
 import { HttpError } from "./auth";
+import { isGeneratedPath, mayCallMessages } from "../src/sourcePaths";
 
-/** App source that can reference messages; generated, test and dependency files are skipped. */
+/** App source and markup that can reference messages; generated, test and dependency files are skipped. */
 export function isSourcePath(path: string, scope: string): boolean {
   if (scope && !path.startsWith(`${scope}/`)) return false;
-  if (!/\.(svelte|vue|astro|[cm]?[jt]sx?)$/.test(path) || /\.d\.[cm]?ts$/.test(path)) return false;
+  if (!mayCallMessages(path) || isGeneratedPath(path)) return false;
   if (/\.(test|spec|stories)\.[^/]+$/.test(path)) return false;
   const parts = path.split("/");
   if (parts.some(part => !part || part === "." || part === "..")) return false;
-  return !parts.some(part => ["node_modules", "paraglide", "dist", ".svelte-kit", ".next", ".output", "__tests__", "__mocks__", "tests", "test", "e2e", "cypress", "playwright", "coverage"].includes(part));
+  return !parts.some(part => ["__tests__", "__mocks__", "tests", "test", "e2e", "cypress", "playwright"].includes(part));
 }
 
 const MAX_FILE = 512 * 1024;

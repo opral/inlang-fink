@@ -84,3 +84,14 @@ test("long lines are cut to a window around the call", async () => {
   expect(line.length).toBeLessThan(260);
   expect(line.slice(usage.from, usage.to)).toBe("m.far_right()");
 });
+
+test("only generated and output roots are left out; markup that mentions messages makes usage incomplete", async () => {
+  const paths = (files: Record<string, string>) => sourceSnapshot(files).map(file => file.path);
+  expect(paths({
+    "src/features/build/Page.tsx": "", "src/lib/dist/format.ts": "", "src/features/paraglide/Picker.tsx": "",
+    "dist/index.js": "", "packages/web/build/app.js": "", "src/lib/paraglide/runtime.js": "", "src/paraglide/messages/_index.js": "", "src/paraglide/messages.js": "",
+    "docs/intro.mdx": "import { m } from '../src/paraglide/messages.js';\n# {m.title()}", "README.md": "# My app", "public/index.html": "<h1>Hi</h1>",
+  })).toEqual(["src/features/build/Page.tsx", "src/lib/dist/format.ts", "src/features/paraglide/Picker.tsx", "docs/intro.mdx"]);
+  const { analysis } = await usages({ "docs/intro.mdx": "import { m } from '../src/paraglide/messages.js';\n# {m.title()}", "src/a.ts": "import { m } from './paraglide/messages.js'; m.other();" });
+  expect(analysis.status).toBe("incomplete");
+});

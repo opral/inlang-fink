@@ -45,3 +45,8 @@ test("truncated archives fail instead of returning partial source", async () => 
   expect(isSourcePath("src/../etc/x.ts", "")).toBe(false);
   expect(isSourcePath("e2e/login.ts", "")).toBe(false);
 });
+
+test("source paths keep app folders named build, dist or paraglide, and markup", () => {
+  for (const path of ["src/features/build/Page.tsx", "apps/web/src/dist/x.ts", "src/features/paraglide/Picker.tsx", "docs/intro.mdx", "src/routes/about.md"]) expect(isSourcePath(path, "")).toBe(true);
+  for (const path of ["build/index.js", "packages/web/dist/app.js", "src/lib/paraglide/runtime.js", "src/paraglide/messages/_index.js"]) expect(isSourcePath(path, "")).toBe(false);
+});
