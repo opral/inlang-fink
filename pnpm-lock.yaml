@@ -603,17 +603,17 @@ packages:
     os: [win32]
 
   '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz':
-    resolution: {integrity: sha512-GmJOt3UbBqfMBuGNVF1EjMT6+aF/UUc65npPMspPa+Akd4HbuGpHOsvjVgOPVlJScft62SdlsSvHR7tn8Xx/4A==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
+    resolution: {integrity: sha512-SXJT2cweLgF4x7C80nTS+cS0XK0DwpfMt6sos6QmtebgtzWAqwAj+tEBzUjPzjKcdrnQ2gCKlxYI1u6OEpdm6A==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
     version: 12.0.0
     peerDependencies:
-      '@inlang/sdk': 3.1.0
+      '@inlang/sdk': ^3.1.0
 
   '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz':
     resolution: {integrity: sha512-yaWYChBnPfV1vKX1wBHSQUn9kLSoYSmqU66lp+m24cnbi1wiHYoM40/yvcuQnkpy4izfX3JolV2jQaw3EUuHDg==, tarball: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz}
     version: 6.3.0
 
   '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
-    resolution: {integrity: sha512-B2eD9Sek3sQUY6HB6kYPGwD1iaH/BorBg8JjIMPrZkp2RDiOPkD8KV6whfNiyhrSq5F7cUv5pgG/8EhAvEnP3g==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
+    resolution: {integrity: sha512-KeLg9SWmJW2Fd1OnopAFzm2icowsFbo58nBTUBGJKymZlcgBE0OEtXvwuY3qNogeOBTT1uCc1THMbcqi+PWeFA==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
     version: 2.3.0-pr.4438
 
   '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
@@ -621,7 +621,7 @@ packages:
     version: 4.4.5
 
   '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
-    resolution: {integrity: sha512-wXxbYkQIH46ej1VJ3kx8DIljiw+RNTJG1dw0b4ADvaN1ethFUXke4+N5rpJ4ZOhZTh6wlXtkDViwODfIHMe+ug==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
+    resolution: {integrity: sha512-6UBo6ApS8K1fRh2FCVNCykFYwKH5fCFyAKzZVKrujclufbqWXQEUbnKKdUKWx8WSCqeD1bcyxJ3hFdZ4paKG+Q==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
     version: 3.1.0
     engines: {node: '>=20.0.0'}
 
