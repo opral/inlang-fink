@@ -603,13 +603,13 @@ packages:
     os: [win32]
 
   '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz':
-    resolution: {integrity: sha512-3ses4Hiv4EOQlMPNAr6z/4VYRQ7VtGVnwTZRKjxZi5qsh+926QXPDlempxmnJEQO5F3rgdnHX0mq/OiwHfZ1Pg==, tarball: file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz}
+    resolution: {integrity: sha512-M3VWmrvvjxEo0x6M1E2JBXwUDiZYsXw0+C4YfMz7AEz/jIFZVaYcbJx9dHT9ANSK9UPiD3AK4gcAq2rnSsFcYw==, tarball: file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz}
     version: 13.0.0
     peerDependencies:
       '@inlang/sdk': ^4.0.0
 
   '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz':
-    resolution: {integrity: sha512-o/7EOsXpkMNh/7L2lAsvQ5dvrHY9ihxm3GuoaMjms3rCMv0l2sryZAGtt3O3NnSBP6v4X992dGKWguKbx+8c6Q==, tarball: file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz}
+    resolution: {integrity: sha512-qybug/l+WZUqKVWYzbr5orlZlFE//dEUomEwP+/PyGWdIxOymmwRQETDHEyPQETS0bz2b5N1+STgx2zM7aDQmQ==, tarball: file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz}
     version: 6.4.0
 
   '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz':
@@ -617,11 +617,11 @@ packages:
     version: 2.3.0
 
   '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz':
-    resolution: {integrity: sha512-aeSyHlwJnSAzgniSEjg1Z3WbFEt51i/YycVX77ORUO2eAm7K6LxqewgcNURe+ylXr4lYHwdQF1GxSTTtQ2IbwA==, tarball: file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz}
+    resolution: {integrity: sha512-CBPIhbGa5vSFPPZ6X/D657z3P7ZYTHnrvtDEQkFOd6zrURvU+f9+jpYSHOpifF0C1AA586ameES6syu3etfDdA==, tarball: file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz}
     version: 4.5.0
 
   '@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz':
-    resolution: {integrity: sha512-rruP7Yc2J3YSAnd7S5IsILz1cwGCm1sZbtKiRWW9r3vC3h31FQam6SqwtbW6Y1LJwaMTvAAWoLlLnrPGqDtQaw==, tarball: file:vendor/inlang-sdk-4.0.0-pr.4436.tgz}
+    resolution: {integrity: sha512-J5uCxusuaMC2452URCmvHvBpYbR8HTtx3VL2ItdmojoGifD0bqhxOssKYicFI3aysaCabijdSzdiMG21bt8c8Q==, tarball: file:vendor/inlang-sdk-4.0.0-pr.4436.tgz}
     version: 4.0.0
     engines: {node: '>=20.0.0'}
 
@@ -1191,11 +1191,6 @@ packages:
 
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
-
-  flat@6.0.1:
-    resolution: {integrity: sha512-/3FfIa8mbrg3xE7+wAhWeV+bd7L2Mof+xtZb5dRDKZ+wDvYJK4WDYeIOuOhre5Yv5aQObZrlbRmk3RTSiuQBtw==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -2084,7 +2079,6 @@ snapshots:
     dependencies:
       '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@sinclair/typebox': 0.31.30
-      flat: 6.0.1
 
   '@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz':
     dependencies:
@@ -2605,8 +2599,6 @@ snapshots:
   fflate@0.4.9: {}
 
   fflate@0.8.3: {}
-
-  flat@6.0.1: {}
 
   fsevents@2.3.3:
     optional: true
