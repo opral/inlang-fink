@@ -5,14 +5,14 @@ import type { CheckDiagnostic } from "@inlang/sdk/browser";
 export type Issue = Exclude<CheckDiagnostic, { checkId: "unused-message" }>;
 export type IssueKind = "missing-translation" | "missing-form" | "empty-form" | "placeholder";
 /**
- * The SDK's missing-selector (opral/inlang#4438): the reference chooses by an input (`name`, through
- * its `selector`) that this translation has no selector for. Typed here so it also works with an
- * SDK that doesn't report it yet.
+ * The SDK's missing-selector: the reference chooses by an input (`name`, through its `selector`)
+ * that this translation has no selector for; `values` are the select values or exact numbers it
+ * can't express (empty for a plural).
  */
-export type MissingSelector = { checkId: "missing-selector"; locale?: string; messageId: string; name: string; selector: string; values?: string[] };
+export type MissingSelector = Extract<Issue, { checkId: "missing-selector" }>;
 /** The reference's exact numbers (ICU =0) this translation has no exact-number selector for, if that's what's missing. */
-export const missingNumbers = (issue: MissingSelector) => issue.values?.length && issue.values.every(value => /^-?\d+(\.\d+)?$/.test(value)) ? issue.values : undefined;
-export const missingSelector = (issue: { checkId: string }): MissingSelector | undefined => issue.checkId === "missing-selector" ? issue as unknown as MissingSelector : undefined;
+export const missingNumbers = (issue: MissingSelector) => issue.values.length && issue.values.every(value => /^-?\d+(\.\d+)?$/.test(value)) ? issue.values : undefined;
+export const missingSelector = (issue: Issue): MissingSelector | undefined => issue.checkId === "missing-selector" ? issue : undefined;
 export const issueKind = (issue: Issue): IssueKind =>
   issue.checkId === "missing-translation" || issue.checkId === "empty-translation" ? "missing-translation"
   : issue.checkId === "missing-variant" || missingSelector(issue) ? "missing-form"
