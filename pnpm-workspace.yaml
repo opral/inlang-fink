@@ -2,10 +2,18 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
-# Unreleased inlang packages, linked to local checkouts of their pull requests until they are released:
-# @inlang/sdk from opral/inlang#4438 (branch codex/project-checks-fixes) in ../inlang-project-checks and
-# @inlang/editor-component from opral/inlang#4437 (codex/composable-editor-components) in
-# ../inlang-editor-components. Every dependent uses the same SDK. Replace the links with the released
-# versions once #4438 and #4437 ship: CI and the Worker deploy have no such checkouts.
+# Unreleased inlang packages, vendored as `pnpm pack` tarballs of their pull requests until they are
+# released (replace them with the released versions before merging):
+# - @inlang/sdk from opral/inlang#4438 (branch codex/project-checks-fixes)
+# - @inlang/plugin-m-function-matcher from opral/inlang#4438
+# - @inlang/editor-component from opral/inlang#4437 (codex/composable-editor-components)
+# - @inlang/plugin-message-format and @inlang/plugin-i18next from opral/inlang#4440
+#   (codex/plugins-exact-numbers); same version numbers as the npm releases, hence the -pr suffix
+# Every dependent (component, plugins, matcher) uses the vendored SDK through the override below.
+#
+# Regenerate a tarball after its PR changed: check out the branch, build the package
+# (`pnpm --filter @inlang/sdk build`, `pnpm --filter @inlang/editor-component build`, …),
+# `pnpm pack --pack-destination <dir>` in its package directory, copy it to vendor/ under the
+# same file name, then `pnpm install` here (the lockfile pins the tarball's integrity).
 overrides:
-  "@inlang/sdk": "link:../inlang-project-checks/packages/sdk"
+  "@inlang/sdk": "file:vendor/inlang-sdk-3.1.0-pr.4438.tgz"

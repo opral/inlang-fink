@@ -5,30 +5,30 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@inlang/sdk': link:../inlang-project-checks/packages/sdk
+  '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
 
 importers:
 
   .:
     dependencies:
       '@inlang/editor-component':
-        specifier: link:../inlang-editor-components/packages/ui-components/editor-component
-        version: link:../inlang-editor-components/packages/ui-components/editor-component
+        specifier: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz
+        version: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)
       '@inlang/plugin-i18next':
-        specifier: 6.3.0
-        version: 6.3.0
+        specifier: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz
+        version: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz
       '@inlang/plugin-m-function-matcher':
         specifier: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz
         version: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz
       '@inlang/plugin-message-format':
-        specifier: 4.4.5
-        version: 4.4.5
+        specifier: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz
+        version: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz
       '@inlang/sdk':
-        specifier: link:../inlang-project-checks/packages/sdk
-        version: link:../inlang-project-checks/packages/sdk
+        specifier: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+        version: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
       '@inlang/settings-component':
         specifier: 5.0.0
-        version: 5.0.0(@inlang/sdk@inlang-project-checks+packages+sdk)(@types/react@19.3.0)
+        version: 5.0.0(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)
       '@lit/react':
         specifier: ^1.0.8
         version: 1.0.8(@types/react@19.3.0)
@@ -602,18 +602,32 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@inlang/plugin-i18next@6.3.0':
-    resolution: {integrity: sha512-xVHFtXaNJPVrN5NMbhSzyhLvvNPWkYvjmonN4ie/BAu8etGk0JzP0aqtH/B4ItQBjWn90r8PjuqGAbMDWH/TyA==}
+  '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz':
+    resolution: {integrity: sha512-dZQSy1P559OHfvyufqnOQHpeh5NILYPsIVmywyqQybSVTZXOdm8m5LPXFliwXS1luebWoZx5kmP8grZ0Mx7m5w==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
+    version: 12.0.0
+    peerDependencies:
+      '@inlang/sdk': 3.1.0
+
+  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz':
+    resolution: {integrity: sha512-yaWYChBnPfV1vKX1wBHSQUn9kLSoYSmqU66lp+m24cnbi1wiHYoM40/yvcuQnkpy4izfX3JolV2jQaw3EUuHDg==, tarball: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz}
+    version: 6.3.0
 
   '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
     resolution: {integrity: sha512-B2eD9Sek3sQUY6HB6kYPGwD1iaH/BorBg8JjIMPrZkp2RDiOPkD8KV6whfNiyhrSq5F7cUv5pgG/8EhAvEnP3g==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
     version: 2.3.0-pr.4438
 
-  '@inlang/plugin-message-format@4.4.5':
-    resolution: {integrity: sha512-g3WpG00mx3Wq/3zulz4uuT+HhdBRB7UMz2hVbfSm+E4RJHXNYyFyvS0elPETX7gEz8yiTd0KbyukZGJHetmkZA==}
+  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
+    resolution: {integrity: sha512-thf16xVJMMv5vUU9qXza/piQUVxHQz9s7tSFyiDnsdXxicANC+bzBbTGzvztAVok3B2DMec5XS6KGLfARHgTug==, tarball: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz}
+    version: 4.4.5
+
+  '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
+    resolution: {integrity: sha512-xKW7KsQvIwCfSoF/ACj8CcekXCywGXpCQg68TdGf4kb42E592EBcgZximh2Oi6EIW2i2Zc4aZYja59RF0goZWQ==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
+    version: 3.1.0
+    engines: {node: '>=20.0.0'}
 
   '@inlang/settings-component@5.0.0':
     resolution: {integrity: sha512-Kr0FrUFIhoHNU07HiEQk3z7gSBv1XLUrmKVagX7EcRb0nUov5BTXbcCl4GJQuErN9JAcKasUJwsK9Rr3RZJoWg==}
+    version: 5.0.0
     peerDependencies:
       '@inlang/sdk': '*'
 
@@ -635,6 +649,27 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
+
+  '@lexical/clipboard@0.16.1':
+    resolution: {integrity: sha512-0dWs/SwKS5KPpuf6fUVVt9vSCl6HAqcDGhSITw/okv0rrIlXTUT6WhVsMJtXfFxTyVvwMeOecJHvQH3i/jRQtA==}
+
+  '@lexical/html@0.16.1':
+    resolution: {integrity: sha512-vbtAdCvQ3PaAqa5mFmtmrvbiAvjCu1iXBAJ0bsHqFXCF2Sba5LwHVe8dUAOTpfEZEMbiHfjul6b5fj4vNPGF2A==}
+
+  '@lexical/list@0.16.1':
+    resolution: {integrity: sha512-i9YhLAh5N6YO9dP+R1SIL9WEdCKeTiQQYVUzj84vDvX5DIBxMPUjTmMn3LXu9T+QO3h1s2L/vJusZASrl45eAw==}
+
+  '@lexical/plain-text@0.16.1':
+    resolution: {integrity: sha512-GjY4ylrBZIaAVIF8IFnmW0XGyHAuRmWA6gKB8iTTlsjgFrCHFIYC74EeJSp309O0Hflg9rRBnKoX1TYruFHVwA==}
+
+  '@lexical/selection@0.16.1':
+    resolution: {integrity: sha512-+nK3RvXtyQvQDq7AZ46JpphmM33pwuulwiRfeXR5T9iFQTtgWOEjsAi/KKX7vGm70BxACfiSxy5QCOgBWFwVJg==}
+
+  '@lexical/table@0.16.1':
+    resolution: {integrity: sha512-GWb0/MM1sVXpi1p2HWWOBldZXASMQ4c6WRNYnRmq7J/aB5N66HqQgJGKp3m66Kz4k1JjhmZfPs7F018qIBhnFQ==}
+
+  '@lexical/utils@0.16.1':
+    resolution: {integrity: sha512-BVyJxDQi/rIxFTDjf2zE7rMDKSuEaeJ4dybHRa/hRERt85gavGByQawSLeQlTjLaYLVsy+x7wCcqh2fNhlLf0g==}
 
   '@lit-labs/ssr-dom-shim@1.6.0':
     resolution: {integrity: sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ==}
@@ -1191,6 +1226,13 @@ packages:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
 
+  kysely@0.28.17:
+    resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
+    engines: {node: '>=20.0.0'}
+
+  lexical@0.16.1:
+    resolution: {integrity: sha512-+R05d3+N945OY8pTUjTqQrWoApjC+ctzvjnmNETtx9WmVAaiW0tQVG+AYLt5pDGY8dQXtd4RPorvnxBTECt9SA==}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -1453,6 +1495,14 @@ packages:
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
+
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
+    hasBin: true
+
+  uuid@14.0.2:
+    resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
+    hasBin: true
 
   vite@8.3.3:
     resolution: {integrity: sha512-cTAldKPImjg6c+gk48U19POPn3GCBzZwpdsN8ZMEEcbpes+6/wvfqUd0C2y3qYY4wsj8PwgFwrZ/1jBPVttMSg==}
@@ -2002,28 +2052,50 @@ snapshots:
   '@img/sharp-win32-x64@0.35.4':
     optional: true
 
-  '@inlang/plugin-i18next@6.3.0':
+  '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)':
     dependencies:
-      '@inlang/sdk': link:../inlang-project-checks/packages/sdk
+      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@lexical/plain-text': 0.16.1
+      '@lexical/utils': 0.16.1
+      '@lit/task': 1.0.3
+      '@shoelace-style/shoelace': 2.14.0(@types/react@19.3.0)
+      '@sinclair/typebox': 0.31.28
+      chroma-js: 2.6.0
+      lexical: 0.16.1
+      lit: 3.3.3
+      uuid: 11.1.1
+    transitivePeerDependencies:
+      - '@types/react'
+
+  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz':
+    dependencies:
+      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
       '@sinclair/typebox': 0.31.28
 
   '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
     dependencies:
       '@babel/parser': 7.29.9
-      '@inlang/sdk': link:../inlang-project-checks/packages/sdk
+      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
       svelte: 5.57.2
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@inlang/plugin-message-format@4.4.5':
+  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
     dependencies:
-      '@inlang/sdk': link:../inlang-project-checks/packages/sdk
+      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
       '@sinclair/typebox': 0.31.30
       flat: 6.0.1
 
-  '@inlang/settings-component@5.0.0(@inlang/sdk@inlang-project-checks+packages+sdk)(@types/react@19.3.0)':
+  '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
     dependencies:
-      '@inlang/sdk': link:../inlang-project-checks/packages/sdk
+      '@lix-js/sdk': 0.19.0
+      '@sinclair/typebox': 0.31.30
+      kysely: 0.28.17
+      uuid: 14.0.2
+
+  '@inlang/settings-component@5.0.0(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)':
+    dependencies:
+      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
       '@lit/task': 1.0.3
       '@shoelace-style/shoelace': 2.14.0(@types/react@19.3.0)
       '@sinclair/typebox': 0.31.28
@@ -2055,6 +2127,48 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@lexical/clipboard@0.16.1':
+    dependencies:
+      '@lexical/html': 0.16.1
+      '@lexical/list': 0.16.1
+      '@lexical/selection': 0.16.1
+      '@lexical/utils': 0.16.1
+      lexical: 0.16.1
+
+  '@lexical/html@0.16.1':
+    dependencies:
+      '@lexical/selection': 0.16.1
+      '@lexical/utils': 0.16.1
+      lexical: 0.16.1
+
+  '@lexical/list@0.16.1':
+    dependencies:
+      '@lexical/utils': 0.16.1
+      lexical: 0.16.1
+
+  '@lexical/plain-text@0.16.1':
+    dependencies:
+      '@lexical/clipboard': 0.16.1
+      '@lexical/selection': 0.16.1
+      '@lexical/utils': 0.16.1
+      lexical: 0.16.1
+
+  '@lexical/selection@0.16.1':
+    dependencies:
+      lexical: 0.16.1
+
+  '@lexical/table@0.16.1':
+    dependencies:
+      '@lexical/utils': 0.16.1
+      lexical: 0.16.1
+
+  '@lexical/utils@0.16.1':
+    dependencies:
+      '@lexical/list': 0.16.1
+      '@lexical/selection': 0.16.1
+      '@lexical/table': 0.16.1
+      lexical: 0.16.1
 
   '@lit-labs/ssr-dom-shim@1.6.0': {}
 
@@ -2511,6 +2625,10 @@ snapshots:
 
   kleur@4.1.5: {}
 
+  kysely@0.28.17: {}
+
+  lexical@0.16.1: {}
+
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -2802,6 +2920,10 @@ snapshots:
       browserslist: 4.29.3
       escalade: 3.2.0
       picocolors: 1.1.1
+
+  uuid@11.1.1: {}
+
+  uuid@14.0.2: {}
 
   vite@8.3.3(@types/node@22.20.5)(esbuild@0.28.1):
     dependencies:
