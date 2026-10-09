@@ -2,18 +2,19 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
-# Unreleased inlang packages, vendored as `pnpm pack` tarballs of their pull requests until they are
-# released (replace them with the released versions before merging):
-# - @inlang/sdk from opral/inlang#4438 (branch codex/project-checks-fixes)
-# - @inlang/plugin-m-function-matcher from opral/inlang#4438
-# - @inlang/editor-component from opral/inlang#4437 (codex/composable-editor-components)
-# - @inlang/plugin-message-format and @inlang/plugin-i18next from opral/inlang#4440
-#   (codex/plugins-exact-numbers); same version numbers as the npm releases, hence the -pr suffix
-# Every dependent (component, plugins, matcher) uses the vendored SDK through the override below.
+# Unreleased inlang packages, vendored as `pnpm pack` tarballs of the release PR opral/inlang#4436
+# ("Version Packages", head 55c52602, = main at 696c28a3 plus the version bumps) until they are on
+# npm. The tarballs carry the exact versions that will be published: @inlang/sdk 4.0.0,
+# @inlang/editor-component 13.0.0, @inlang/plugin-message-format 4.5.0, @inlang/plugin-i18next 6.4.0
+# and @inlang/plugin-m-function-matcher 2.3.0. The plugins depend on "@inlang/sdk": "4.0.0", which
+# npm does not have yet, hence the override below.
 #
-# Regenerate a tarball after its PR changed: check out the branch, build the package
+# Once they are published, run `node scripts/use-released-inlang.mjs` (switches package.json to the
+# released versions, removes this override and vendor/, then `pnpm install`).
+#
+# Regenerate a tarball after the release PR changed: check out its head, build the package
 # (`pnpm --filter @inlang/sdk build`, `pnpm --filter @inlang/editor-component build`, …),
-# `pnpm pack --pack-destination <dir>` in its package directory, copy it to vendor/ under the
-# same file name, then `pnpm install` here (the lockfile pins the tarball's integrity).
+# `pnpm pack --pack-destination <dir>` in its package directory, copy it to vendor/ with the
+# `-pr.4436` suffix, then `pnpm install` here (the lockfile pins the tarball's integrity).
 overrides:
-  "@inlang/sdk": "file:vendor/inlang-sdk-3.1.0-pr.4438.tgz"
+  "@inlang/sdk": "file:vendor/inlang-sdk-4.0.0-pr.4436.tgz"

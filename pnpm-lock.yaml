@@ -5,30 +5,30 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+  '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
 
 importers:
 
   .:
     dependencies:
       '@inlang/editor-component':
-        specifier: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz
-        version: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)
+        specifier: file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz
+        version: file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz(@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz)(@types/react@19.3.0)
       '@inlang/plugin-i18next':
-        specifier: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz
-        version: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz
+        specifier: file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz
+        version: file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz
       '@inlang/plugin-m-function-matcher':
-        specifier: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz
-        version: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz
+        specifier: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz
+        version: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz
       '@inlang/plugin-message-format':
-        specifier: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz
-        version: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz
+        specifier: file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz
+        version: file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz
       '@inlang/sdk':
-        specifier: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
-        version: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+        specifier: file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
+        version: file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@inlang/settings-component':
         specifier: 5.0.0
-        version: 5.0.0(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)
+        version: 5.0.0(@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz)(@types/react@19.3.0)
       '@lit/react':
         specifier: ^1.0.8
         version: 1.0.8(@types/react@19.3.0)
@@ -602,27 +602,27 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz':
-    resolution: {integrity: sha512-QjUQ1vdoAuOsAboKvFrcWV2oUnzPSuFP+DrYnp/gpsMQiGPEN0UNqhlVKCqdBmiMGCU1ZbuH0lQVrRghH/OjFg==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
-    version: 12.0.0
+  '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz':
+    resolution: {integrity: sha512-3ses4Hiv4EOQlMPNAr6z/4VYRQ7VtGVnwTZRKjxZi5qsh+926QXPDlempxmnJEQO5F3rgdnHX0mq/OiwHfZ1Pg==, tarball: file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz}
+    version: 13.0.0
     peerDependencies:
-      '@inlang/sdk': ^3.1.0
+      '@inlang/sdk': ^4.0.0
 
-  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz':
-    resolution: {integrity: sha512-yaWYChBnPfV1vKX1wBHSQUn9kLSoYSmqU66lp+m24cnbi1wiHYoM40/yvcuQnkpy4izfX3JolV2jQaw3EUuHDg==, tarball: file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz}
-    version: 6.3.0
+  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz':
+    resolution: {integrity: sha512-o/7EOsXpkMNh/7L2lAsvQ5dvrHY9ihxm3GuoaMjms3rCMv0l2sryZAGtt3O3NnSBP6v4X992dGKWguKbx+8c6Q==, tarball: file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz}
+    version: 6.4.0
 
-  '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
-    resolution: {integrity: sha512-MuNUuU+zdSs26p1CAUlcCY+/4PdA9mUw87ujt5z6dxc9jMwFNZ77aLeriTpCADk0QMTpK7subMS7V+oHfy7Emw==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
-    version: 2.3.0-pr.4438
+  '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz':
+    resolution: {integrity: sha512-0iucxBbCKjLT6e6lxuc54ufFs5fSE7NcmdamPA9BM3kDUS2+tqBoY+czDEOkCm4N0g4ey3bUbCPG/oXPw9ncIg==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz}
+    version: 2.3.0
 
-  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
-    resolution: {integrity: sha512-thf16xVJMMv5vUU9qXza/piQUVxHQz9s7tSFyiDnsdXxicANC+bzBbTGzvztAVok3B2DMec5XS6KGLfARHgTug==, tarball: file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz}
-    version: 4.4.5
+  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz':
+    resolution: {integrity: sha512-aeSyHlwJnSAzgniSEjg1Z3WbFEt51i/YycVX77ORUO2eAm7K6LxqewgcNURe+ylXr4lYHwdQF1GxSTTtQ2IbwA==, tarball: file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz}
+    version: 4.5.0
 
-  '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
-    resolution: {integrity: sha512-nBSaQcsZS+P5IRYtKvsMHCYLkBcpK6myXzPX1TINbTiEYnlHP8NsRYFFPheHNO6QRfkm8udGLiKJXICjHJTwCw==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
-    version: 3.1.0
+  '@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz':
+    resolution: {integrity: sha512-rruP7Yc2J3YSAnd7S5IsILz1cwGCm1sZbtKiRWW9r3vC3h31FQam6SqwtbW6Y1LJwaMTvAAWoLlLnrPGqDtQaw==, tarball: file:vendor/inlang-sdk-4.0.0-pr.4436.tgz}
+    version: 4.0.0
     engines: {node: '>=20.0.0'}
 
   '@inlang/settings-component@5.0.0':
@@ -2052,9 +2052,9 @@ snapshots:
   '@img/sharp-win32-x64@0.35.4':
     optional: true
 
-  '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)':
+  '@inlang/editor-component@file:vendor/inlang-editor-component-13.0.0-pr.4436.tgz(@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz)(@types/react@19.3.0)':
     dependencies:
-      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@lexical/plain-text': 0.16.1
       '@lexical/utils': 0.16.1
       '@lit/task': 1.0.3
@@ -2067,35 +2067,35 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.3.0-pr.4440.tgz':
+  '@inlang/plugin-i18next@file:vendor/inlang-plugin-i18next-6.4.0-pr.4436.tgz':
     dependencies:
-      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@sinclair/typebox': 0.31.28
 
-  '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
+  '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4436.tgz':
     dependencies:
       '@babel/parser': 7.29.9
-      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       svelte: 5.57.2
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
+  '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.5.0-pr.4436.tgz':
     dependencies:
-      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@sinclair/typebox': 0.31.30
       flat: 6.0.1
 
-  '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
+  '@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz':
     dependencies:
       '@lix-js/sdk': 0.19.0
       '@sinclair/typebox': 0.31.30
       kysely: 0.28.17
       uuid: 14.0.2
 
-  '@inlang/settings-component@5.0.0(@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz)(@types/react@19.3.0)':
+  '@inlang/settings-component@5.0.0(@inlang/sdk@file:vendor/inlang-sdk-4.0.0-pr.4436.tgz)(@types/react@19.3.0)':
     dependencies:
-      '@inlang/sdk': file:vendor/inlang-sdk-3.1.0-pr.4438.tgz
+      '@inlang/sdk': file:vendor/inlang-sdk-4.0.0-pr.4436.tgz
       '@lit/task': 1.0.3
       '@shoelace-style/shoelace': 2.14.0(@types/react@19.3.0)
       '@sinclair/typebox': 0.31.28
