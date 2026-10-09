@@ -603,7 +603,7 @@ packages:
     os: [win32]
 
   '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz':
-    resolution: {integrity: sha512-SXJT2cweLgF4x7C80nTS+cS0XK0DwpfMt6sos6QmtebgtzWAqwAj+tEBzUjPzjKcdrnQ2gCKlxYI1u6OEpdm6A==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
+    resolution: {integrity: sha512-oXfnp85z19LEr+U8fY7rfMdGCyfBIfr9032mrDih0UDs3H07CARqd9BIPFLpwowPwtFYklpgg2CS72ixe/pm/A==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
     version: 12.0.0
     peerDependencies:
       '@inlang/sdk': ^3.1.0
@@ -613,7 +613,7 @@ packages:
     version: 6.3.0
 
   '@inlang/plugin-m-function-matcher@file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz':
-    resolution: {integrity: sha512-KeLg9SWmJW2Fd1OnopAFzm2icowsFbo58nBTUBGJKymZlcgBE0OEtXvwuY3qNogeOBTT1uCc1THMbcqi+PWeFA==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
+    resolution: {integrity: sha512-2JL4WnHF1ynKJoIaGqrtOUDhvQzYDzYfzC+0WBCw5wKW7lpxcV50hK8YeY8ZO/yUd3Oc8wrWnqxbI8Y1bcuSZg==, tarball: file:vendor/inlang-plugin-m-function-matcher-2.3.0-pr.4438.tgz}
     version: 2.3.0-pr.4438
 
   '@inlang/plugin-message-format@file:vendor/inlang-plugin-message-format-4.4.5-pr.4440.tgz':
@@ -621,7 +621,7 @@ packages:
     version: 4.4.5
 
   '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
-    resolution: {integrity: sha512-6UBo6ApS8K1fRh2FCVNCykFYwKH5fCFyAKzZVKrujclufbqWXQEUbnKKdUKWx8WSCqeD1bcyxJ3hFdZ4paKG+Q==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
+    resolution: {integrity: sha512-vdY2F0pn1M3rkJe9p/7xDoUL+JBSo5n94GXyRgU2D0XF2rWw52k8qwXpmMo/BaH35wW2F4Q49QM+TAUGYRuNBQ==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
     version: 3.1.0
     engines: {node: '>=20.0.0'}
 
