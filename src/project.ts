@@ -307,6 +307,20 @@ export function changedLocales(base: Record<string, string>, current: BundleNest
   }
   return locales;
 }
+/** The files (`locale\0path`) the draft's messages were read from: `context.original` with the settings it was loaded (or last pushed) with. */
+async function importedFiles(local: Pick<LocalProject, "context">, plugin: InlangPlugin<any>): Promise<Set<string>> {
+  try {
+    const settings: ProjectSettings = JSON.parse(local.context.original[`${local.context.projectPath}/settings.json`]!);
+    const plans = await plugin.toBeImportedFiles!({ settings });
+    return new Set(plans.flatMap(plan => {
+      const path = resolveResourcePath(local.context.projectPath, plan.path);
+      return local.context.original[path] === undefined ? [] : [`${plan.locale}\0${path}`];
+    }));
+  } catch {
+    // e.g. the loaded settings had no config for this plugin: no file counts as read
+    return new Set();
+  }
+}
 /** Exports the resource files of `locales`; a file that existed but has no messages left becomes "{}". */
 export async function exportResources(local: Pick<LocalProject, "project" | "context">, locales: Set<string>): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
@@ -318,11 +332,14 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
   }
   for (const plugin of pluginsFor(local.context.settings)) {
     // The files as they are in the repository: the plugin keeps the text of every unchanged message,
-    // so a push only changes the edited lines.
+    // so a push only changes the edited lines. `imported` marks the files the draft's messages were read
+    // from (as the same locale), so the plugin also writes a file whose last message was deleted, as
+    // that file without it (e.g. keeping `$schema`), instead of the "{}" above.
+    const read = await importedFiles(local, plugin);
     const existing = (await plugin.toBeImportedFiles!({ settings: local.context.settings })).flatMap(plan => {
       const path = resolveResourcePath(local.context.projectPath, plan.path);
       const content = local.context.baseline?.[path] ?? local.context.original[path];
-      return content === undefined ? [] : [{ path: plan.path, locale: plan.locale, content: new TextEncoder().encode(content), metadata: plan.metadata }];
+      return content === undefined ? [] : [{ path: plan.path, locale: plan.locale, content: new TextEncoder().encode(content), metadata: plan.metadata, imported: read.has(`${plan.locale}\0${path}`) }];
     });
     let exported: Awaited<ReturnType<typeof local.project.exportFiles>>;
     try { exported = await local.project.exportFiles({ pluginKey: plugin.key, files: existing }); }
