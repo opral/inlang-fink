@@ -270,9 +270,14 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
     const groups = message ? selectorGroups(message, bundle.declarations, { referenceVariants }) : [];
     const numberSplit = isTarget && message && isSimple(message) && !sourceSplits && pluralCategories(locale).length >= 3 ? numberInputs(message, bundle.declarations)[0] : undefined;
     // The reference chooses by an input this translation doesn't (the SDK's missing-selector): offer the split.
-    const unsplit = message ? localeIssues.flatMap(issue => missingSelector(issue) ?? []).map(issue => {
+    const unsplitIssues = localeIssues.flatMap(issue => missingSelector(issue) ?? []);
+    const unsplit = message ? unsplitIssues.map(issue => {
       const plural = isPluralSelector(issue.selector, bundle.declarations), numbers = missingNumbers(issue);
-      return <p key={`split-${issue.name}`} className="field-note defect">{numbers ? <>{sourceName} has a form for exactly {listOf(numbers)}.</> : <>{sourceName} uses different words depending on {`{${issue.name}}`}.</>}{isSimple(message)
+      // A plural and its exact numbers are reported apart: split by the plural first, then add the number.
+      const afterPlural = !plural && unsplitIssues.some(other => other !== issue && other.name === issue.name && isPluralSelector(other.selector, bundle.declarations));
+      return <p key={`split-${issue.selector}`} className="field-note defect">{numbers ? <>{sourceName} has a form for exactly {listOf(numbers)}.</> : <>{sourceName} uses different words depending on {`{${issue.name}}`}.</>}{afterPlural
+        ? <> Add it in <b>Edit structure…</b> after splitting by {`{${issue.name}}`}.</>
+        : isSimple(message)
         ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
         : <> Add it in <b>Edit structure…</b>.</>}</p>;
     }) : [];
