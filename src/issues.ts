@@ -9,7 +9,9 @@ export type IssueKind = "missing-translation" | "missing-form" | "empty-form" | 
  * its `selector`) that this translation has no selector for. Typed here so it also works with an
  * SDK that doesn't report it yet.
  */
-export type MissingSelector = { checkId: "missing-selector"; locale?: string; messageId: string; name: string; selector: string };
+export type MissingSelector = { checkId: "missing-selector"; locale?: string; messageId: string; name: string; selector: string; values?: string[] };
+/** The reference's exact numbers (ICU =0) this translation has no exact-number selector for, if that's what's missing. */
+export const missingNumbers = (issue: MissingSelector) => issue.values?.length && issue.values.every(value => /^-?\d+(\.\d+)?$/.test(value)) ? issue.values : undefined;
 export const missingSelector = (issue: { checkId: string }): MissingSelector | undefined => issue.checkId === "missing-selector" ? issue as unknown as MissingSelector : undefined;
 export const issueKind = (issue: Issue): IssueKind =>
   issue.checkId === "missing-translation" || issue.checkId === "empty-translation" ? "missing-translation"

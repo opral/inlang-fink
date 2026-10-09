@@ -12,7 +12,7 @@ import { languageName, type LanguageFocus } from "./languages";
 import { SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { joinMessage, markupLabel, markupVariable, wrapVariable, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
 import { seeded } from "./seeded";
-import { isMissing, missingSelector, type Issue } from "./issues";
+import { isMissing, missingNumbers, missingSelector, type Issue } from "./issues";
 
 const PatternEditor = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
 const PatternView = createComponent({ react: React, tagName: "inlang-pattern-view", elementClass: InlangPatternView });
@@ -43,7 +43,7 @@ export function cardStatus(issues: { locale: string; issue: Issue }[], flags: { 
     if (issue.checkId === "missing-variable" || issue.checkId === "unknown-variable") return { tone: "defect", label: `${issue.checkId === "unknown-variable" ? "Unexpected" : "Missing"} {${issue.name}} in ${languageName(locale)}` };
   }
   for (const { issue, locale } of issues) if (issue.checkId === "missing-markup") return { tone: "defect", label: `${markupLabel(issue.name)} missing in ${languageName(locale)}` };
-  for (const { issue, locale } of issues) { const unsplit = missingSelector(issue); if (unsplit) return { tone: "todo", label: `Not split by {${unsplit.name}}${several ? ` in ${languageName(locale)}` : ""}` }; }
+  for (const { issue, locale } of issues) { const unsplit = missingSelector(issue); if (unsplit) { const numbers = missingNumbers(unsplit); return { tone: "todo", label: `${numbers ? `No form for ${listOf(numbers)}` : `Not split by {${unsplit.name}}`}${several ? ` in ${languageName(locale)}` : ""}` }; } }
   const empty = issues.flatMap(({ issue, locale }) => issue.checkId === "empty-variant" ? [{ issue, locale }] : []);
   if (empty.length === 1) { const [{ issue, locale }] = empty as [typeof empty[number]], name = flags.formName?.(locale, issue.variantId); return { tone: "todo", label: `${name ? `Form ${name}` : "A form"} is empty${several ? ` in ${languageName(locale)}` : ""}` }; }
   if (empty.length) return { tone: "todo", label: `${empty.length} forms are empty` };
@@ -271,8 +271,8 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
     const numberSplit = isTarget && message && isSimple(message) && !sourceSplits && pluralCategories(locale).length >= 3 ? numberInputs(message, bundle.declarations)[0] : undefined;
     // The reference chooses by an input this translation doesn't (the SDK's missing-selector): offer the split.
     const unsplit = message ? localeIssues.flatMap(issue => missingSelector(issue) ?? []).map(issue => {
-      const plural = isPluralSelector(issue.selector, bundle.declarations);
-      return <p key={`split-${issue.name}`} className="field-note defect">{sourceName} uses different words depending on {`{${issue.name}}`}.{isSimple(message)
+      const plural = isPluralSelector(issue.selector, bundle.declarations), numbers = missingNumbers(issue);
+      return <p key={`split-${issue.name}`} className="field-note defect">{numbers ? <>{sourceName} has a form for exactly {listOf(numbers)}.</> : <>{sourceName} uses different words depending on {`{${issue.name}}`}.</>}{isSimple(message)
         ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
         : <> Add it in <b>Edit structure…</b>.</>}</p>;
     }) : [];
