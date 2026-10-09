@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
-    "deploy": "npm run build && node scripts/deploy.mjs fink fink-migration-preview",
+    "deploy:production": "npm run build && node scripts/deploy.mjs fink fink-migration-preview",
     "deploy:preview": "npm run build && node scripts/deploy.mjs fink-migration-preview",
     "cf:typegen": "wrangler types --strict-vars=false"
   },

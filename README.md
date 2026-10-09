@@ -76,7 +76,7 @@ The deploy script supplies only the GitHub client secret and session secret to W
 
 The existing App needs these callback URLs, next to its live (Render) callback:
 
-- `https://fink-migration-preview.opral.workers.dev/api/auth/callback`: the stable callback Worker, set as `GITHUB_CALLBACK_ORIGIN` in `wrangler.jsonc`. Login on any workers.dev origin (`fink.opral.workers.dev`, PR previews) goes through it. It relays the sealed session to the origin that started the login. Credentials are never sent in browser-readable JSON. Only `fink.opral.workers.dev`, `fink.inlang.com` and `fink-pr-<number>.opral.workers.dev` origins are accepted.
+- `https://fink-migration-preview.opral.workers.dev/api/auth/callback`: the stable callback Worker, set as `GITHUB_CALLBACK_ORIGIN` in `wrangler.jsonc`. Login on any workers.dev origin (`fink.opral.workers.dev`, PR previews) goes through it. It relays the sealed session to the origin that started the login. Credentials are never sent in browser-readable JSON. Only `fink.inlang.com`, `fink.opral.workers.dev`, `fink-pr-<number>.opral.workers.dev` and the `GITHUB_CALLBACK_ORIGIN` origin itself (e.g. `http://localhost:8787` locally) are accepted. Keep the `fink-migration-preview` Worker: workers.dev logins and PR previews depend on it.
 - `https://fink.inlang.com/api/auth/callback`: login on `fink.inlang.com` completes on that domain. Add it before DNS points at the Worker.
 
 Every Worker shares `SESSION_SECRET`, so a session sealed by the callback Worker opens on the others.
@@ -90,9 +90,9 @@ infisical login
 infisical run --projectId <project-id> --env prod --path /fink -- pnpm deploy:preview
 ```
 
-`pnpm deploy:preview` updates the stable preview Worker. `pnpm deploy` updates both production and the stable callback Worker. Both commands require Infisical's three deployment secrets in the environment and build before deploying.
+`pnpm deploy:preview` updates the stable preview Worker. `pnpm deploy:production` updates both production and the stable callback Worker. Both commands require Infisical's three deployment secrets in the environment and build before deploying.
 
-Switching `fink.inlang.com` and retiring Render are separate rollout steps after live sign-in/push validation. `wrangler.jsonc` attaches no route or custom domain, and a test keeps it that way: every Worker deploys with it, and Wrangler in CI replaces existing domains and DNS records without asking. To switch, add the `fink.inlang.com` callback URL above, delete the `fink` CNAME to Render in the `inlang.com` zone, and add `fink.inlang.com` as a Custom Domain of the `fink` Worker (Workers & Pages → fink → Settings → Domains & Routes). Deploys leave Custom Domains that the config doesn't declare in place. To declare it in code instead, pass `--domain fink.inlang.com` in `scripts/deploy.mjs` for the `fink` target only.
+Switching `fink.inlang.com` and retiring Render are separate rollout steps after live sign-in/push validation. `wrangler.jsonc` attaches no route or custom domain, and a test keeps it that way: every Worker deploys with it, and Wrangler in CI replaces existing domains and DNS records without asking. To switch, add the `fink.inlang.com` callback URL above, delete the `fink` CNAME to Render in the `inlang.com` zone, and add `fink.inlang.com` as a Custom Domain of the `fink` Worker (Workers & Pages → fink → Settings → Domains & Routes). Do the last two steps back to back: resolvers that look the name up in between can cache "no such name" for up to 30 minutes (the zone's negative-cache TTL). Deploys leave Custom Domains that the config doesn't declare in place. Afterwards, remove `fink.inlang.com` from the Render service. To declare it in code instead, pass `--domain fink.inlang.com` in `scripts/deploy.mjs` for the `fink` target only.
 
 ## Extracted history
 

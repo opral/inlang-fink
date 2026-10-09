@@ -81,6 +81,7 @@ test("fink.inlang.com completes GitHub login on itself; workers.dev origins use 
   expect((await redirect("https://fink.opral.workers.dev")).href).toBe("https://fink-migration-preview.opral.workers.dev/api/auth/callback");
   expect((await redirect("https://fink-migration-preview.opral.workers.dev")).href).toBe("https://fink-migration-preview.opral.workers.dev/api/auth/callback");
   expect((await worker.fetch(new Request("https://fink.example.com/api/auth/login"), env)).status).toBe(403);
+  expect((await worker.fetch(new Request("http://fink.example.com/api/auth/login"), { ...env, GITHUB_CALLBACK_ORIGIN: "" })).status).toBe(403);
   const login = await worker.fetch(new Request("https://fink.inlang.com/api/auth/login"), env);
   const state = new URL(login.headers.get("Location")!).searchParams.get("state")!;
   const exchange = vi.fn().mockResolvedValue(Response.json({ access_token: "private-test-token" })); vi.stubGlobal("fetch", exchange);

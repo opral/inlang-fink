@@ -16,7 +16,8 @@ function callbackOrigin(request: Request, env: Env) {
   return origin === PRODUCTION_ORIGIN ? origin : env.GITHUB_CALLBACK_ORIGIN || origin;
 }
 function allowedOrigin(origin: string, request: Request, env: Env) {
-  if (origin === callbackOrigin(request, env)) return true;
+  // Without a configured callback Worker, no origin is trusted just for being the request's own.
+  if (env.GITHUB_CALLBACK_ORIGIN && origin === callbackOrigin(request, env)) return true;
   const url = new URL(origin);
   if (url.protocol === "https:" && (url.origin === PRODUCTION_ORIGIN || (!!env.WORKERS_SUBDOMAIN && url.hostname === `fink.${env.WORKERS_SUBDOMAIN}.workers.dev`))) return true;
   return url.protocol === "https:" && !!env.WORKERS_SUBDOMAIN && new RegExp(`^fink-pr-[0-9]+\\.${String(env.WORKERS_SUBDOMAIN).replace(/\./g, "\\.")}\\.workers\\.dev$`).test(url.hostname);
