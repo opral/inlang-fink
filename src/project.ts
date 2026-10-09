@@ -317,8 +317,15 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
     }
   }
   for (const plugin of pluginsFor(local.context.settings)) {
+    // The files as they are in the repository: the plugin keeps the text of every unchanged message,
+    // so a push only changes the edited lines.
+    const existing = (await plugin.toBeImportedFiles!({ settings: local.context.settings })).flatMap(plan => {
+      const path = resolveResourcePath(local.context.projectPath, plan.path);
+      const content = local.context.baseline?.[path] ?? local.context.original[path];
+      return content === undefined ? [] : [{ path: plan.path, locale: plan.locale, content: new TextEncoder().encode(content), metadata: plan.metadata }];
+    });
     let exported: Awaited<ReturnType<typeof local.project.exportFiles>>;
-    try { exported = await local.project.exportFiles({ pluginKey: plugin.key }); }
+    try { exported = await local.project.exportFiles({ pluginKey: plugin.key, files: existing }); }
     catch (error) {
       // e.g. i18next can't express an exact number other than 0: name the format, keep the plugin's reason
       const format = plugin.key === i18next.key ? "i18next" : "inlang message format";
