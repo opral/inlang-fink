@@ -29,6 +29,7 @@ export default defineConfig({
   resolve: { alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
   worker: { format: "es", plugins: () => [compressedLixWasm()] },
   build: { target: "es2022" },
-  optimizeDeps: { exclude: ["@inlang/sdk", "@lix-js/sdk", "@lix-js/storage-opfs"] },
+  // The SDK isn't pre-bundled (its Lix WASM loader), so its CommonJS dependency is, for the dev server.
+  optimizeDeps: { exclude: ["@inlang/sdk", "@lix-js/sdk", "@lix-js/storage-opfs"], include: ["@inlang/sdk > @sinclair/typebox"] },
   server: { proxy: { "/api": "http://localhost:8787" } },
 });

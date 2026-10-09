@@ -1,4 +1,5 @@
 import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { createComponent } from "@lit/react";
 import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
 import { isNumericKey, isPluralSelector, missingVariants, resolveInputVariable, selectorGroups, variableNames, type BundleNested, type CheckDiagnostic, type Declaration, type MessageNested, type Pattern, type ProjectSettings, type SelectorGroup } from "@inlang/sdk/browser";
@@ -142,8 +143,8 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
   const add = (matches: Match[]) => {
     const id = crypto.randomUUID();
     // New forms start from the default form's text, which is usually closest.
-    addVariant(bundle.id, { id, message_id: message.id, matches, pattern: structuredClone(defaultVariant(message)?.pattern ?? []) });
-    setSelectedId(id); focusId.current = id;
+    focusId.current = id;
+    flushSync(() => { addVariant(bundle.id, { id, message_id: message.id, matches, pattern: structuredClone(defaultVariant(message)?.pattern ?? []) }); setSelectedId(id); });
   };
   return <>
     {selected && <p className="editing">{expanded || !isDefault ? <>Editing <b>{label(selected)}</b></> : "Default form"}</p>}
@@ -176,7 +177,8 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
     return added.length ? { ...message, variants: [...message.variants, ...added] } : message;
   }) } : stored, [stored, adding]);
   useEffect(() => { if (adding.length) setAdding(list => { const saved = new Set(stored.messages.flatMap(message => message.variants.map(variant => variant.id))); const rest = list.filter(variant => !saved.has(variant.id)); return rest.length === list.length ? list : rest; }); }, [stored]);
-  const add = (bundleId: string, variant: Variant) => { setAdding(list => [...list, variant]); addVariant(bundleId, variant); };
+  // Rendered (and focused) before the click's task ends, so no key typed right after it is lost.
+  const add = (bundleId: string, variant: Variant) => { flushSync(() => setAdding(list => [...list, variant])); addVariant(bundleId, variant); };
   const root = useRef<HTMLElement>(null);
   const editors = useRef(new Map<string, InlangPatternEditor>()), focusKey = useRef<string | undefined>(undefined);
   useLayoutEffect(() => { const editor = focusKey.current && editors.current.get(focusKey.current); if (editor) { focusKey.current = undefined; focusEditor(editor); } }, [bundle]);
