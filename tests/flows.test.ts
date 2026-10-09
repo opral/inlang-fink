@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BundleNested, Declaration, MessageNested } from "@inlang/sdk/browser";
-import { markupVariable, wrapVariable, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words } from "../src/flows";
+import { markupVariable, wrapVariable, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, unsupportedExactNumber, untranslatedWords, variableSuggestions, words } from "../src/flows";
 
 const v = (name: string) => ({ type: "expression" as const, arg: { type: "variable-reference" as const, name } });
 const t = (value: string) => ({ type: "text" as const, value });
@@ -122,5 +122,20 @@ describe("forms from the inlang SDK", () => {
     const split = splitMessage(invite, de, { selector: "gender" });
     expect(keys(split.variants)).toEqual(["female", "male", "*"]);
     expect(split.declarations).toBeUndefined();
+  });
+});
+
+describe("unsupportedExactNumber", () => {
+  // i18next imports `count_zero` as an exact 0 on the `count` input next to `countPlural`
+  const message: MessageNested = { ...english, selectors: [{ type: "variable-reference", name: "count" }, { type: "variable-reference", name: "countPlural" }],
+    variants: english.variants.map(variant => ({ ...variant, matches: [{ type: "catchall-match", key: "count" }, ...variant.matches] })) };
+  const i18next: BundleNested = { ...bundle, messages: [message] };
+  const exact = (value: string) => ({ id: `en-${value}`, message_id: message.id, matches: [{ type: "literal-match" as const, key: "count", value }, { type: "catchall-match" as const, key: "countPlural" }], pattern: [t("x")] });
+  it("allows 0 and plural categories, not other exact numbers", () => {
+    expect(unsupportedExactNumber(i18next, exact("0"))).toBeUndefined();
+    expect(unsupportedExactNumber(i18next, message.variants[0]!)).toBeUndefined();
+    expect(unsupportedExactNumber(i18next, exact("1"))).toBe("1");
+    // also a number on the plural selector itself
+    expect(unsupportedExactNumber(bundle, { ...english.variants[0]!, id: "en-5", matches: [{ type: "literal-match", key: "countPlural", value: "5" }] })).toBe("5");
   });
 });

@@ -1,4 +1,4 @@
-import { matchValue, requiredVariants, selectorGroups, variableNames, type BundleNested, type Declaration, type MessageNested, type Pattern } from "@inlang/sdk/browser";
+import { isNumericKey, matchValue, requiredVariants, selectorGroups, variableNames, type BundleNested, type Declaration, type MessageNested, type Pattern } from "@inlang/sdk/browser";
 
 // Pure helpers behind the translator flows for complex messages: markup, variables,
 // per-language selectors and starting a translation from the source text.
@@ -178,4 +178,20 @@ export function untranslatedWords(seeded: string[], pattern: Pattern): string[] 
   const left = new Set(words(pattern));
   // Short words ("in", "to") are often the same in both languages; only longer ones are flagged.
   return [...new Set(seeded.filter(word => word.length >= 4 && left.has(word)))];
+}
+
+/**
+ * The exact number (other than 0) a variant would add to a plural, e.g. "1" for `count=1`. i18next
+ * can only express an exact 0 (`key_zero`); exporting any other exact number fails. Undefined when
+ * the variant is fine.
+ */
+export function unsupportedExactNumber(bundle: BundleNested, variant: Variant): string | undefined {
+  const message = bundle.messages.find(value => value.id === variant.message_id);
+  if (!message) return undefined;
+  const variants = [...message.variants.filter(value => value.id !== variant.id), variant];
+  for (const group of selectorGroups({ ...message, variants }, bundle.declarations)) {
+    const key = group.keyOf(variant);
+    if (group.isPlural && isNumericKey(key) && Number(key) !== 0) return key;
+  }
+  return undefined;
 }

@@ -8,7 +8,7 @@ import { LixFloat, type FloatMode } from "./LixFloat";
 import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
 import type { InlangPatternEditor } from "@inlang/editor-component";
-import type { Restructure } from "./flows";
+import { unsupportedExactNumber, type Restructure } from "./flows";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
 import { issueKind, type Issue, type IssueKind } from "./issues";
@@ -24,7 +24,7 @@ import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, 
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
 import { LocalDrafts } from "./LocalDrafts";
 import { capture, hashId, identify, telemetryEnabled } from "./telemetry";
-import { preparePush, replaceBundles, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
+import { onlyExactZero, preparePush, replaceBundles, openRepositoryProject, syncWithRemote, gitBlobSha, readBundle, readBundles, getBaselineSignatures, bundleSignature, bundleSignatures, saveContext, settingsChanges, type LocalProject } from "./project";
 import { api, parseRepository, projectScope, repoQuery, type Repo, type RepoTree } from "./repository";
 
 /** The commit message fink.inlang.com used for every push; translators don't write commits. */
@@ -357,6 +357,18 @@ export default function App() {
   flushRef.current = flushWrites;
   const change = useCallback((detail: ChangeEventDetail, immediate = false) => {
     if (!localRef.current) return;
+    // i18next has no exact numbers other than 0 (`key_zero`): such a form couldn't be pushed.
+    if (detail.entity === "variant" && detail.newData && onlyExactZero(localRef.current.context.settings)) {
+      const variant = detail.newData as BundleNested["messages"][number]["variants"][number], bundleId = ownerOf(detail), bundle = bundleId ? bundleIndex.current.get(bundleId) : undefined;
+      const before = bundle?.messages.flatMap(message => message.variants).find(value => value.id === variant.id);
+      const number = bundle && JSON.stringify(before?.matches) !== JSON.stringify(variant.matches) ? unsupportedExactNumber(bundle, variant) : undefined;
+      if (number !== undefined) {
+        setError(`i18next can't have a form for exactly ${number}: only 0 (key_zero) and the plural categories (one, other, …). The form wasn't changed.`);
+        // the structure editor shows the rejected value until it gets the stored bundle again
+        refresh(localRef.current, bundleId!).catch(report);
+        return;
+      }
+    }
     if (detail.entity === "variant" && detail.newData) {
       // "Saving…" shows only while writing; the leave warning covers text that is still pending.
       pendingWrites.current.set(detail.entityId, detail);
@@ -371,7 +383,7 @@ export default function App() {
       await write(local.project.db, detail);
       await refresh(local, bundleId);
     });
-  }, [enqueue, flushWrites, refresh]);
+  }, [enqueue, flushWrites, refresh, report]);
   // Leaving a field or the page writes what was typed right away.
   useEffect(() => {
     const flush = () => flushWrites();
@@ -676,7 +688,7 @@ export default function App() {
     return terms.every(term => text.includes(term));
   }), [bundles, terms]);
   const counts = useMemo(() => {
-    const result = { all: searched.length, todo: 0, edited: 0, "missing-translation": 0, "missing-form": 0, placeholder: 0 };
+    const result = { all: searched.length, todo: 0, edited: 0, "missing-translation": 0, "missing-form": 0, "empty-form": 0, placeholder: 0 };
     for (const bundle of searched) {
       const kinds = kindsOf(bundle);
       if (kinds.size) result.todo++;
@@ -809,7 +821,7 @@ export default function App() {
             <input className="search-input" type="search" aria-label="Search messages" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search messages and keys" />
           </div>
           {filter === "todo" && <div className="chips" role="group" aria-label="Kind of work">
-            {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
+            {([["all", "All to do", counts.todo], ["missing-translation", "Missing translation", counts["missing-translation"]], ["missing-form", "Missing forms", counts["missing-form"]], ["empty-form", "Empty forms", counts["empty-form"]], ["placeholder", "Placeholder problems", counts.placeholder]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={todoKind === value} onClick={() => setTodoKind(value)}>{label} {count}</button>)}
           </div>}
         </div>
         <div className="list-head"><span>{visible.length} {visible.length === 1 ? "message" : "messages"}</span>

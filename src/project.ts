@@ -21,6 +21,8 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
   if (plugins.length !== 1) throw new Error("Configure exactly one resource plugin (i18next or inlang message format) per project to avoid ambiguous message ownership.");
   return plugins;
 }
+/** i18next can express only the exact number 0 (`key_zero`) next to plural categories. */
+export const onlyExactZero = (settings: ProjectSettings) => pluginsFor(settings).some(plugin => plugin.key === i18next.key);
 /** The editor's project also loads the m-function matcher, whose usage analysis powers checks and usages. */
 const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), mFunctionMatcher as InlangPlugin<any>];
 export const METADATA = "/fink-context.json";
@@ -315,7 +317,14 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
     }
   }
   for (const plugin of pluginsFor(local.context.settings)) {
-    for (const file of await local.project.exportFiles({ pluginKey: plugin.key })) {
+    let exported: Awaited<ReturnType<typeof local.project.exportFiles>>;
+    try { exported = await local.project.exportFiles({ pluginKey: plugin.key }); }
+    catch (error) {
+      // e.g. i18next can't express an exact number other than 0: name the format, keep the plugin's reason
+      const format = plugin.key === i18next.key ? "i18next" : "inlang message format";
+      throw new Error(`Couldn't write the ${format} files: ${error instanceof Error ? error.message : String(error)} Nothing was pushed.`, { cause: error });
+    }
+    for (const file of exported) {
       if (!locales.has(file.locale)) continue;
       const path = resolveResourcePath(local.context.projectPath, outputPath(local.context.settings, plugin.key, file));
       const content = new TextDecoder().decode(file.content);

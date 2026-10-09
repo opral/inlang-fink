@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createComponent } from "@lit/react";
 import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
 import { isNumericKey, isPluralSelector, missingVariants, resolveInputVariable, selectorGroups, variableNames, type BundleNested, type CheckDiagnostic, type Declaration, type MessageNested, type Pattern, type ProjectSettings, type SelectorGroup } from "@inlang/sdk/browser";
@@ -34,14 +34,17 @@ type Props = {
   machineTranslate: (request: MachineTranslationRequest) => void;
 };
 
-/** One status per card, most urgent first. */
-export function cardStatus(issues: { locale: string; issue: Issue }[], flags: { edited?: boolean; replaced?: boolean; unused?: boolean; stillSource?: number; sourceName?: string }, several: boolean): CardStatus | undefined {
+/** One status per card, most urgent first. `formName` names a form by its variant ("0", "one"). */
+export function cardStatus(issues: { locale: string; issue: Issue }[], flags: { edited?: boolean; replaced?: boolean; unused?: boolean; stillSource?: number; sourceName?: string; formName?: (locale: string, variantId: string) => string | undefined }, several: boolean): CardStatus | undefined {
   const missing = issues.filter(({ issue }) => isMissing(issue));
   if (missing.length) return { tone: "todo", label: several ? `Missing in ${missing.map(({ locale }) => languageName(locale)).join(", ")}` : "Missing" };
   for (const { issue, locale } of issues) {
     if (issue.checkId === "missing-variable" || issue.checkId === "unknown-variable") return { tone: "defect", label: `${issue.checkId === "unknown-variable" ? "Unexpected" : "Missing"} {${issue.name}} in ${languageName(locale)}` };
   }
   for (const { issue, locale } of issues) if (issue.checkId === "missing-markup") return { tone: "defect", label: `${markupLabel(issue.name)} missing in ${languageName(locale)}` };
+  const empty = issues.flatMap(({ issue, locale }) => issue.checkId === "empty-variant" ? [{ issue, locale }] : []);
+  if (empty.length === 1) { const [{ issue, locale }] = empty as [typeof empty[number]], name = flags.formName?.(locale, issue.variantId); return { tone: "todo", label: `${name ? `Form ${name}` : "A form"} is empty${several ? ` in ${languageName(locale)}` : ""}` }; }
+  if (empty.length) return { tone: "todo", label: `${empty.length} forms are empty` };
   const forms = issues.filter(({ issue }) => issue.checkId === "missing-variant");
   if (forms.length) return { tone: "todo", label: `${forms.length} ${forms.length === 1 ? "form" : "forms"} missing` };
   if (flags.stillSource) return { tone: "todo", label: flags.stillSource === 1 ? `Still in ${flags.sourceName}` : `${flags.stillSource} forms still in ${flags.sourceName}` };
@@ -64,8 +67,11 @@ const matchLabel = (variant: Variant, message: MessageNested, declarations: Decl
   return groups.map(group => { const key = group.keyOf(variant); return key === "*" && !group.isPlural ? `any ${group.input}` : keyLabel(group, key); }).join(" · ");
 };
 
-/** Focuses an editor once it has rendered, e.g. after the button that was focused went away. */
-const focusEditor = (editor: InlangPatternEditor | null | undefined) => requestAnimationFrame(() => editor?.querySelector<HTMLElement>("[contenteditable]")?.focus());
+/**
+ * Focuses an editor, e.g. after the button that was focused went away. A new editor focuses once it has
+ * rendered (a microtask, before the next key event), so text typed right after "+ Add form" lands in it.
+ */
+const focusEditor = (editor: InlangPatternEditor | null | undefined) => editor?.focus();
 const listOf = (items: string[]) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
 /** What English does with a piece of markup, for the fix note ("links “docs”"). */
@@ -92,7 +98,8 @@ type FormRow = { key: string; label: string; hint?: string; variant?: Variant; m
  * requires but no variant covers (`missingVariants`, the `missing-variant` check) are rows without a variant.
  */
 function formRows(message: MessageNested, declarations: Declaration[], group: SelectorGroup, referenceVariants?: Variant[]): FormRow[] {
-  const examples: Record<string, string> = group.plural ? pluralExamples(message.locale, group.plural.type) : {};
+  // Numbers with their own form (ICU =0) are not examples of a category: English "other" is 2, 3, 4… next to 0.
+  const examples: Record<string, string> = group.plural ? pluralExamples(message.locale, group.plural.type, { exclude: group.keys.filter(isNumericKey) }) : {};
   const hint = (key: string) => group.isPlural && isNumericKey(key) ? "exactly" : examples[key === "*" ? "other" : key];
   const missing = new Map(missingVariants(message, declarations, { referenceVariants }).map(matches => [group.keyOf({ matches }), matches]));
   const rows: FormRow[] = [], used = new Set<Variant>();
@@ -127,10 +134,11 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
   const [selectedId, setSelectedId] = useState<string>();
   const selected = message.variants.find(variant => variant.id === selectedId) ?? defaultVariant(message);
   const missing = issues.filter(issue => issue.checkId === "missing-variant").length;
+  const empty = issues.filter(issue => issue.checkId === "empty-variant").length;
   const by = selectorGroups(message, bundle.declarations).map(group => group.input);
   const isDefault = selected && selected === defaultVariant(message);
   const editor = useRef<InlangPatternEditor>(null), focusId = useRef<string | undefined>(undefined);
-  useEffect(() => { if (focusId.current && selected?.id === focusId.current) { focusId.current = undefined; focusEditor(editor.current); } }, [selected]);
+  useLayoutEffect(() => { if (focusId.current && selected?.id === focusId.current) { focusId.current = undefined; focusEditor(editor.current); } }, [selected]);
   const add = (matches: Match[]) => {
     const id = crypto.randomUUID();
     // New forms start from the default form's text, which is usually closest.
@@ -144,7 +152,7 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
       onSelectVariant={event => setSelectedId((event as CustomEvent<{ variantId: string }>).detail.variantId)}
       onAddVariant={event => add((event as CustomEvent<{ matches: Match[] }>).detail.matches)} />}
     <div className="form-actions">
-      <span>{message.variants.length} forms by {by.join(" and ")}{missing > 0 && <> · <b className="todo">{missing} missing</b></>}</span>
+      <span>{message.variants.length} forms by {by.join(" and ")}{missing > 0 && <> · <b className="todo">{missing} missing</b></>}{empty > 0 && <> · <b className="todo">{empty} empty</b></>}</span>
       <button type="button" className="inline-link" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Hide forms" : "Show all forms"}</button>
       <button type="button" className="inline-link" aria-expanded={preview} onClick={() => setPreview(!preview)}>{preview ? "Hide preview" : "Preview"}</button>
     </div>
@@ -153,7 +161,7 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
   </>;
 }
 
-export const MessageCard = memo(function MessageCard({ bundle, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
+export const MessageCard = memo(function MessageCard({ bundle: stored, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
@@ -161,9 +169,17 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
   const [matched, setMatched] = useState<string>();
   // Forms added by "+ Add form", highlighted until their copied text is changed.
   const [copied, setCopied] = useState<Record<string, { from: string; hint?: string; pattern: string }>>({});
+  // Forms added here show right away, before they are saved, so typing right after "+ Add form" isn't lost.
+  const [adding, setAdding] = useState<Variant[]>([]);
+  const bundle = useMemo(() => adding.length ? { ...stored, messages: stored.messages.map(message => {
+    const added = adding.filter(variant => variant.message_id === message.id && !message.variants.some(value => value.id === variant.id));
+    return added.length ? { ...message, variants: [...message.variants, ...added] } : message;
+  }) } : stored, [stored, adding]);
+  useEffect(() => { if (adding.length) setAdding(list => { const saved = new Set(stored.messages.flatMap(message => message.variants.map(variant => variant.id))); const rest = list.filter(variant => !saved.has(variant.id)); return rest.length === list.length ? list : rest; }); }, [stored]);
+  const add = (bundleId: string, variant: Variant) => { setAdding(list => [...list, variant]); addVariant(bundleId, variant); };
   const root = useRef<HTMLElement>(null);
   const editors = useRef(new Map<string, InlangPatternEditor>()), focusKey = useRef<string | undefined>(undefined);
-  useEffect(() => { const editor = focusKey.current && editors.current.get(focusKey.current); if (editor) { focusKey.current = undefined; focusEditor(editor); } }, [bundle]);
+  useLayoutEffect(() => { const editor = focusKey.current && editors.current.get(focusKey.current); if (editor) { focusKey.current = undefined; focusEditor(editor); } }, [bundle]);
   // Pattern editors emit composed "change" events with the updated variant.
   useEffect(() => {
     const element = root.current;
@@ -182,7 +198,8 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     return byLocale;
   }, [diagnostics, focus.source]);
   const stillSource = targets.flatMap(locale => bundle.messages.find(message => message.locale === locale)?.variants ?? []).filter(variant => seeded.get(variant.id)?.pattern === JSON.stringify(variant.pattern)).length;
-  const status = cardStatus(targets.flatMap(locale => (issues[locale] ?? []).map(issue => ({ locale, issue }))), { edited, replaced, unused, stillSource, sourceName }, targets.length > 1);
+  const formName = (locale: string, variantId: string) => { const message = bundle.messages.find(value => value.locale === locale), variant = message?.variants.find(value => value.id === variantId); return message && variant ? matchLabel(variant, message, bundle.declarations) : undefined; };
+  const status = cardStatus(targets.flatMap(locale => (issues[locale] ?? []).map(issue => ({ locale, issue }))), { edited, replaced, unused, stillSource, sourceName, formName }, targets.length > 1);
   const tone = !status ? "" : status.tone !== "neutral" ? "todo" : status.label === "Not used in code" ? "neutral" : "changed";
   // Lit components compare by identity; clone each variant once per bundle snapshot.
   const variants = useMemo(() => new Map(bundle.messages.flatMap(message => message.variants.map(variant => [variant.id, structuredClone(variant)]))), [bundle]);
@@ -199,7 +216,9 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
     const found = locale === focus.source ? undefined : formNotes(issues[locale] ?? [], variant.id, markup);
     const target = () => editors.current.get(key);
     const copy = copied[variant.id];
+    const empty = (issues[locale] ?? []).some(issue => issue.checkId === "empty-variant" && issue.variantId === variant.id);
     return <>
+      {empty && locale !== focus.source && <p className="field-note defect">This form is empty. The other forms have text.</p>}
       {copy && copy.pattern === JSON.stringify(variant.pattern) && <p className="field-note">Copied from <b>{copy.from}</b>.{copy.hint && ` Check the words for ${copy.hint.replace(/…$/, "")}.`}</p>}
       {found?.missing.map(name => <p key={`m-${name}`} className="field-note defect">{`{${name}}`} is missing. <button type="button" className="inline-link" onClick={() => { const editor = target(); editor?.insertExpression(name); focusEditor(editor); }}>Insert {`{${name}}`}</button></p>)}
       {found?.extra.map(({ name, suggestion }) => <p key={`e-${name}`} className="field-note defect">{`{${name}}`} isn't a variable in {sourceName}.{suggestion
@@ -276,7 +295,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
               const id = crypto.randomUUID(), pattern = structuredClone(near?.variant?.pattern ?? defaultVariant(message)?.pattern ?? []);
               focusKey.current = `${locale}:${id}`;
               if (near) setCopied(value => ({ ...value, [id]: { from: near.label, hint: exact ? form.key : form.hint, pattern: JSON.stringify(pattern) } }));
-              addVariant(bundle.id, { id, message_id: message.id, matches: form.matches, pattern });
+              add(bundle.id, { id, message_id: message.id, matches: form.matches, pattern });
             }}>{exact ? `+ Add a form for ${form.key}` : `+ Add ${form.label} form`}</button></div>;
           const variant = form.variant, key = `${locale}:${variant.id}`, fresh = copied[variant.id]?.pattern === JSON.stringify(variant.pattern);
           return <div key={variant.id} className={`message-cell edit form${fresh ? " new" : ""}${matched === variant.id ? " matched" : ""}`} data-untranslated={untranslated(variant)}>
@@ -294,7 +313,7 @@ export const MessageCard = memo(function MessageCard({ bundle, settings, focus, 
           onVariantMatch={event => setMatched((event as CustomEvent<{ variantId?: string }>).detail.variantId)} /></div>}
       </>;
     }
-    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} referenceVariants={referenceVariants} issues={localeIssues} variants={variants} addVariant={addVariant} editorProps={editorProps} /></div>;
+    else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} referenceVariants={referenceVariants} issues={localeIssues} variants={variants} addVariant={add} editorProps={editorProps} /></div>;
     return <div className="message-row" key={locale}>
       {localeCell(locale, localeIssues.length > 0)}
       <div className="message-target">{cells}</div>

@@ -151,8 +151,8 @@ test("To do filters and the language menu count work per language", async ({ pag
   await expect(translation(page, "items")).toBeFocused();
   await page.keyboard.type("Artikel");
   await expect(translation(page, "items")).toHaveText("Artikel");
-  // German "one" is exactly 1, so it may spell the number out (inlang SDK rule); the other form needs {count}.
-  await expect(page.locator('[data-bundle="items"] .message-status')).toHaveText("Edited");
+  // German "one" is exactly 1, so it may spell the number out (inlang SDK rule); the other form is still empty.
+  await expect(page.locator('[data-bundle="items"] .message-status')).toHaveText("Form other is empty");
   await translation(page, "items", 1).click();
   await page.keyboard.type("Artikel");
   // Now it needs {count} instead of a translation, and it stays put while the filter is unchanged.
@@ -167,6 +167,29 @@ test("To do filters and the language menu count work per language", async ({ pag
   // The choice is remembered per project.
   await page.reload();
   await expect(page.getByRole("button", { name: /English.*French/ })).toBeVisible({ timeout: 60_000 });
+});
+
+test("an ICU exact number: its own form, not an example of other; typing right after + Add form; empty forms are to do", async ({ page }) => {
+  const icu = (match: Record<string, string>) => [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["count", "countPlural"], match }];
+  await stubApi(page, { ...resources,
+    "messages/en.json": JSON.stringify({ files: icu({ "count=0, countPlural=*": "No files", "count=*, countPlural=one": "One file", "count=*, countPlural=*": "{count} files" }) }),
+    "messages/de.json": JSON.stringify({ files: icu({ "count=*, countPlural=one": "Eine Datei", "count=*, countPlural=*": "{count} Dateien" }) }),
+  }, {});
+  await openRepository(page);
+  const card = page.locator('[data-bundle="files"]');
+  await expect(card.locator(".message-status")).toHaveText("1 form missing", { timeout: 90_000 });
+  // 0 has its own form, so English "other" starts at 2
+  await expect(card.locator(".message-ref .form").last()).toContainText("other2, 3, 4…");
+  await card.getByRole("button", { name: "+ Add a form for 0" }).click();
+  await page.keyboard.type("Keine Dateien ");
+  await expect(translation(page, "files", 0)).toContainText("Keine Dateien ");
+  // an empty form next to filled ones (the SDK's empty-variant check)
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await expect(card.locator(".message-status")).toHaveText("Form 0 is empty");
+  await expect(card.getByText("This form is empty.")).toBeVisible();
+  await page.getByRole("button", { name: /^To do/ }).click();
+  await expect(page.getByRole("button", { name: "Empty forms 1" })).toBeVisible();
 });
 
 test("links a German word like the English text and removes the link again", async ({ page }) => {
