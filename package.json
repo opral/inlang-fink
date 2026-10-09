@@ -1,0 +1,48 @@
+{
+  "name": "@inlang/fink",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "vite build && node scripts/prepare-assets.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm test && npm run build",
+    "deploy:production": "npm run build && node scripts/deploy.mjs fink fink-migration-preview",
+    "deploy:preview": "npm run build && node scripts/deploy.mjs fink-migration-preview",
+    "cf:typegen": "wrangler types --strict-vars=false"
+  },
+  "dependencies": {
+    "@inlang/editor-component": "13.0.0",
+    "@inlang/plugin-i18next": "6.4.0",
+    "@inlang/plugin-m-function-matcher": "2.3.0",
+    "@inlang/plugin-message-format": "4.5.0",
+    "@inlang/sdk": "4.0.0",
+    "@inlang/settings-component": "5.0.0",
+    "@lit/react": "^1.0.8",
+    "@lix-js/sdk": "0.19.0",
+    "@lix-js/storage-opfs": "0.19.0",
+    "@shoelace-style/shoelace": "2.20.1",
+    "posthog-js": "^1.438.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "8.3.3",
+    "vitest": "^4.0.0",
+    "wrangler": "4.148.0"
+  },
+  "packageManager": "pnpm@10.23.0"
+}

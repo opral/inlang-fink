@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars*
+.env*
+!.dev.vars.example
+test-results/
+playwright-report/
+
+.worker-secrets.json

@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "fink",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/ingest/*"
+    ]
+  },
+  "vars": {
+    "GITHUB_CLIENT_ID": "Iv1.436da58906364f96",
+    "GITHUB_CALLBACK_ORIGIN": "https://fink-migration-preview.opral.workers.dev",
+    "WORKERS_SUBDOMAIN": "opral"
+  },
+  "secrets": {
+    "required": [
+      "GITHUB_CLIENT_SECRET",
+      "SESSION_SECRET"
+    ]
+  }
+}

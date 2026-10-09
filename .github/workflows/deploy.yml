@@ -1,0 +1,93 @@
+name: Deploy Worker
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-${{ github.event.pull_request.number || 'production' }}
+  cancel-in-progress: true
+env:
+  CLOUDFLARE_ACCOUNT_ID: 11a1a6f76d167248cc6987e978efb7e5
+  WRANGLER_SEND_METRICS: false
+jobs:
+  deploy:
+    # PRs from this repository deploy previews; production deploys only from main.
+    if: github.event.action != 'closed' && (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Validate Infisical configuration
+        env:
+          INFISICAL_IDENTITY_ID: ${{ vars[github.event_name == 'pull_request' && 'INFISICAL_PREVIEW_IDENTITY_ID' || 'INFISICAL_PRODUCTION_IDENTITY_ID'] }}
+          INFISICAL_PROJECT_SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
+        run: |
+          test -n "$INFISICAL_IDENTITY_ID" || { echo 'Configure the Fink Infisical OIDC identity repository variable.'; exit 1; }
+          test -n "$INFISICAL_PROJECT_SLUG" || { echo 'Configure INFISICAL_PROJECT_SLUG in repository variables.'; exit 1; }
+      - name: Fetch deployment secrets from Infisical
+        uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9
+        with:
+          method: oidc
+          identity-id: ${{ vars[github.event_name == 'pull_request' && 'INFISICAL_PREVIEW_IDENTITY_ID' || 'INFISICAL_PRODUCTION_IDENTITY_ID'] }}
+          oidc-audience: https://github.com/opral
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.INFISICAL_ENVIRONMENT || 'prod' }}
+          secret-path: ${{ vars.INFISICAL_SECRET_PATH || '/fink' }}
+          domain: ${{ vars.INFISICAL_DOMAIN || 'https://app.infisical.com' }}
+      - name: Deploy with GitHub App secrets
+        id: deploy
+        env:
+          WORKER_NAME: ${{ github.event_name == 'pull_request' && format('fink-pr-{0}', github.event.pull_request.number) || 'fink' }}
+        run: |
+          if [ "$WORKER_NAME" = fink ]; then
+            node scripts/deploy.mjs fink fink-migration-preview
+          else
+            node scripts/deploy.mjs "$WORKER_NAME"
+          fi
+          echo "url=https://${WORKER_NAME}.opral.workers.dev" >> "$GITHUB_OUTPUT"
+          echo "Preview: https://${WORKER_NAME}.opral.workers.dev" >> "$GITHUB_STEP_SUMMARY"
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: preview
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch cleanup token from Infisical
+        uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_PREVIEW_IDENTITY_ID }}
+          oidc-audience: https://github.com/opral
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.INFISICAL_ENVIRONMENT || 'prod' }}
+          secret-path: ${{ vars.INFISICAL_SECRET_PATH || '/fink' }}
+          domain: ${{ vars.INFISICAL_DOMAIN || 'https://app.infisical.com' }}
+      - name: Delete closed PR Worker
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'CLOUDFLARE_API_TOKEN is missing from the Fink Infisical folder.'; exit 1; }
+          npx --yes wrangler@4.148.0 delete --name "fink-pr-${PR_NUMBER}" --force

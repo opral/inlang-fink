@@ -1,0 +1,30 @@
+/* The prototype's rich component highlights, adapted to the standalone layout. */
+.rich-diff { margin: 24px 0; border: 1px solid #e4e4e7; background: white; }
+.rich-diff-bundle { padding: 16px; }
+.rich-diff-bundle + .rich-diff-bundle { border-top: 1px solid #e4e4e7; }
+.rich-diff-heading h3 { margin: 0 0 12px; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.rich-diff-heading sl-details { display: block; margin-bottom: 16px; font-size: 13px; }
+.rich-diff-heading sl-details::part(header) { padding: 8px 12px; }
+.rich-diff-heading sl-details::part(content) { padding: 0; }
+.rich-diff-heading ul { list-style: none; padding: 0 12px; margin: 0 0 8px; font-size: 13px; }
+.rich-diff-heading li { padding: 6px 0; }
+.rich-diff-heading li + li { border-top: 1px solid #e4e4e7; }
+.rich-diff-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.rich-diff-side { min-width: 0; }
+.rich-diff-side h4 { font-size: 12px; font-weight: 500; color: #71717a; margin: 0 0 8px; }
+.rich-diff-render { pointer-events: none; border: 1px solid #d4d4d8; overflow: hidden; }
+.rich-diff-render inlang-bundle { display: block; }
+.rich-diff-render .diff-unchanged { opacity: .3; }
+.rich-diff-absent { padding: 16px; color: #71717a; font-size: 13px; border: 1px dashed #d4d4d8; }
+.highlighted-bundle inlang-message::part(new-variant), .highlighted-bundle::part(add-variable), .highlighted-bundle::part(bundle-action), .highlighted-bundle inlang-message::part(selector-button) { display: none; }
+.highlighted-bundle .highlight-red .inlang-pattern-editor-contenteditable,
+.highlighted-bundle .highlight-match-red::part(match),
+.highlighted-bundle .highlight-selector-red::part(selector),
+.highlighted-bundle.highlight-variables-red::part(variable) { background-color: #f3c9cd !important; border: 1px solid #da2728 !important; }
+.highlighted-bundle .highlight-green .inlang-pattern-editor-contenteditable,
+.highlighted-bundle .highlight-match-green::part(match),
+.highlighted-bundle .highlight-selector-green::part(selector),
+.highlighted-bundle.highlight-variables-green::part(variable) { background-color: #b2f4d4 !important; border: 1px solid #16a34b !important; }
+@media (max-width: 760px) { .rich-diff-columns { grid-template-columns: minmax(0, 1fr); } .rich-diff-bundle { padding: 12px; } }
+
+.highlighted-bundle inlang-variant::part(match-options) { display: none; }
