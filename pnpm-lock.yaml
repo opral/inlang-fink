@@ -603,7 +603,7 @@ packages:
     os: [win32]
 
   '@inlang/editor-component@file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz':
-    resolution: {integrity: sha512-dZQSy1P559OHfvyufqnOQHpeh5NILYPsIVmywyqQybSVTZXOdm8m5LPXFliwXS1luebWoZx5kmP8grZ0Mx7m5w==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
+    resolution: {integrity: sha512-GmJOt3UbBqfMBuGNVF1EjMT6+aF/UUc65npPMspPa+Akd4HbuGpHOsvjVgOPVlJScft62SdlsSvHR7tn8Xx/4A==, tarball: file:vendor/inlang-editor-component-12.0.0-pr.4437.tgz}
     version: 12.0.0
     peerDependencies:
       '@inlang/sdk': 3.1.0
@@ -621,7 +621,7 @@ packages:
     version: 4.4.5
 
   '@inlang/sdk@file:vendor/inlang-sdk-3.1.0-pr.4438.tgz':
-    resolution: {integrity: sha512-xKW7KsQvIwCfSoF/ACj8CcekXCywGXpCQg68TdGf4kb42E592EBcgZximh2Oi6EIW2i2Zc4aZYja59RF0goZWQ==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
+    resolution: {integrity: sha512-wXxbYkQIH46ej1VJ3kx8DIljiw+RNTJG1dw0b4ADvaN1ethFUXke4+N5rpJ4ZOhZTh6wlXtkDViwODfIHMe+ug==, tarball: file:vendor/inlang-sdk-3.1.0-pr.4438.tgz}
     version: 3.1.0
     engines: {node: '>=20.0.0'}
 
