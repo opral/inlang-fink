@@ -324,6 +324,17 @@ async function importedFiles(local: Pick<LocalProject, "context">, plugin: Inlan
     return new Set();
   }
 }
+/**
+ * With one next-intl file per namespace, every message must be in one of them: `Other.title` has no file
+ * if the namespaces are `Home` and `Checkout`.
+ */
+function assertNamespaced(settings: ProjectSettings, bundles: BundleNested[]) {
+  const pathPattern = (settings[nextIntl.key] as { pathPattern?: unknown } | undefined)?.pathPattern;
+  if (!pathPattern || typeof pathPattern !== "object" || Array.isArray(pathPattern)) return;
+  const namespaces = Object.keys(pathPattern);
+  const outside = bundles.filter(bundle => !namespaces.some(namespace => bundle.id.startsWith(`${namespace}.`)) && bundle.messages.some(message => !isBlankMessage(message))).map(bundle => bundle.id);
+  if (outside.length) throw new Error(`Couldn't write the next-intl files: ${outside.slice(0, 5).map(id => `"${id}"`).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} must start with one of the namespaces of pathPattern (${namespaces.map(namespace => `${namespace}.`).join(", ")}). Rename or delete ${outside.length === 1 ? "it" : "them"}. Nothing was pushed.`);
+}
 /** Exports the resource files of `locales`; a file that existed but has no messages left becomes "{}". */
 export async function exportResources(local: Pick<LocalProject, "project" | "context">, locales: Set<string>): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
@@ -332,6 +343,7 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
       const path = resolveResourcePath(local.context.projectPath, plan.path);
       if (locales.has(plan.locale) && local.context.original[path] !== undefined) files[path] = "{}";
     }
+    if (plugin.key === nextIntl.key) assertNamespaced(local.context.settings, await readBundles(local.project));
   }
   for (const plugin of pluginsFor(local.context.settings)) {
     // The files as they are in the repository: the plugin keeps the text of every unchanged message,

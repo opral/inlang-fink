@@ -62,6 +62,10 @@ test("push accepts next-intl resource files, also the sourceLanguageFilePath, an
   };
   await expect(run({ "messages/de.json": "{}", "messages/main.json": "{}" })).resolves.toMatchObject({ head: "d".repeat(40) });
   await expect(run({ "messages/other.json": "{}" })).rejects.toMatchObject({ status: 400 });
+  // the plugin only uses sourceLanguageFilePath next to a single pathPattern
+  remote["plugin.inlang.nextIntl"] = { pathPattern: { Home: "./messages/{locale}/home.json" }, sourceLanguageFilePath: "./messages/main.json" } as never;
+  await expect(run({ "messages/de/home.json": "{}" })).resolves.toMatchObject({ head: "d".repeat(40) });
+  await expect(run({ "messages/main.json": "{}" })).rejects.toMatchObject({ status: 400 });
 });
 test("OAuth uses PKCE and relays sessions only to the preview that initiated login", async () => {
   const env = { GITHUB_CLIENT_ID: "test-client", GITHUB_CLIENT_SECRET: "test-secret", SESSION_SECRET: "a secure test secret with at least 32 characters", GITHUB_CALLBACK_ORIGIN: "https://fink-migration-preview.opral.workers.dev", WORKERS_SUBDOMAIN: "opral" } as Env;

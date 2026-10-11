@@ -53,7 +53,7 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
     const configured = settings[key]?.pathPattern;
     const patterns = typeof configured === "string" ? [configured] : Array.isArray(configured) ? configured : configured && typeof configured === "object" ? Object.values(configured) : [];
     // next-intl's source language file when its name doesn't follow pathPattern
-    const sourceFile = key === "plugin.inlang.nextIntl" ? settings[key]?.sourceLanguageFilePath : undefined;
+    const sourceFile = key === "plugin.inlang.nextIntl" && typeof configured === "string" ? settings[key]?.sourceLanguageFilePath : undefined;
     if (typeof sourceFile === "string") allowed.add(resolveResourcePath(input.projectPath, sourceFile));
     for (const pattern of patterns) for (const locale of [...new Set([...settings.locales, ...nextSettings.locales])]) {
       if (typeof pattern === "string" && typeof locale === "string") allowed.add(resolveResourcePath(input.projectPath, pattern.replace(/\{(?:locale|languageTag)\}/g, locale)));

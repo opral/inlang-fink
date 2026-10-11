@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadProjectInMemory, newProject, selectBundleNested, type MessageNested, type ProjectSettings } from "@inlang/sdk";
 import { exportResources, pluginsFor } from "../src/project";
 import type { RepoContext } from "../src/repository";
+import { validateSettingsEdit } from "../src/settingsData";
 
 /**
  * next-intl projects: `messages/{locale}.json` with nested namespaces, ICU plurals, selects and
@@ -38,6 +39,9 @@ const de = `{
     "title": "Willkommen bei {appName}",
     "cart": "{count, plural, =0 {Dein Warenkorb ist leer} one {Du hast # Artikel} other {Du hast # Artikel}}",
     "terms": "Bitte lies die <b>AGB</b> und unsere <link>Datenschutzerklärung</link>."
+  },
+  "Nav": {
+    "links": ["Doku", "Blog"]
   }
 }
 `;
@@ -79,7 +83,7 @@ describe("next-intl", () => {
     await project.close();
   });
 
-  it.runIf(icu)("plurals, selects and rich text are variants and markup; edited forms and tags are written as ICU", async () => {
+  it.runIf(icu)("plurals and rich text are variants and markup; an edited form and an edited link text change only their entry", async () => {
     const { project, context } = await load();
     const cart = await message(project, "Home.cart", "de");
     expect(cart.selectors.map(selector => selector.name)).toEqual(["countPluralExact", "countPlural"]);
@@ -109,6 +113,36 @@ describe("next-intl", () => {
       '      "title": "Order summary",',
       `      "total": "Total '{'braces'}'"`,
     ]);
+    await project.close();
+  });
+
+  it.runIf(icu)("a new locale's file is written nested, as next-intl reads it", async () => {
+    const withFrench = { ...settings, locales: ["en", "de", "fr"] } as ProjectSettings;
+    const { project, context } = await load({ en, de }, withFrench);
+    await project.db.insertInto("inlang_message").values({ id: "title-fr", bundle_id: "Home.title", locale: "fr", selectors: [] }).execute();
+    await project.db.insertInto("inlang_variant").values({ id: "title-fr-variant", message_id: "title-fr", matches: [], pattern: [{ type: "text", value: "Bienvenue sur " }, { type: "expression", arg: { type: "variable-reference", name: "appName" } }] }).execute();
+    const files = await exportResources({ project, context }, new Set(["fr"]));
+    expect(Object.keys(files)).toEqual(["messages/fr.json"]);
+    expect(JSON.parse(files["messages/fr.json"]!)).toEqual({ Home: { title: "Bienvenue sur {appName}" } });
+    await project.close();
+  });
+
+  it("with a sourceLanguageFilePath, the settings form can't change the reference locale, whose file it is", () => {
+    const withSourceFile = { ...settings, "plugin.inlang.nextIntl": { pathPattern: "./messages/{locale}.json", sourceLanguageFilePath: "./messages/main.json" } } as ProjectSettings;
+    expect(() => validateSettingsEdit(withSourceFile, { ...withSourceFile, baseLocale: "de" } as ProjectSettings)).toThrow("./messages/main.json");
+    expect(() => validateSettingsEdit(withSourceFile, { ...withSourceFile, locales: ["en", "de", "fr"] } as ProjectSettings)).not.toThrow();
+    expect(() => validateSettingsEdit(settings, { ...settings, baseLocale: "de" } as ProjectSettings)).not.toThrow();
+  });
+
+  it("with files per namespace, a message outside the namespaces is reported by name before pushing", async () => {
+    const namespaced = { ...settings, "plugin.inlang.nextIntl": { pathPattern: { Home: "./messages/{locale}/home.json" } } } as ProjectSettings;
+    const project = await loadProjectInMemory({ blob: await newProject({ settings: namespaced }), providePlugins: pluginsFor(namespaced) });
+    await project.importFiles({ pluginKey: "plugin.inlang.nextIntl", files: [{ locale: "en", content: new TextEncoder().encode('{"title":"Home"}'), toBeImportedFilesMetadata: { namespace: "Home" } }] });
+    await project.db.insertInto("inlang_bundle").values({ id: "Other.title", declarations: [] }).execute();
+    await project.db.insertInto("inlang_message").values({ id: "other-en", bundle_id: "Other.title", locale: "en", selectors: [] }).execute();
+    await project.db.insertInto("inlang_variant").values({ id: "other-en-variant", message_id: "other-en", matches: [], pattern: [{ type: "text", value: "Other" }] }).execute();
+    const context = { projectPath: "project.inlang", settings: namespaced, baseline: {}, original: { "project.inlang/settings.json": JSON.stringify(namespaced), "messages/en/home.json": '{"title":"Home"}' } } as unknown as RepoContext;
+    await expect(exportResources({ project, context }, new Set(["en"]))).rejects.toThrow('"Other.title" must start with one of the namespaces of pathPattern (Home.)');
     await project.close();
   });
 

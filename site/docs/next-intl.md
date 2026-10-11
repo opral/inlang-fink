@@ -40,7 +40,7 @@ If you split messages into one file per namespace, give `pathPattern` one entry 
 }
 ```
 
-The messages of `./messages/en/home.json` appear as `HomePage.title` and so on, as `useTranslations("HomePage")` reads them. Fink writes each one back to its own file.
+The messages of `./messages/en/home.json` appear as `HomePage.title` and so on, as `useTranslations("HomePage")` reads them. Fink writes each one back to its own file. A new message must start with one of the namespaces, such as `HomePage.subtitle`: Fink can't push a message that has no file.
 
 ## What Fink understands
 
@@ -64,3 +64,4 @@ Fink writes only the messages you changed. Every other line of the file, its key
 - **Tags around a plural**, such as `<b>{count, plural, …}</b>`, are written into each form, `{count, plural, one {<b>…</b>} …}`, once you edit the message. next-intl renders both the same.
 - **Self-closing tags** like `<br/>` are text in next-intl. Use `<br></br>`.
 - A message next-intl can't parse is shown as text and written back as it was, unless you edit it.
+- With `sourceLanguageFilePath`, the file of the reference locale, change the reference locale in `settings.json` in your repository, not in Fink.
