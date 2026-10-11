@@ -12,7 +12,7 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
   const onSubmit = (event: FormEvent) => { event.preventDefault(); submit(); };
   return <>
     <section className="hero">
-      <p className="eyebrow">Free during beta · Works with i18next and Paraglide JS</p>
+      <p className="eyebrow">Free and open source · Works with i18next and Paraglide JS</p>
       <h1>The translation editor<br />for your GitHub repo.</h1>
       <p className="hero-lead">Open your repository and edit i18next or Paraglide JS translations side by side. Fink catches missing translations and broken variables, then commits only what you changed. No sync, no second copy of your strings.</p>
       <form className="repo-cta" onSubmit={onSubmit}>

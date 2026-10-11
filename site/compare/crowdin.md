@@ -27,8 +27,8 @@ order: 1
 | In-context editing, screenshots | No | Yes |
 | Workflows, vendors, crowdsourcing | No | Yes |
 | Translator accounts | GitHub account | Crowdin account, invited to the project |
-| Price | Free during beta | Paid plans by hosted words and managers. Free for eligible open source projects |
-| Source code | Source-available (FCL-1.0-MIT) | Proprietary |
+| Price | Free | Paid plans by hosted words and managers. Free for eligible open source projects |
+| Source code | Open source (MIT) | Proprietary |
 
 ## Choose Crowdin if
 

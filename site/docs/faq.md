@@ -11,11 +11,11 @@ A translation editor that runs in your browser. It opens the translation files i
 
 ## What does it cost?
 
-Fink is free during the beta.
+Nothing. Fink is free. Optional hosted services, such as machine translation, may come with inlang Cloud. The editor itself stays free.
 
 ## Is Fink open source?
 
-Fink is source-available, not OSI open source. The code is public at [github.com/opral/inlang-fink](https://github.com/opral/inlang-fink) under the Fair Core License (FCL-1.0-MIT), and each release becomes MIT-licensed two years after it's published.
+Yes. Fink is open source under the [MIT license](https://github.com/opral/inlang-fink/blob/main/LICENSE). The code is at [github.com/opral/inlang-fink](https://github.com/opral/inlang-fink).
 
 ## Which formats does Fink support?
 

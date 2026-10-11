@@ -17,7 +17,7 @@ Fink is **not a TMS**. It is an editor for the translation files that are alread
 | Formats | i18next JSON, inlang message format (Paraglide JS) | Dozens |
 | Translation memory, machine translation, glossary | No | Yes |
 | Review workflows, vendors, agencies | No (review happens in GitHub) | Yes |
-| Price | Free during beta | Free tiers or open source plans, then paid plans |
+| Price | Free | Free tiers or open source plans, then paid plans |
 
 ## Fink is a good fit when
 

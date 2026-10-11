@@ -180,14 +180,14 @@ export function llmsTxt(pages) {
   const bySlug = new Map(pages.map(page => [page.slug, page]));
   return `# Fink
 
-> Fink is a free, browser-based translation editor for GitHub repositories. It opens the i18next JSON or inlang message format (Paraglide JS) files in a repository that has a project.inlang folder, shows every language of a message side by side, checks for missing translations, variables and plural forms, and commits the changed files back to the branch. There is no sync and no second copy of the translations: the repository is the source of truth.
+> Fink is a free, open source (MIT), browser-based translation editor for GitHub repositories. It opens the i18next JSON or inlang message format (Paraglide JS) files in a repository that has a project.inlang folder, shows every language of a message side by side, checks for missing translations, variables and plural forms, and commits the changed files back to the branch. There is no sync and no second copy of the translations: the repository is the source of truth.
 
 Key facts:
 - Supported formats: i18next JSON (including namespaces and plurals) and the inlang message format used by Paraglide JS. Not supported: ICU MessageFormat files, next-intl, PO, XLIFF, YAML, mobile string files.
 - Hosting: github.com repositories only. Public repositories open without signing in; pushing requires signing in with GitHub and the Inlang GitHub App installed on the repository.
 - People without write access push to a fork and open a pull request on GitHub. Fink doesn't create branches or pull requests itself.
 - Fink is not a translation management system: no translation memory, no machine translation, no vendor workflows.
-- Free during the beta. Source: ${REPOSITORY} (Fair Core License, FCL-1.0-MIT).
+- Fink is free and open source (MIT): ${REPOSITORY}. Optional hosted services, such as machine translation, may come with inlang Cloud; the editor stays free.
 
 ${NAV.map(group => `## ${group.title}\n\n${group.pages.map(slug => { const page = bySlug.get(slug); return `- [${page.title}](${ORIGIN}/${slug}.md): ${page.description}`; }).join("\n")}`).join("\n\n")}
 

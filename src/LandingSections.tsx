@@ -15,7 +15,7 @@ export function Benefits() {
 }
 
 const faq: [string, ReactNode][] = [
-  ["What does it cost?", "Fink is free during the beta."],
+  ["What does it cost?", "Nothing. Fink is free and open source (MIT). Optional hosted services like machine translation may come with inlang Cloud. The editor stays free."],
   ["Do translators need git or a GitHub account?", <>No git. To save changes they need a free GitHub account. Without one they can try edits in their browser, but can't save them. <a href="/docs/translators">Translators and non-developers</a></>],
   ["Does it work with private repositories?", <>Yes. Sign in with GitHub and install the Inlang GitHub App on the repositories Fink may use. <a href="/docs/getting-started">Getting started</a></>],
   ["Will Fink reformat my files?", <>No. Untouched files aren't committed, and in changed files the messages you didn't edit keep their exact formatting. <a href="/docs/push">What Fink commits</a></>],

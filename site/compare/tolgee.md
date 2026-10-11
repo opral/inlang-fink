@@ -25,8 +25,8 @@ order: 4
 | AI and machine translation | No | Yes |
 | Translator accounts | GitHub account | Tolgee account, invited to the project |
 | Hosting | Hosted at fink.inlang.com | Tolgee Cloud or self-hosted |
-| Price | Free during beta | Free plan with limits, then paid plans. Tolgee announced free plans for open source projects on request |
-| License | FCL-1.0-MIT (source-available) | Apache-2.0, with enterprise features under a separate license |
+| Price | Free | Free plan with limits, then paid plans. Tolgee announced free plans for open source projects on request |
+| License | MIT | Apache-2.0, with enterprise features under a separate license |
 
 ## Choose Tolgee if
 

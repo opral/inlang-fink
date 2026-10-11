@@ -26,8 +26,8 @@ order: 2
 | Over-the-air updates for mobile | No | Yes |
 | Figma integration | No | Yes |
 | Translator accounts | GitHub account | Lokalise account in your team |
-| Price | Free during beta | Paid plans by words and seats, with a free trial |
-| Source code | Source-available (FCL-1.0-MIT) | Proprietary |
+| Price | Free | Paid plans by words and seats, with a free trial |
+| Source code | Open source (MIT) | Proprietary |
 
 ## Choose Lokalise if
 

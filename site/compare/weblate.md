@@ -26,13 +26,13 @@ order: 3
 | Quality checks | Missing translations, variables, plural forms, markup | Many checks |
 | Translator accounts | GitHub account | Weblate account, with anonymous suggestions possible |
 | Hosting | Hosted at fink.inlang.com | Self-hosted (free) or Hosted Weblate (paid, free Libre plan for open source) |
-| License | FCL-1.0-MIT (source-available) | GPL-3.0 |
+| License | MIT | GPL-3.0 |
 
 ## Choose Weblate if
 
 - You run a large community translation effort with many languages and translators.
 - You need translation memory, glossaries or many file formats.
-- You want to self-host under an OSI open source license, or your code isn't on github.com.
+- You want to self-host a full platform, or your code isn't on github.com.
 
 ## Choose Fink if
 

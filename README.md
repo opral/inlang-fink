@@ -1,6 +1,6 @@
 # Fink
 
-User documentation: [fink.inlang.com/docs](https://fink.inlang.com/docs). The docs and comparison pages are Markdown in `site/`, rendered to static HTML by `scripts/build-site.mjs` during `pnpm build`.
+Fink is free and open source under the [MIT license](./LICENSE). User documentation: [fink.inlang.com/docs](https://fink.inlang.com/docs). The docs and comparison pages are Markdown in `site/`, rendered to static HTML by `scripts/build-site.mjs` during `pnpm build`.
 
 A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository, select a branch and `.inlang` project, edit messages, review the generated resources, and commit directly to that branch.
 
