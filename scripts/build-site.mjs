@@ -1,7 +1,7 @@
 // Writes the static docs and comparison pages, sitemap.xml, robots.txt and llms.txt into dist/,
 // and puts a static copy of the landing page into dist/index.html for crawlers. Runs after
 // `vite build` (see package.json).
-import { appendFile, mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "vite";
 import { loadPages, renderPage, renderNotFound, sitemap, robots, llmsTxt, llmsFullTxt, pageMarkdown, url } from "./site.mjs";
@@ -19,7 +19,8 @@ await writeFile(path.join(dist, "sitemap.xml"), sitemap(pages));
 await writeFile(path.join(dist, "robots.txt"), robots());
 await writeFile(path.join(dist, "llms.txt"), llmsTxt(pages));
 await writeFile(path.join(dist, "llms-full.txt"), llmsFullTxt(pages));
-await copyFile("site/site.css", path.join(dist, "site.css"));
+// The same self-hosted fonts as the app (src/fonts.css), then the site styles.
+await writeFile(path.join(dist, "site.css"), (await readFile("src/fonts.css", "utf8")) + (await readFile("site/site.css", "utf8")));
 // The Markdown twins point search engines at their HTML page. The Worker sets this header for
 // /docs/* and /compare/* (run_worker_first); _headers covers the two top-level twins.
 await appendFile(path.join(dist, "_headers"), pages.filter(page => !page.slug.includes("/")).map(page => `\n/${page.slug}.md\n  Link: <${url(page.slug)}>; rel="canonical"\n`).join(""));

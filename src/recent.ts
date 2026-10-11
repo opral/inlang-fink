@@ -39,3 +39,10 @@ export function timeAgo(date: number | string): string {
   }
   return "just now";
 }
+/** The repository owner's GitHub avatar for a recent project card. */
+export const avatarUrl = (owner: string, size = 80) => `https://github.com/${encodeURIComponent(owner)}.png?size=${size}`;
+/** Shown instead of the avatar when it doesn't load: the owner's first one or two letters, e.g. "opral" → "OP", "acme-inc" → "AI". */
+export function initials(owner: string): string {
+  const words = owner.split(/[-_.\s]+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : owner.slice(0, 2)).toUpperCase();
+}
