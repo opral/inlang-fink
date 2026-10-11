@@ -11,8 +11,7 @@ const OG_IMAGE = `${ORIGIN}/og.png`;
 
 /** Sidebar order. Every Markdown file in site/ must be listed here (a test checks it). */
 export const NAV = [
-  { title: "Get started", pages: ["docs", "docs/getting-started", "docs/set-up-a-project", "docs/formats"] },
-  { title: "For teams", pages: ["teams"] },
+  { title: "Get started", pages: ["docs", "docs/getting-started", "docs/set-up-a-project", "docs/formats", "teams"] },
   { title: "Using Fink", pages: ["docs/editing", "docs/reference-locale", "docs/plurals-and-selects", "docs/checks", "docs/unused-messages", "docs/push", "docs/branches-forks-and-pull-requests", "docs/translators", "docs/drafts"] },
   { title: "Integrations", pages: ["docs/i18next", "docs/paraglide-js"] },
   { title: "More", pages: ["docs/privacy", "docs/faq"] },
@@ -70,7 +69,8 @@ export function renderMarkdown(markdown) {
 }
 
 /** Docs and comparison pages belong to their section; a top-level page (e.g. /teams) is its own. */
-const sectionOf = page => page.slug.startsWith("compare") ? { name: "Compare", slug: "compare" } : page.slug.startsWith("docs") ? { name: "Docs", slug: "docs" } : { name: page.navTitle ?? page.title, slug: page.slug };
+const inSection = (slug, section) => slug === section || slug.startsWith(`${section}/`);
+const sectionOf = page => inSection(page.slug, "compare") ? { name: "Compare", slug: "compare" } : inSection(page.slug, "docs") ? { name: "Docs", slug: "docs" } : { name: page.navTitle ?? page.title, slug: page.slug };
 const navLabel = page => page.slug === "docs" ? "Overview" : page.slug === "compare" ? "Fink vs a TMS" : page.navTitle ?? page.title.replace(/^Fink vs /, "vs ");
 
 /** schema.org data: breadcrumbs everywhere, an article per page, and FAQPage for the FAQ. */
@@ -105,7 +105,9 @@ function sidebar(pages, current) {
 }
 
 function pager(pages, current) {
-  const order = NAV.flatMap(group => group.pages), index = order.indexOf(current);
+  // Standalone pages (layout: page) are listed in the sidebar but not part of the reading order.
+  const standalone = new Set(pages.filter(page => page.layout === "page").map(page => page.slug));
+  const order = NAV.flatMap(group => group.pages).filter(slug => !standalone.has(slug)), index = order.indexOf(current);
   const title = slug => { const page = pages.find(page => page.slug === slug); return escape(page ? (page.navTitle ?? page.title) : slug); };
   const previous = order[index - 1], next = order[index + 1];
   return `<nav class="pager" aria-label="Previous and next page">${previous ? `<a href="/${previous}" rel="prev"><span>Previous</span>${title(previous)}</a>` : "<span></span>"}${next ? `<a href="/${next}" rel="next"><span>Next</span>${title(next)}</a>` : "<span></span>"}</nav>`;
@@ -156,7 +158,7 @@ ${page.layout === "page" ? "" : `<nav class="site-sidebar" aria-label="${section
 <h1>${escape(page.title)}</h1>
 ${renderMarkdown(page.body)}
 </article>
-${pager(pages, page.slug)}
+${page.layout === "page" ? "" : pager(pages, page.slug)}
 <p class="page-meta">Maintained by <a href="https://opral.com">Opral</a>, the team behind inlang · <a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="${REPOSITORY}/issues">Report an issue</a> · <a href="/${page.slug}.md">Markdown</a></p>
 </main>
 </div>
@@ -197,7 +199,7 @@ Key facts:
 - Fink is not a translation management system: no translation memory, no machine translation, no vendor workflows.
 - Fink is free and open source (MIT): ${REPOSITORY}. Optional hosted services, such as machine translation, may come with inlang Cloud; the editor stays free.
 
-${NAV.map(group => `## ${group.title}\n\n${group.pages.map(slug => { const page = bySlug.get(slug); return `- [${page.title}](${ORIGIN}/${slug}.md): ${page.description}`; }).join("\n")}`).join("\n\n")}
+${NAV.map(group => `## ${group.title}\n\n${group.pages.map(slug => { const page = bySlug.get(slug); return `- [${page.navTitle ?? page.title}](${ORIGIN}/${slug}.md): ${page.description}`; }).join("\n")}`).join("\n\n")}
 
 ## Optional
 
