@@ -10,25 +10,25 @@ importers:
     dependencies:
       '@inlang/editor-component':
         specifier: 13.0.0
-        version: 13.0.0(@inlang/sdk@4.0.0)(@types/react@19.3.0)
+        version: 13.0.0(@inlang/sdk@4.0.1)(@types/react@19.3.0)
       '@inlang/plugin-i18next':
-        specifier: 6.4.0
-        version: 6.4.0
+        specifier: 6.4.1
+        version: 6.4.1
       '@inlang/plugin-m-function-matcher':
+        specifier: 2.3.1
+        version: 2.3.1
+      '@inlang/plugin-message-format':
+        specifier: 4.5.1
+        version: 4.5.1
+      '@inlang/plugin-next-intl':
         specifier: 2.3.0
         version: 2.3.0
-      '@inlang/plugin-message-format':
-        specifier: 4.5.0
-        version: 4.5.0
-      '@inlang/plugin-next-intl':
-        specifier: 2.2.2
-        version: 2.2.2
       '@inlang/sdk':
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 4.0.1
+        version: 4.0.1
       '@inlang/settings-component':
         specifier: 5.0.0
-        version: 5.0.0(@inlang/sdk@4.0.0)(@types/react@19.3.0)
+        version: 5.0.0(@inlang/sdk@4.0.1)(@types/react@19.3.0)
       '@lit/react':
         specifier: ^1.0.8
         version: 1.0.8(@types/react@19.3.0)
@@ -610,20 +610,20 @@ packages:
     peerDependencies:
       '@inlang/sdk': ^4.0.0
 
-  '@inlang/plugin-i18next@6.4.0':
-    resolution: {integrity: sha512-rR6oysh05jyO7IOBdpY0rPYmrI5WhYg6hCVyQ8k86GKJ99zFTYhzsPE2h7TpbF3XHOXTxDD58b4gvBPmFamlsA==}
+  '@inlang/plugin-i18next@6.4.1':
+    resolution: {integrity: sha512-DuD9LpeksS3NYjrF+sUl8rshMSPgIk+eRAJQ/eYi3eUZeZGYZBvrQvKyw3gwqYvvfl2oVRY+4MbGoOXxBfbkSg==}
 
-  '@inlang/plugin-m-function-matcher@2.3.0':
-    resolution: {integrity: sha512-C1wBvCl+xwrfBS18OO6+JEYZDeI2pnLg/yed6C/TSGOU+K4chsV8kEkUuy42L335yX8Oe/yK7SMyVwJRYBWbWQ==}
+  '@inlang/plugin-m-function-matcher@2.3.1':
+    resolution: {integrity: sha512-VlU/WgmZ904mzlgrW1sgFCQWQH3qSH323i7mam3d8z4jQpDyPdeY6qZ0VzZSeRLjUnRFLCBViBkwfxlIpjaPrQ==}
 
-  '@inlang/plugin-message-format@4.5.0':
-    resolution: {integrity: sha512-sUiIAxNjFBciVun5bVJMZZ0fN6jU9RRaul3ThmE7kyXUtOeOE5GwrBdVCipRn/gxgMhZlCh88oO8RJbXegn+pA==}
+  '@inlang/plugin-message-format@4.5.1':
+    resolution: {integrity: sha512-ZeidgmPGtAhSFIgYabc8webMO3C7GlElJOVRKoV3n3iDof2PTgIbPLAt/kp/lLYGKTmKZxNsog0rDIkkbN1bFA==}
 
-  '@inlang/plugin-next-intl@2.2.2':
-    resolution: {integrity: sha512-+9bMq+Lv3jNzXD/GiaVZI96Z4/Oq3f4cxKPTGOdbZaZwAm24vCbTwCAWK5+Qca67LclElJPOK42bC83yEqx3WQ==}
+  '@inlang/plugin-next-intl@2.3.0':
+    resolution: {integrity: sha512-Q/uxCEFVOqlLUBRetdlUfaCxYV4zjOe495gdj1yowI0jiofAJx8nrsE/H/rn3k1eYG8D7wNRiERWImPbK1PXHg==}
 
-  '@inlang/sdk@4.0.0':
-    resolution: {integrity: sha512-AwGasJATSKq9J3EVBdmIbpU++2DTI8z0J5WbejT6lqymLaoDB4cf95Zp0ijmJp7XUNP/z10qQfA2lz0TAojRYA==}
+  '@inlang/sdk@4.0.1':
+    resolution: {integrity: sha512-1CxNtlaMtjWI22YlVhIpNUgINhZPyTwhHsKhwpRf6HhEXOem8cRImh8gX7wXAQ35gvDMTB46blxNMWKAXWo3pw==}
     engines: {node: '>=20.0.0'}
 
   '@inlang/settings-component@5.0.0':
@@ -2052,9 +2052,9 @@ snapshots:
   '@img/sharp-win32-x64@0.35.4':
     optional: true
 
-  '@inlang/editor-component@13.0.0(@inlang/sdk@4.0.0)(@types/react@19.3.0)':
+  '@inlang/editor-component@13.0.0(@inlang/sdk@4.0.1)(@types/react@19.3.0)':
     dependencies:
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       '@lexical/plain-text': 0.16.1
       '@lexical/utils': 0.16.1
       '@lit/task': 1.0.3
@@ -2067,39 +2067,39 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@inlang/plugin-i18next@6.4.0':
+  '@inlang/plugin-i18next@6.4.1':
     dependencies:
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       '@sinclair/typebox': 0.31.28
 
-  '@inlang/plugin-m-function-matcher@2.3.0':
+  '@inlang/plugin-m-function-matcher@2.3.1':
     dependencies:
       '@babel/parser': 7.29.9
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       svelte: 5.57.2
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@inlang/plugin-message-format@4.5.0':
+  '@inlang/plugin-message-format@4.5.1':
     dependencies:
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       '@sinclair/typebox': 0.31.30
 
-  '@inlang/plugin-next-intl@2.2.2':
+  '@inlang/plugin-next-intl@2.3.0':
     dependencies:
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       '@sinclair/typebox': 0.31.28
 
-  '@inlang/sdk@4.0.0':
+  '@inlang/sdk@4.0.1':
     dependencies:
       '@lix-js/sdk': 0.19.0
       '@sinclair/typebox': 0.31.30
       kysely: 0.28.17
       uuid: 14.0.2
 
-  '@inlang/settings-component@5.0.0(@inlang/sdk@4.0.0)(@types/react@19.3.0)':
+  '@inlang/settings-component@5.0.0(@inlang/sdk@4.0.1)(@types/react@19.3.0)':
     dependencies:
-      '@inlang/sdk': 4.0.0
+      '@inlang/sdk': 4.0.1
       '@lit/task': 1.0.3
       '@shoelace-style/shoelace': 2.14.0(@types/react@19.3.0)
       '@sinclair/typebox': 0.31.28

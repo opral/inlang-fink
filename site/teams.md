@@ -33,7 +33,7 @@ Fink compares each translation with the source text and marks the message. Most 
 ## What each person needs
 
 - **Translator or PM:** A free GitHub account with write access to the repository, and the link a developer sent you. Without write access, the Inlang GitHub App must be installed on your account so Fink can push to your fork. A developer can help with this.
-- **Developer:** Sets up the project once (one command for i18next, nothing for Paraglide JS), installs the Inlang GitHub App on the repository and sends the translators a link.
+- **Developer:** Sets up the project once (one command for i18next, one small file for next-intl, nothing for Paraglide JS), installs the Inlang GitHub App on the repository and sends the translators a link.
 - **Viewer:** Nothing, for a public repository. Changes stay in that browser and can't be saved.
 
 Fink has no accounts, invitations or roles of its own. GitHub decides who can push. For a private repository, everyone needs a GitHub account with access to it, and the Inlang GitHub App installed on it.
