@@ -75,3 +75,11 @@ a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-r
   .site-nav { gap: 14px; }
   .site-nav a[href^="https://github.com"] { display: none; }
 }
+
+/* Standalone pages (layout: page), e.g. /teams: no sidebar, centred column. */
+.page-layout { grid-template-columns: minmax(0, 1fr); }
+.page-layout .site-main { max-width: 760px; margin: 0 auto; }
+.page-layout .prose > p:first-of-type { font-size: 18px; color: var(--text-2); }
+.page-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 24px 0 8px; }
+.page-cta .site-cta { padding: 8px 16px; border-radius: var(--radius); background: var(--text); color: #fff; font-weight: 500; text-decoration: none; }
+.page-cta .site-cta:hover { background: var(--text-2); }

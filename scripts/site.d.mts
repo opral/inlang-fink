@@ -1,5 +1,5 @@
 // Types for scripts/site.mjs, used by tests/site.test.ts.
-export type Page = { slug: string; file: string; title: string; seoTitle: string; description: string; body: string; source: string };
+export type Page = { slug: string; file: string; title: string; seoTitle: string; description: string; body: string; source: string; layout?: string; navTitle?: string };
 export const ORIGIN: string;
 export const REPOSITORY: string;
 export const NAV: { title: string; pages: string[] }[];

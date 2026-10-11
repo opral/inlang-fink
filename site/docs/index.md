@@ -12,6 +12,7 @@ Fink is a free i18n editor that runs in your browser. It opens the translation f
 - [Getting started](/docs/getting-started): open a repository, edit, review and push in five minutes.
 - [Set up a project](/docs/set-up-a-project): add the `project.inlang` folder Fink needs, for i18next or Paraglide JS.
 - [Supported formats](/docs/formats): what Fink can open today, and what it can't.
+- [Fink for teams](/teams): how translators and PMs edit text without JSON or git.
 
 ## Using Fink
 
