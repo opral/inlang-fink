@@ -11,12 +11,12 @@ export function Benefits() {
     <li><h3>Catch mistakes before they ship</h3><p>Checks find missing translations, missing or unknown <code>{"{variables}"}</code> and missing plural forms, with one-click fixes.</p></li>
     <li><h3>Nothing to sync</h3><p>Your repository stays the only copy of your translations. No import, no export, no integration that breaks.</p></li>
     <li><h3>Clean commits</h3><p>Only the messages you edit change. The rest of each file keeps its exact formatting, so the diff is easy to review.</p></li>
-  </ul></section>;
+  </ul><p className="benefits-teams">Translators or PMs who don't use git? <a href="/teams">Fink for teams</a></p></section>;
 }
 
 const faq: [string, ReactNode][] = [
   ["What does it cost?", "Nothing. Fink is free and open source (MIT). Optional hosted services like machine translation may come with inlang Cloud. The editor stays free."],
-  ["Do translators need git or a GitHub account?", <>No git. To save changes they need a free GitHub account. Without one they can try edits in their browser, but can't save them. <a href="/docs/translators">Translators and non-developers</a></>],
+  ["Do translators need git or a GitHub account?", <>No git. To save changes they need a free GitHub account. Without one they can try edits in their browser, but can't save them. <a href="/teams">Fink for teams</a></>],
   ["Does it work with private repositories?", <>Yes. Sign in with GitHub and install the Inlang GitHub App on the repositories Fink may use. <a href="/docs/getting-started">Getting started</a></>],
   ["Will Fink reformat my files?", <>No. Untouched files aren't committed, and in changed files the messages you didn't edit keep their exact formatting. <a href="/docs/push">What Fink commits</a></>],
   ["Can I review changes before they reach main?", <>Yes. Push to a branch you created on GitHub and open a pull request there. People without write access push to a fork and open a pull request. <a href="/docs/branches-forks-and-pull-requests">Branches, forks and pull requests</a></>],

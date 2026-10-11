@@ -5,7 +5,7 @@ description: What translators, PMs and writers need to edit your app's translati
 order: 11
 ---
 
-Fink is built so people who don't use git, a terminal or a code editor can edit translations. They work in the browser, and Fink turns their edits into a commit.
+Fink is built so people who don't use git, a terminal or a code editor can edit translations. They work in the browser, and Fink turns their edits into a commit. For a short overview to share with your team, see [Fink for teams](/teams).
 
 ## What they need
 

@@ -21,3 +21,5 @@
   .benefits, .setup-grid, .faq-list { grid-template-columns: 1fr; }
   .benefits { margin-top: 40px; }
 }
+.benefits-teams { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+.benefits-teams a { color: var(--text); font-weight: 500; text-underline-offset: 3px; }

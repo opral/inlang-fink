@@ -9,7 +9,8 @@ const jsonLd = (html: string) => [...html.matchAll(/<script type="application\/l
 
 describe("static docs and comparison pages", () => {
   test("every Markdown file is in the navigation and every navigation entry exists", () => {
-    const files = ["docs", "compare"].flatMap(section => readdirSync(`site/${section}`).filter(name => name.endsWith(".md")).map(name => name === "index.md" ? section : `${section}/${name.slice(0, -3)}`));
+    const files = ["docs", "compare"].flatMap(section => readdirSync(`site/${section}`).filter(name => name.endsWith(".md")).map(name => name === "index.md" ? section : `${section}/${name.slice(0, -3)}`))
+      .concat(readdirSync("site").filter(name => name.endsWith(".md")).map(name => name.slice(0, -3)));
     expect(NAV.flatMap(group => group.pages).sort()).toEqual(files.sort());
   });
 
@@ -30,7 +31,7 @@ describe("static docs and comparison pages", () => {
       expect(html.match(/<h1[ >]/g)).toHaveLength(1);
       const types = jsonLd(html).map(data => data["@type"]);
       expect(types).toContain("BreadcrumbList");
-      expect(types).toContain(page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : "TechArticle");
+      expect(types).toContain(page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : page.layout === "page" ? "WebPage" : "TechArticle");
     }
     expect(titles.size).toBe(pages.length);
     expect(descriptions.size).toBe(pages.length);
@@ -57,6 +58,17 @@ describe("static docs and comparison pages", () => {
   test("headings get stable anchors", () => {
     expect(headingId("When the branch changed")).toBe("when-the-branch-changed");
     expect(renderMarkdown("## 3. Sign in and grant access")).toContain('id="3-sign-in-and-grant-access"');
+  });
+
+  test("the teams page says exactly where changes go", () => {
+    const teams = bySlug.get("teams")!;
+    const html = renderPage(teams, pages);
+    expect(html).toContain('<link rel="canonical" href="https://fink.inlang.com/teams">');
+    expect(html).not.toContain('class="site-sidebar"');
+    expect(teams.body).toContain("that your link opened. Fink does not open a pull request.");
+    expect(teams.body).toContain("You submit the pull request on GitHub.");
+    expect(sitemap(pages)).toContain("<loc>https://fink.inlang.com/teams</loc>");
+    expect(llmsTxt(pages)).toContain("(https://fink.inlang.com/teams.md)");
   });
 
   test("the not-found page isn't indexed", () => {

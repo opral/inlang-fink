@@ -12,6 +12,7 @@ const OG_IMAGE = `${ORIGIN}/og.png`;
 /** Sidebar order. Every Markdown file in site/ must be listed here (a test checks it). */
 export const NAV = [
   { title: "Get started", pages: ["docs", "docs/getting-started", "docs/set-up-a-project", "docs/formats"] },
+  { title: "For teams", pages: ["teams"] },
   { title: "Using Fink", pages: ["docs/editing", "docs/reference-locale", "docs/plurals-and-selects", "docs/checks", "docs/unused-messages", "docs/push", "docs/branches-forks-and-pull-requests", "docs/translators", "docs/drafts"] },
   { title: "Integrations", pages: ["docs/i18next", "docs/paraglide-js"] },
   { title: "More", pages: ["docs/privacy", "docs/faq"] },
@@ -33,6 +34,12 @@ export function parseFrontmatter(source) {
 /** Every page in `root` (site/), keyed by route without leading slash: "docs", "docs/checks", "compare/crowdin". */
 export function loadPages(root) {
   const pages = [];
+  // Standalone pages at the top level of site/, e.g. site/teams.md → /teams.
+  for (const file of readdirSync(root).filter(name => name.endsWith(".md")).sort()) {
+    const source = readFileSync(path.join(root, file), "utf8");
+    const { data, body } = parseFrontmatter(source);
+    pages.push({ slug: file.slice(0, -3), file: `site/${file}`, title: data.title, seoTitle: data.seoTitle, description: data.description, layout: data.layout, navTitle: data.navTitle, body, source });
+  }
   for (const section of ["docs", "compare"]) {
     for (const file of readdirSync(path.join(root, section)).filter(name => name.endsWith(".md")).sort()) {
       const source = readFileSync(path.join(root, section, file), "utf8");
@@ -62,16 +69,18 @@ export function renderMarkdown(markdown) {
   return marked.parse(markdown, { async: false });
 }
 
-const sectionOf = slug => slug.startsWith("compare") ? { name: "Compare", slug: "compare" } : { name: "Docs", slug: "docs" };
+/** Docs and comparison pages belong to their section; a top-level page (e.g. /teams) is its own. */
+const sectionOf = page => page.slug.startsWith("compare") ? { name: "Compare", slug: "compare" } : page.slug.startsWith("docs") ? { name: "Docs", slug: "docs" } : { name: page.navTitle ?? page.title, slug: page.slug };
+const navLabel = page => page.slug === "docs" ? "Overview" : page.slug === "compare" ? "Fink vs a TMS" : page.navTitle ?? page.title.replace(/^Fink vs /, "vs ");
 
 /** schema.org data: breadcrumbs everywhere, an article per page, and FAQPage for the FAQ. */
 export function structuredData(page) {
-  const section = sectionOf(page.slug);
+  const section = sectionOf(page);
   const crumbs = [{ name: "Fink", item: ORIGIN + "/" }, { name: section.name, item: url(section.slug) }];
   if (page.slug !== section.slug) crumbs.push({ name: page.title, item: url(page.slug) });
   const data = [
     { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: crumbs.map((crumb, index) => ({ "@type": "ListItem", position: index + 1, ...crumb })) },
-    { "@context": "https://schema.org", "@type": page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : "TechArticle", headline: page.seoTitle, description: page.description, url: url(page.slug), mainEntityOfPage: url(page.slug), image: OG_IMAGE, inLanguage: "en", author: { "@type": "Organization", "@id": `${ORIGIN}/#org`, name: "Opral", url: "https://opral.com" }, publisher: { "@id": `${ORIGIN}/#org` }, about: { "@id": `${ORIGIN}/#app` } },
+    { "@context": "https://schema.org", "@type": page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : page.layout === "page" ? "WebPage" : "TechArticle", headline: page.seoTitle, description: page.description, url: url(page.slug), mainEntityOfPage: url(page.slug), image: OG_IMAGE, inLanguage: "en", author: { "@type": "Organization", "@id": `${ORIGIN}/#org`, name: "Opral", url: "https://opral.com" }, publisher: { "@id": `${ORIGIN}/#org` }, about: { "@id": `${ORIGIN}/#app` } },
   ];
   if (page.slug === "docs/faq") data.push({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqEntries(page.body).map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) });
   return data;
@@ -91,14 +100,13 @@ function sidebar(pages, current) {
   return NAV.map(group => `<div class="nav-group"><p class="nav-title">${group.title}</p><ul>${group.pages.map(slug => {
     const page = bySlug.get(slug);
     if (!page) throw new Error(`Navigation lists missing page ${slug}`);
-    const label = slug === "docs" ? "Overview" : slug === "compare" ? "Fink vs a TMS" : page.title.replace(/^Fink vs /, "vs ");
-    return `<li><a href="/${slug}"${slug === current ? ' aria-current="page"' : ""}>${escape(label)}</a></li>`;
+    return `<li><a href="/${slug}"${slug === current ? ' aria-current="page"' : ""}>${escape(navLabel(page))}</a></li>`;
   }).join("")}</ul></div>`).join("");
 }
 
 function pager(pages, current) {
   const order = NAV.flatMap(group => group.pages), index = order.indexOf(current);
-  const title = slug => escape(pages.find(page => page.slug === slug)?.title ?? slug);
+  const title = slug => { const page = pages.find(page => page.slug === slug); return escape(page ? (page.navTitle ?? page.title) : slug); };
   const previous = order[index - 1], next = order[index + 1];
   return `<nav class="pager" aria-label="Previous and next page">${previous ? `<a href="/${previous}" rel="prev"><span>Previous</span>${title(previous)}</a>` : "<span></span>"}${next ? `<a href="/${next}" rel="next"><span>Next</span>${title(next)}</a>` : "<span></span>"}</nav>`;
 }
@@ -108,7 +116,7 @@ export const siteFooter = `<footer class="site-footer"><div class="site-footer-i
 
 /** One static HTML page. */
 export function renderPage(page, pages) {
-  const section = sectionOf(page.slug);
+  const section = sectionOf(page);
   const canonical = url(page.slug);
   const crumbs = page.slug === section.slug ? `<a href="/">Fink</a><span aria-hidden="true">/</span><span>${section.name}</span>` : `<a href="/">Fink</a><span aria-hidden="true">/</span><a href="/${section.slug}">${section.name}</a><span aria-hidden="true">/</span><span>${escape(page.title)}</span>`;
   return `<!doctype html>
@@ -140,8 +148,8 @@ ${structuredData(page).map(data => `<script type="application/ld+json">${JSON.st
 </head>
 <body>
 ${siteHeader}
-<div class="site-layout">
-<nav class="site-sidebar" aria-label="${section.name}">${sidebar(pages, page.slug)}</nav>
+<div class="site-layout${page.layout === "page" ? " page-layout" : ""}">
+${page.layout === "page" ? "" : `<nav class="site-sidebar" aria-label="${section.name}">${sidebar(pages, page.slug)}</nav>`}
 <main class="site-main">
 <nav class="breadcrumbs" aria-label="Breadcrumb">${crumbs}</nav>
 <article class="prose">
