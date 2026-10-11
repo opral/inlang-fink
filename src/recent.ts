@@ -1,7 +1,7 @@
 // Projects opened in this browser. Drafts live in OPFS per repository, branch,
 // and project; this list only remembers how to reopen them.
 export type RecentProject = { owner: string; name: string; branch: string; projectPath: string; openedAt: number; pending: number };
-const KEY = "fink:recent-projects";
+export const RECENT_KEY = "fink:recent-projects";
 const LIMIT = 6;
 export const recentKey = (project: Pick<RecentProject, "owner" | "name" | "branch" | "projectPath">) => [project.owner, project.name, project.branch, project.projectPath].join("/").toLowerCase();
 function valid(value: unknown): value is RecentProject {
@@ -10,12 +10,12 @@ function valid(value: unknown): value is RecentProject {
 }
 export function readRecent(): RecentProject[] {
   try {
-    const value = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(value) ? value.filter(valid).map(project => ({ ...project, pending: Number(project.pending) || 0 })).slice(0, LIMIT) : [];
+    const value = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter(valid).map(project => ({ ...project, pending: Number(project.pending) || 0 })).sort((a, b) => b.openedAt - a.openedAt).slice(0, LIMIT) : [];
   } catch { return []; }
 }
 function write(projects: RecentProject[]) {
-  try { localStorage.setItem(KEY, JSON.stringify(projects.slice(0, LIMIT))); } catch { /* Storage can be unavailable in private windows. */ }
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(projects.slice(0, LIMIT))); } catch { /* Storage can be unavailable in private windows. */ }
 }
 export function rememberRecent(project: Omit<RecentProject, "openedAt" | "pending">) {
   const previous = readRecent();

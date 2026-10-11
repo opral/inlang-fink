@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createComponent } from "@lit/react";
-import { InlangPatternEditor, InlangPatternView, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
+import { InlangPatternEditor, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
 import { isNumericKey, isPluralSelector, missingVariants, resolveInputVariable, selectorGroups, variableNames, type BundleNested, type CheckDiagnostic, type Declaration, type MessageNested, type Pattern, type ProjectSettings, type SelectorGroup } from "@inlang/sdk/browser";
 import { Editor } from "./Editor";
 import { Dropdown } from "./Menu";
@@ -15,7 +15,6 @@ import { seeded } from "./seeded";
 import { isMissing, missingNumbers, missingSelector, type Issue } from "./issues";
 
 const PatternEditor = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
-const PatternView = createComponent({ react: React, tagName: "inlang-pattern-view", elementClass: InlangPatternView });
 const Forms = createComponent({ react: React, tagName: "inlang-message-forms", elementClass: InlangMessageForms, events: { onSelectVariant: "select-variant", onAddVariant: "add-variant" } });
 const Preview = createComponent({ react: React, tagName: "inlang-message-preview", elementClass: InlangMessagePreview, events: { onVariantMatch: "variant-match" } });
 
@@ -31,7 +30,8 @@ type Props = {
   change: (detail: ChangeEventDetail, immediate?: boolean) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
   addVariant: (bundleId: string, variant: Variant) => void; removeVariant: (bundleId: string, variantId: string) => void;
   addMessage: (bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: Variant[] }) => void;
-  restructure: (bundleId: string, messageId: string, next: Restructure) => void;
+  /** Restructures a message; computed from the saved bundle once earlier edits are written. */
+  restructure: (bundleId: string, messageId: string, next: (bundle: BundleNested, message: MessageNested) => Restructure) => void;
   machineTranslate: (request: MachineTranslationRequest) => void;
 };
 
@@ -149,7 +149,7 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
   };
   return <>
     {selected && <p className="editing">{expanded || !isDefault ? <>Editing <b>{label(selected)}</b></> : "Default form"}</p>}
-    {selected && <div className="field"><PatternEditor ref={editor} variant={variants.get(selected.id)} declarations={bundle.declarations} aria-label={`${languageName(message.locale)} translation of ${bundle.id}, form ${label(selected)}`} {...editorProps(selected.pattern)} /></div>}
+    {selected && <div className="field"><PatternEditor ref={editor} variant={variants.get(selected.id)} declarations={bundle.declarations} aria-label={`${languageName(message.locale)} ${source === message ? "text" : "translation"} of ${bundle.id}, form ${label(selected)}`} {...editorProps(selected.pattern)} /></div>}
     {expanded && <Forms message={message} variants={message.variants} declarations={bundle.declarations} locale={message.locale} referenceVariants={referenceVariants} selectedVariantId={selected?.id ?? ""}
       onSelectVariant={event => setSelectedId((event as CustomEvent<{ variantId: string }>).detail.variantId)}
       onAddVariant={event => add((event as CustomEvent<{ matches: Match[] }>).detail.matches)} />}
@@ -193,7 +193,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
   }, [change]);
   const source = bundle.messages.find(message => message.locale === focus.source);
   const sourceName = languageName(focus.source);
-  // Reviewing all languages also makes the reference itself editable.
+  // Target languages; the reference (source) row above them is edited the same way.
   const targets = focus.all ? [focus.source, ...settings.locales.filter(locale => locale !== focus.source)] : focus.targets;
   const issues = useMemo(() => {
     const byLocale: Record<string, Issue[]> = {};
@@ -239,19 +239,8 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
   const untranslated = (variant: Variant) => { const seed = seeded.get(variant.id); return seed ? untranslatedWords(seed.words, variant.pattern).join("|") || undefined : undefined; };
   const localeCell = (locale: string, todo: boolean) => <div className="message-locale">
     <b>{locale}</b><span className="locale-name">{languageName(locale)}</span>
-    {locale === settings.baseLocale && <span className="ref-badge">ref</span>}
+    {locale === settings.baseLocale ? <span className="ref-badge">ref</span> : locale === focus.source && <span className="ref-badge from" title={`Translating from ${languageName(locale)}`}>from</span>}
     {todo && <span className="todo-dot" aria-label="Needs work" />}
-  </div>;
-  const sourceGroups = useMemo(() => source ? selectorGroups(source, bundle.declarations) : [], [source, bundle.declarations]);
-  const sourceRow = () => source && <div className="message-row" key={`ref-${source.locale}`}>
-    {localeCell(source.locale, false)}
-    <div className="message-ref">
-      {isSimple(source) || sourceGroups.length !== 1
-        ? <div className="message-cell source"><PatternView pattern={defaultVariant(source)?.pattern ?? []} declarations={bundle.declarations} />{source.variants.length > 1 && <span className="form-count"> · {source.variants.length} forms</span>}</div>
-        : formRows(source, bundle.declarations, sourceGroups[0]!).filter(form => form.variant).map(form => <div className="message-cell source form" key={form.variant!.id}>
-          <span className="form-label"><b>{form.label}</b>{form.hint && <small>{form.hint}</small>}</span><PatternView pattern={form.variant!.pattern} declarations={bundle.declarations} />
-        </div>)}
-    </div>
   </div>;
   /** Creates the translation shaped like the source: empty forms, or the source text to translate word by word. */
   const start = (locale: string, copy: boolean) => {
@@ -278,19 +267,19 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
       return <p key={`split-${issue.selector}`} className="field-note defect">{numbers ? <>{sourceName} has a form for exactly {listOf(numbers)}.</> : <>{sourceName} uses different words depending on {`{${issue.name}}`}.</>}{afterPlural
         ? <> Add it in <b>Edit structure…</b> after splitting by {`{${issue.name}}`}.</>
         : isSimple(message)
-        ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
+        ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, (current, latest) => splitMessage(current, latest, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
         : <> Add it in <b>Edit structure…</b>.</>}</p>;
     }) : [];
     let cells: React.ReactNode;
     if (!message) cells = <div className="message-cell missing-translation-row">
-      <button type="button" className="empty" onClick={() => start(locale, false)}>Translate to {name}…</button>
+      <button type="button" className="empty" onClick={() => start(locale, false)}>{isTarget ? `Translate to ${name}…` : `Write the ${name} text…`}</button>
       {source && isTarget && <button type="button" className="mt-button" onClick={() => start(locale, true)}>Start from {sourceName}</button>}
-      <button type="button" className="mt-button" onClick={() => machineTranslate({ source: focus.source, targets: [locale], count: 1, message: bundle.id })}><SparkleIcon />Machine translate</button>
+      {isTarget && <button type="button" className="mt-button" onClick={() => machineTranslate({ source: focus.source, targets: [locale], count: 1, message: bundle.id })}><SparkleIcon />Machine translate</button>}
     </div>;
     else if (isSimple(message)) cells = message.variants.map(variant => <div key={variant.id} className="message-cell edit" data-untranslated={untranslated(variant)}>
-      {editor(locale, variant, `${name} translation of ${bundle.id}`)}
+      {editor(locale, variant, `${name} ${isTarget ? "translation" : "text"} of ${bundle.id}`)}
       {notes(locale, variant, locale, false)}
-      {numberSplit && <p className="field-note">{name} uses different words depending on the number ({pluralCategories(locale).length} forms). <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, { plural: numberSplit }))}>Split by {`{${numberSplit}}`}</button></p>}
+      {numberSplit && <p className="field-note">{name} uses different words depending on the number ({pluralCategories(locale).length} forms). <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, (current, latest) => splitMessage(current, latest, { plural: numberSplit }))}>Split by {`{${numberSplit}}`}</button></p>}
       {isTarget && sourceSplits && pluralCategories(locale).length <= 1 && source!.selectors.every(selector => isPluralSelector(selector.name, bundle.declarations)) && <p className="field-note">{name} uses the same words for every number, so one text covers all counts.</p>}
     </div>);
     else if (groups.length === 1) {
@@ -315,11 +304,11 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
           const variant = form.variant, key = `${locale}:${variant.id}`, fresh = copied[variant.id]?.pattern === JSON.stringify(variant.pattern);
           return <div key={variant.id} className={`message-cell edit form${fresh ? " new" : ""}${matched === variant.id ? " matched" : ""}`} data-untranslated={untranslated(variant)}>
             <span className="form-label"><b>{form.label}</b>{form.hint && <small>{form.hint}</small>}</span>
-            <div className="form-body">{editor(key, variant, `${name} translation of ${bundle.id}, form ${form.label}`)}{notes(key, variant, locale, exact)}</div>
-            {!form.required && isTarget && <button type="button" className="inline-link remove-form" aria-label={`Remove the ${form.label} form`} onClick={() => removeVariant(bundle.id, variant.id)}>Remove</button>}
+            <div className="form-body">{editor(key, variant, `${name} ${isTarget ? "translation" : "text"} of ${bundle.id}, form ${form.label}`)}{notes(key, variant, locale, exact)}</div>
+            {!form.required && <button type="button" className="inline-link remove-form" aria-label={`Remove the ${form.label} form`} onClick={() => removeVariant(bundle.id, variant.id)}>Remove</button>}
           </div>;
         })}
-        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${groups[0]!.input}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(bundle, message))}>Use one text again</button></div>}
+        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${groups[0]!.input}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage)}>Use one text again</button></div>}
         <div className="message-cell actions">
           {complete && tokens.length > 0 && <span className="check">✓ {listOf(tokens)} {tokens.length === 1 ? "is" : "are"} in every form</span>}
           <button type="button" className="inline-link" aria-expanded={preview === locale} onClick={() => { setPreview(preview === locale ? undefined : locale); setMatched(undefined); }}>{preview === locale ? "Hide preview" : "Preview"}</button>
@@ -329,19 +318,19 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
       </>;
     }
     else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} referenceVariants={referenceVariants} issues={localeIssues} variants={variants} addVariant={add} editorProps={editorProps} /></div>;
-    return <div className="message-row" key={locale}>
+    return <div className={isTarget ? "message-row" : "message-row reference"} key={locale} data-locale={locale}>
       {localeCell(locale, localeIssues.length > 0)}
-      <div className="message-target">{cells}{unsplit.length > 0 && <div className="message-cell actions">{unsplit}</div>}</div>
+      <div className={isTarget ? "message-target" : "message-target message-ref"}>{cells}{unsplit.length > 0 && <div className="message-cell actions">{unsplit}</div>}</div>
     </div>;
   };
-  // Structure changes a translator can make per language: split by count or by another language's selector, or back to one text.
-  const splits = targets.filter(locale => locale !== focus.source).flatMap(locale => {
+  // Structure changes per language, the reference included: split by count or by another language's selector.
+  const splits = [focus.source, ...targets.filter(locale => locale !== focus.source)].flatMap(locale => {
     const message = bundle.messages.find(value => value.locale === locale);
     if (!message || !isSimple(message)) return [];
-    const byNumber = pluralCategories(locale).length > 1 ? numberInputs(message, bundle.declarations).map(input => ({ label: `Split ${languageName(locale)} by {${input}}`, next: () => splitMessage(bundle, message, { plural: input }) })) : [];
+    const byNumber = pluralCategories(locale).length > 1 ? numberInputs(message, bundle.declarations).map(input => ({ label: `Split ${languageName(locale)} by {${input}}`, next: (current: BundleNested, latest: MessageNested) => splitMessage(current, latest, { plural: input }) })) : [];
     // Selects other languages use; an exact number that belongs to a plural (ICU =0) is part of that plural.
     const used = [...new Set(bundle.messages.flatMap(value => selectorGroups(value, bundle.declarations)).filter(group => !group.isPlural).map(group => group.selector))];
-    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${resolveInputVariable(selector, bundle.declarations)}}`, next: () => splitMessage(bundle, message, { selector }) }));
+    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${resolveInputVariable(selector, bundle.declarations)}}`, next: (current: BundleNested, latest: MessageNested) => splitMessage(current, latest, { selector }) }));
     return [...byNumber, ...bySelector].map(item => ({ ...item, message_id: message.id }));
   });
   return <article className="message-card" data-bundle={bundle.id} ref={root} aria-label={bundle.id}>
@@ -351,7 +340,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
         {status && <span className={`message-status ${tone}`}>{status.label}</span>}
         <Dropdown className="message-menu" title="More actions" align="end" label={<span aria-label={`More actions for ${bundle.id}`}>···</span>}>
           {close => <>
-            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.message_id, item.next()); }}>{item.label}</button>)}
+            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.message_id, item.next); }}>{item.label}</button>)}
             <button type="button" className="menu-item" onClick={() => { close(); setStructure(true); }}>Edit structure…</button>
             <button type="button" className="menu-item" onClick={() => { close(); removeBundle(bundle.id); }}>Delete message</button>
           </>}
@@ -360,7 +349,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
       {usage && code && <p className="message-where">{describeUsage(usage)}{usages!.length > 1 && <> · used in {usages!.length} places</>} · <button type="button" className="inline-link" aria-expanded={showCode} onClick={() => setShowCode(!showCode)}>{showCode ? "hide code" : "code"}</button></p>}
     </header>
     {showCode && usages && code && <UsageCode usages={usages} codeUrl={code.url} scope={code.scope} />}
-    {!focus.all && sourceRow()}
+    {!focus.all && row(focus.source)}
     {targets.map(row)}
     {replaced && <p className="message-note">Replaced your edit with a newer version from GitHub.</p>}
     {others.length > 0 && <div className="message-foot">

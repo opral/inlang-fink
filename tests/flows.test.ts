@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BundleNested, Declaration, MessageNested } from "@inlang/sdk/browser";
-import { markupVariable, wrapVariable, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, unsupportedExactNumber, untranslatedWords, variableSuggestions, words } from "../src/flows";
+import { referenceInputs, markupVariable, wrapVariable, joinMessage, markupLabel, messageFromSource, numberInputs, referenceMarkup, renameVariable, splitMessage, unsupportedExactNumber, untranslatedWords, variableSuggestions, words } from "../src/flows";
 
 const v = (name: string) => ({ type: "expression" as const, arg: { type: "variable-reference" as const, name } });
 const t = (value: string) => ({ type: "text" as const, value });
@@ -137,5 +137,27 @@ describe("unsupportedExactNumber", () => {
     expect(unsupportedExactNumber(i18next, exact("1"))).toBe("1");
     // also a number on the plural selector itself
     expect(unsupportedExactNumber(bundle, { ...english.variants[0]!, id: "en-5", matches: [{ type: "literal-match", key: "countPlural", value: "5" }] })).toBe("5");
+  });
+});
+
+describe("referenceInputs", () => {
+  const hello = (pattern: ReturnType<typeof t | typeof v>[], extra: Declaration[] = []): BundleNested => ({ id: "hello", declarations: [...declarations, ...extra], messages: [
+    { id: "en", bundle_id: "hello", locale: "en", selectors: [], variants: [{ id: "en-1", message_id: "en", matches: [], pattern }] },
+    { id: "de", bundle_id: "hello", locale: "de", selectors: [], variants: [{ id: "de-1", message_id: "de", matches: [], pattern: [t("Hallo "), v("email")] }] },
+  ] });
+  const variant = (pattern: ReturnType<typeof t | typeof v>[]) => ({ id: "en-1", message_id: "en", matches: [], pattern });
+  it("declares variables the reference starts using, once, after the existing declarations", () => {
+    expect(referenceInputs(hello([t("Hello")]), variant([t("Hello "), v("name"), t(" and "), v("name"), v("count")]))).toEqual({ declarations: [...declarations, { type: "input-variable", name: "name" }], added: ["name"] });
+  });
+  it("leaves declared inputs and local variables alone", () => {
+    expect(referenceInputs(hello([t("Hello")]), variant([v("count"), v("countPlural"), t("items")]))).toBeUndefined();
+    // Unused inputs stay unless they may be removed.
+    expect(referenceInputs(hello([v("name")], [{ type: "input-variable", name: "name" }]), variant([t("Hello")]))).toBeUndefined();
+  });
+  it("drops a removable input once no form, selector or local declaration uses it", () => {
+    const removable = (name: string) => name !== "count";
+    expect(referenceInputs(hello([v("name")], [{ type: "input-variable", name: "name" }]), variant([t("Hello")]), removable)).toEqual({ declarations, added: [] });
+    // {email} is still used by German, {count} by the local countPlural.
+    expect(referenceInputs(hello([v("email")]), variant([t("Hello")]), () => true)).toBeUndefined();
   });
 });

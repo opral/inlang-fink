@@ -72,6 +72,33 @@ export function variableSuggestions(source: MessageNested | undefined, target: P
   return [...missing, ...present, ...others];
 }
 
+/** Names of every variable a value refers to (patterns, selectors' local declarations, options). */
+function references(value: unknown, names = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) for (const item of value) references(item, names);
+  else if (value && typeof value === "object") {
+    const node = value as { type?: unknown; name?: unknown };
+    if (node.type === "variable-reference" && typeof node.name === "string") names.add(node.name);
+    for (const child of Object.values(value)) references(child, names);
+  }
+  return names;
+}
+
+/**
+ * The reference defines a message's inputs. Saving a reference form declares the variables it uses that
+ * the bundle doesn't (`input name`), so plugins export them and translations are checked against them,
+ * and drops inputs that `removable` allows (ones declared this way) once nothing uses them anymore.
+ * Returns undefined when the declarations stay as they are.
+ */
+export function referenceInputs(bundle: BundleNested, variant: Variant, removable: (name: string) => boolean = () => false): { declarations: Declaration[]; added: string[] } | undefined {
+  const variants = bundle.messages.flatMap(message => message.variants.filter(value => value.id !== variant.id)).concat(variant);
+  const used = references([variants.map(value => value.pattern), bundle.messages.map(message => message.selectors), bundle.declarations.filter(declaration => declaration.type !== "input-variable")]);
+  const kept = bundle.declarations.filter(declaration => declaration.type !== "input-variable" || used.has(declaration.name) || !removable(declaration.name));
+  const declared = new Set(kept.map(declaration => declaration.name));
+  const added = [...references(variant.pattern)].filter(name => !declared.has(name));
+  if (!added.length && kept.length === bundle.declarations.length) return undefined;
+  return { declarations: [...kept, ...added.map(name => ({ type: "input-variable" as const, name }))], added };
+}
+
 /** Replaces (or, without `to`, removes) every `{from}` in a pattern. */
 export function renameVariable(pattern: Pattern, from: string, to?: string): Pattern {
   const result: Pattern = [];
