@@ -17,7 +17,7 @@ Branches protected with "require a pull request before merging" reject direct pu
 
 If you can't push to the repository, for example as a community translator for an open source project, the bottom bar shows **Fork to make changes**:
 
-1. Sign in with GitHub and choose **Fork**. Fink creates a fork in your account, or uses the one you already have, and opens the same branch and project there.
+1. Sign in with GitHub and install the Inlang GitHub App on your own account ([github.com/apps/inlang/installations/new](https://github.com/apps/inlang/installations/new)), so Fink can push to your fork. Then choose **Fork**. Fink creates a fork in your account, or uses the one you already have, and opens the same branch and project there.
 2. Your edited messages move to the fork's draft. Edits in the **Settings** tab don't move along, so make them again in the fork.
 3. Choose **Push**. Fink commits to the branch in your fork.
 4. Choose **Open pull request**. GitHub's compare page opens with the title "Update translations" filled in. Submit it there.
@@ -28,4 +28,4 @@ An older fork may be behind the original repository. If you see unexpected diffe
 
 ## For maintainers
 
-Translation contributions arrive as normal pull requests. They change only the translation files and only the messages the contributor edited, so they are quick to review. Point contributors to `https://fink.inlang.com/?repo=OWNER/REPO` to open your repository directly. Add `&project=path/to/project.inlang` to skip the project picker.
+Translation contributions arrive as normal pull requests. They change only the translation files and only the messages the contributor edited, so they are quick to review. Send contributors a link like `https://fink.inlang.com/?repo=OWNER/REPO&project=project.inlang` to open your project directly. With only `?repo=`, Fink fills in the repository and waits for **Open**.

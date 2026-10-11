@@ -46,5 +46,5 @@ Fink then pushes on top of the latest commit and retries if the branch moves aga
 ## When a push fails
 
 - **"Sign in before pushing"**: sign in with GitHub.
-- **"Check GitHub App access"** or **"GitHub rejected the commit"**: install the Inlang GitHub App on the repository, and check branch protection. Protected branches that require pull requests reject direct pushes. Use a fork instead. See [Branches, forks and pull requests](/docs/branches-forks-and-pull-requests).
+- **"Check GitHub App access"** or **"GitHub rejected the commit"**: install the Inlang GitHub App on the repository, and check branch protection. Protected branches that require pull requests reject direct pushes. Push to another branch and open a pull request. See [Branches, forks and pull requests](/docs/branches-forks-and-pull-requests).
 - **"Couldn't write the … files"**: the format can't express something in your draft, for example an exact number other than 0 in i18next. Nothing was pushed. Fix the message and push again.

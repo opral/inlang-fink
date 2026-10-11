@@ -15,7 +15,7 @@ Fink is built so people who don't use git, a terminal or a code editor can edit 
 | Open a private repository | A GitHub account with access to the repository, and the Inlang GitHub App installed on it |
 | Save changes to GitHub | A GitHub account (free). Without it, edits stay in their browser |
 | Push straight to a branch | Write access to the repository |
-| Contribute without write access | A GitHub account. Fink forks the repository and they open a pull request |
+| Contribute without write access | A GitHub account with the Inlang GitHub App installed on it, so Fink can push to their fork. Fink forks the repository and they open a pull request |
 
 Fink has no accounts of its own, no invitations and no roles. Access is whatever GitHub allows.
 

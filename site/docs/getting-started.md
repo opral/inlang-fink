@@ -15,7 +15,7 @@ Fink edits the translation files in a GitHub repository. You need three things:
 
 Go to [fink.inlang.com](https://fink.inlang.com) and paste the repository URL, for example `https://github.com/acme/web` or just `acme/web`. Use the repository's root URL, not a link to a branch or file.
 
-Fink reads the default branch and finds every `*.inlang/settings.json` in it. If the repository has several projects or you want another branch, pick them in the **Branch** and **Project** menus, then choose **Open project**.
+Fink reads the default branch and finds every `*.inlang/settings.json` in it. If the repository has several projects, pick a branch and project, then choose **Open project**. A repository with one project opens right away. Switch branches later with the branch menu in the header.
 
 Public repositories open without signing in. Private repositories need you to [sign in and grant access](#3-sign-in-and-grant-access) first.
 

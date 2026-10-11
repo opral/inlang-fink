@@ -80,7 +80,7 @@ i18next stores each plural form as its own key with a suffix:
 }
 ```
 
-Fink shows these three keys as one message, `cart`, with the forms 0, one and other. German needs `one` and `other`, Polish adds `few` and `many`. Fink offers the forms each language needs and writes them back as `cart_few`, `cart_many` and so on. Ordinal plurals (`_ordinal_one`, `_ordinal_other`) work the same way. See [Plurals, selects and exact numbers](/docs/plurals-and-selects).
+Fink shows these keys as one message, `cart`, with a form for exactly 0 and the plural forms. Each language gets the plural forms it needs, for example `few` and `many` in Polish, and Fink writes them back with the matching suffixes, such as `cart_few`. Ordinal plurals (`_ordinal_one`, `_ordinal_other`) work the same way. See [Plurals, selects and exact numbers](/docs/plurals-and-selects).
 
 ## Limitations
 

@@ -40,7 +40,7 @@ Click a translation and type. Changes are saved to your [local draft](/docs/draf
 
 ## Project settings
 
-The **Settings** tab edits the reference locale, the list of languages and experimental flags. Adding a language creates its file on push. Plugin settings and paths stay as they are in the repository.
+The **Settings** tab edits the reference locale, the list of languages and experimental flags. A new language's file is created when you push its first translations. Plugin settings and paths stay as they are in the repository.
 
 ## What Fink doesn't do
 

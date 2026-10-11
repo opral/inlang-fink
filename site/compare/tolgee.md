@@ -20,12 +20,12 @@ order: 4
 | Where translations live | Your GitHub repository | Tolgee project, exported to your repository or served by Tolgee |
 | Getting changes into the repo | Commit or pull request from Fink | Tolgee CLI or API in your CI |
 | In-context editing in your app | No | Yes, with Tolgee SDKs |
-| File formats | i18next JSON, inlang message format | About 17 import/export formats, including i18next JSON |
+| File formats | i18next JSON, inlang message format | Many import and export formats, including i18next JSON |
 | Translation memory, glossary | No | Yes |
 | AI and machine translation | No | Yes |
 | Translator accounts | GitHub account | Tolgee account, invited to the project |
 | Hosting | Hosted at fink.inlang.com | Tolgee Cloud or self-hosted |
-| Price | Free during beta | Free plan with limits, then paid plans. Free Business plan for open source on request |
+| Price | Free during beta | Free plan with limits, then paid plans. Tolgee announced free plans for open source projects on request |
 | License | FCL-1.0-MIT (source-available) | Apache-2.0, with enterprise features under a separate license |
 
 ## Choose Tolgee if

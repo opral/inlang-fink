@@ -132,5 +132,8 @@ test("unknown docs and comparison pages are 404s instead of the app's fallback p
   // The app itself, and files that aren't HTML, pass through untouched.
   expect(await (await worker.fetch(new Request("https://fink.test/?repo=a/b"), env)).text()).toBe(app);
   assets.mockResolvedValueOnce(new Response("# Checks", { headers: { "Content-Type": "text/markdown" } }));
-  expect((await worker.fetch(new Request("https://fink.test/docs/checks.md"), env)).status).toBe(200);
+  const markdown = await worker.fetch(new Request("https://fink.test/docs/checks.md"), env);
+  expect(markdown.status).toBe(200);
+  expect(markdown.headers.get("Link")).toBe('<https://fink.inlang.com/docs/checks>; rel="canonical"');
+  expect(await markdown.text()).toBe("# Checks");
 });

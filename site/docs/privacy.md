@@ -27,7 +27,7 @@ On fink.inlang.com, Fink sends four anonymous events to PostHog (US) to count us
 | `app:session_start` | Fink opens | whether you're signed in |
 | `project:project_view` | a project finishes loading | a hashed project ID, number of messages, languages and recent committers |
 | `changes:commit_create` | a push succeeds | number of messages and languages |
-| `cloud:interest_button_click` | you open the machine translation request | which step |
+| `cloud:interest_button_click` | you open machine translation or its request form | which step |
 
 Fink never sends message text, keys, file names or repository names. Signed-in users are counted by a hashed GitHub login. URLs are cut to the page path. There is no autocapture, page view tracking or session recording. Events go through Fink's own domain, and PostHog receives your IP address as with any web request. PostHog also records standard browser and device properties.
 

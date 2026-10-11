@@ -160,7 +160,7 @@ ${siteFooter}
 
 /** The page for unknown /docs and /compare paths, served with status 404 by the Worker. */
 export function renderNotFound(pages) {
-  return renderPage({ slug: "docs", file: "site/docs/index.md", title: "Page not found", seoTitle: "Page not found · Fink docs", description: "This page doesn't exist.", body: "This page doesn't exist, or it moved. Start from the [docs overview](/docs) or [open Fink](/)." }, pages)
+  return renderPage({ slug: "docs/not-found", file: "site/docs/index.md", title: "Page not found", seoTitle: "Page not found · Fink docs", description: "This page doesn't exist.", body: "This page doesn't exist, or it moved. Start from the [docs overview](/docs) or [open Fink](/)." }, pages)
     .replace("<head>\n", '<head>\n<meta name="robots" content="noindex">\n')
     .replace(/<link rel="canonical"[^>]*>\n/, "")
     .replace(/<link rel="alternate"[^>]*>\n/, "")

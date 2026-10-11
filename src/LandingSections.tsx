@@ -7,7 +7,7 @@ import "./landing.css";
 /** Why Fink: right under the repository input. */
 export function Benefits() {
   return <section aria-labelledby="benefits-title"><h2 id="benefits-title" className="visually-hidden">Why Fink</h2><ul className="benefits">
-    <li><h3>One message, every language</h3><p>Stop juggling <code>en.json</code>, <code>de.json</code> and <code>fr.json</code>. Each message shows all its translations, plurals and namespaces in one card.</p></li>
+    <li><h3>One message, every language</h3><p>Stop juggling <code>en.json</code>, <code>de.json</code> and <code>fr.json</code>. Each message shows all its translations and plural forms in one card.</p></li>
     <li><h3>Catch mistakes before they ship</h3><p>Checks find missing translations, missing or unknown <code>{"{variables}"}</code> and missing plural forms, with one-click fixes.</p></li>
     <li><h3>Nothing to sync</h3><p>Your repository stays the only copy of your translations. No import, no export, no integration that breaks.</p></li>
     <li><h3>Clean commits</h3><p>Only the messages you edit change. The rest of each file keeps its exact formatting, so the diff is easy to review.</p></li>

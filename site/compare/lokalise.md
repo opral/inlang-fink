@@ -19,13 +19,13 @@ order: 2
 |---|---|---|
 | Where translations live | Your GitHub repository | Lokalise project, synced to your repository |
 | GitHub workflow | Direct commits, or a pull request from a fork | Pull requests from a Lokalise branch, via the GitHub app or Actions |
-| File formats | i18next JSON, inlang message format | 30+ formats, including i18next JSON |
+| File formats | i18next JSON, inlang message format | Many formats, including i18next JSON |
 | AI and machine translation | No | Yes |
 | Translation memory | No | Yes |
 | Automated workflows, review steps | No (review in GitHub) | Yes |
 | Over-the-air updates for mobile | No | Yes |
 | Figma integration | No | Yes |
-| Translator accounts | GitHub account | Lokalise seat (free translator seats on paid plans) |
+| Translator accounts | GitHub account | Lokalise account in your team |
 | Price | Free during beta | Paid plans by words and seats, with a free trial |
 | Source code | Source-available (FCL-1.0-MIT) | Proprietary |
 

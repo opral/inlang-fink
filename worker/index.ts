@@ -87,7 +87,12 @@ async function staticPage(request: Request, env: Env, url: URL): Promise<Respons
   // A HEAD response has no body to check, so look at the GET response and drop the body after.
   const response = url.pathname === "/docs/not-found" ? undefined : await env.ASSETS.fetch(head ? new Request(request, { method: "GET" }) : request);
   const fallback = !response || (response.status === 200 && (response.headers.get("Content-Type") ?? "").includes("text/html") && (await response.clone().text()).includes('<div id="root">'));
-  if (!fallback) return head ? new Response(null, { status: response.status, headers: response.headers }) : response;
+  if (!fallback) {
+    const headers = new Headers(response.headers);
+    // Markdown twins of the pages (for AI tools) point search engines at the HTML page.
+    if (url.pathname.endsWith(".md")) headers.set("Link", `<${PRODUCTION_ORIGIN}${url.pathname.slice(0, -3)}>; rel="canonical"`);
+    return new Response(head ? null : response.body, { status: response.status, statusText: response.statusText, headers });
+  }
   const notFound = await env.ASSETS.fetch(new Request(new URL("/docs/not-found", url)));
   return new Response(head ? null : notFound.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" } });
 }

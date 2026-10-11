@@ -20,8 +20,9 @@ await writeFile(path.join(dist, "robots.txt"), robots());
 await writeFile(path.join(dist, "llms.txt"), llmsTxt(pages));
 await writeFile(path.join(dist, "llms-full.txt"), llmsFullTxt(pages));
 await copyFile("site/site.css", path.join(dist, "site.css"));
-// The Markdown twins point search engines at their HTML page.
-await appendFile(path.join(dist, "_headers"), pages.map(page => `\n/${page.slug}.md\n  Link: <${url(page.slug)}>; rel="canonical"\n`).join(""));
+// The Markdown twins point search engines at their HTML page. The Worker sets this header for
+// /docs/* and /compare/* (run_worker_first); _headers covers the two top-level twins.
+await appendFile(path.join(dist, "_headers"), pages.filter(page => !page.slug.includes("/")).map(page => `\n/${page.slug}.md\n  Link: <${url(page.slug)}>; rel="canonical"\n`).join(""));
 
 // The landing page rendered by React on the server, so `curl https://fink.inlang.com` shows content.
 // React 19 adds image preload hints to static markup; they don't belong inside #root.
