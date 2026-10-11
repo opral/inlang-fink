@@ -1,11 +1,11 @@
 ---
 title: Plurals, selects and exact numbers
-seoTitle: Plurals, selects and exact numbers (i18next and Paraglide JS)
+seoTitle: Plurals, selects and exact numbers in Fink
 description: How Fink handles plural forms (one, few, many, other), selects such as gender, and forms for exact numbers like 0, per language.
 order: 6
 ---
 
-Some messages need several **forms**: "1 ticket" and "5 tickets", or a different text for each gender. Fink shows them as forms inside one message, per language, for i18next plural keys (`_one`, `_other`, `_zero`) and Paraglide JS plural and select messages alike.
+Some messages need several **forms**: "1 ticket" and "5 tickets", or a different text for each gender. Fink shows them as forms inside one message, per language, for i18next plural keys (`_one`, `_other`, `_zero`), next-intl ICU plurals and selects, and Paraglide JS plural and select messages alike.
 
 ## Plurals
 
@@ -24,6 +24,7 @@ A form for an exact number takes priority over the plural category. A typical us
 - If the reference has a form for 0 and your language doesn't choose by exact numbers yet, the card shows **No form for 0**. Add the form in **Edit structure…** (split the message by `{count}` first if it is one text).
 - If your language already has exact-number forms but one is missing, the card shows **1 form missing** with **+ Add a form for 0**.
 - **i18next** supports only exactly 0 (`key_zero`). Other exact numbers can't be saved in i18next projects.
+- **next-intl** (ICU `=0`, `=1`, …) supports any exact number.
 - **inlang message format** (Paraglide JS) supports any exact number.
 
 ## Selects

@@ -33,14 +33,14 @@ Fink compares each translation with the source text and marks the message. Most 
 ## What each person needs
 
 - **Translator or PM:** A free GitHub account with write access to the repository, and the link a developer sent you. Without write access, the Inlang GitHub App must be installed on your account so Fink can push to your fork. A developer can help with this.
-- **Developer:** Sets up the project once (one command for i18next, nothing for Paraglide JS), installs the Inlang GitHub App on the repository and sends the translators a link.
+- **Developer:** Sets up the project once (one command for i18next, one small file for next-intl, nothing for Paraglide JS), installs the Inlang GitHub App on the repository and sends the translators a link.
 - **Viewer:** Nothing, for a public repository. Changes stay in that browser and can't be saved.
 
 Fink has no accounts, invitations or roles of its own. GitHub decides who can push. For a private repository, everyone needs a GitHub account with access to it, and the Inlang GitHub App installed on it.
 
 ## Setup for developers
 
-1. Add a `project.inlang` folder to the repository. For i18next, run `npx i18next-cli init --inlang`. Paraglide JS projects already have one. See [Set up a project](/docs/set-up-a-project).
+1. Add a `project.inlang` folder to the repository. For i18next, run `npx i18next-cli init --inlang`. For next-intl, add one small settings file, see [next-intl](/docs/next-intl). Paraglide JS projects already have one. See [Set up a project](/docs/set-up-a-project).
 2. Install the [Inlang GitHub App](https://github.com/apps/inlang/installations/new) on the repository.
 3. Add translators and PMs as collaborators on GitHub, or let them work through forks.
 4. Send them a link: `https://fink.inlang.com/?repo=OWNER/REPO&project=project.inlang&branch=BRANCH`. Without `&branch=`, Fink opens the default branch. Fink does not create branches, so create the branch on GitHub first.
@@ -61,7 +61,7 @@ Before you push, **Review** shows each changed text before and after. Only the f
 
 - Everyone who saves changes needs a GitHub account.
 - Only repositories on github.com.
-- Only i18next JSON and Paraglide JS (inlang message format) files. See [Supported formats](/docs/formats).
+- Only i18next JSON, next-intl and Paraglide JS (inlang message format) files. See [Supported formats](/docs/formats).
 - No comments, screenshots or translation memory. Machine translation is not available yet.
 
 Fink is free and open source (MIT).

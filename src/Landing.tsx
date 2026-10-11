@@ -18,7 +18,7 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
     <section className="hero" aria-labelledby="hero-title">
       <div className="hero-text">
         <h1 id="hero-title">The translation editor for your GitHub repo.</h1>
-        <p className="hero-lead">Open your repository. Edit i18next or Paraglide JS translations side by side. Push only what you changed.</p>
+        <p className="hero-lead">Open your repository. Edit i18next, next-intl or Paraglide JS translations side by side. Push only what you changed.</p>
         <form className="repo-cta" onSubmit={onSubmit}>
           <label className="visually-hidden" htmlFor="repository-url">GitHub repository</label>
           <input id="repository-url" value={url} onChange={event => setUrl(event.target.value)} placeholder="github.com/owner/repo" inputMode="url" autoCapitalize="off" autoComplete="off" spellCheck={false} required />

@@ -21,10 +21,10 @@ A translation management system (TMS) such as Crowdin, Lokalise, Weblate or Tolg
 |---|---|---|
 | Where translations live | Only in your GitHub repository | On the platform, synced to your repository |
 | Getting changes into the repo | Fink commits to your branch, or you open a pull request from a fork | Sync job or CLI, usually as a pull request from a service branch |
-| Setup | A `project.inlang` folder, one command for i18next | Project, integration and sync configuration |
+| Setup | A `project.inlang` folder: one command for i18next, one small file for next-intl | Project, integration and sync configuration |
 | Translator accounts | GitHub account | Platform account, invited per project |
 | Checks | Missing translations, variables, plural forms, markup | QA checks |
-| Formats | i18next JSON, inlang message format (Paraglide JS) | Dozens |
+| Formats | i18next JSON, next-intl, inlang message format (Paraglide JS) | Dozens |
 | Translation memory, machine translation, glossary | No | Yes |
 | Review workflows, vendors, agencies | No, review happens on GitHub | Yes |
 | Price | Free | Free tiers or open source plans, then paid plans |
@@ -32,7 +32,7 @@ A translation management system (TMS) such as Crowdin, Lokalise, Weblate or Tolg
 
 ## Fink fits when
 
-- Your translations are i18next JSON or Paraglide JS files in a GitHub repository.
+- Your translations are i18next JSON, next-intl or Paraglide JS files in a GitHub repository.
 - Developers, PMs or volunteers do the translating, and you want their changes as commits you can review.
 - A second copy of your strings, or a sync that can break, is the problem you want to get rid of.
 

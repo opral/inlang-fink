@@ -49,9 +49,12 @@ export async function push(input: PushInput, token: string): Promise<{ head: str
   const nextSettings = input.files[settingsPath] ? JSON.parse(input.files[settingsPath]) : settings;
   try { validateSettingsEdit(settings, nextSettings); } catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid settings edit."); }
   const allowed = new Set<string>([settingsPath]);
-  for (const key of ["plugin.inlang.i18next", "plugin.inlang.messageFormat"]) {
+  for (const key of ["plugin.inlang.i18next", "plugin.inlang.messageFormat", "plugin.inlang.nextIntl"]) {
     const configured = settings[key]?.pathPattern;
     const patterns = typeof configured === "string" ? [configured] : Array.isArray(configured) ? configured : configured && typeof configured === "object" ? Object.values(configured) : [];
+    // next-intl's source language file when its name doesn't follow pathPattern
+    const sourceFile = key === "plugin.inlang.nextIntl" && typeof configured === "string" ? settings[key]?.sourceLanguageFilePath : undefined;
+    if (typeof sourceFile === "string") allowed.add(resolveResourcePath(input.projectPath, sourceFile));
     for (const pattern of patterns) for (const locale of [...new Set([...settings.locales, ...nextSettings.locales])]) {
       if (typeof pattern === "string" && typeof locale === "string") allowed.add(resolveResourcePath(input.projectPath, pattern.replace(/\{(?:locale|languageTag)\}/g, locale)));
     }

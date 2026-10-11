@@ -19,7 +19,7 @@ Yes. Fink is open source under the [MIT license](https://github.com/opral/inlang
 
 ## Which formats does Fink support?
 
-i18next JSON and the inlang message format used by Paraglide JS. ICU MessageFormat files, next-intl, PO, XLIFF and others are not supported. See [Supported formats](/docs/formats).
+i18next JSON, next-intl message files and the inlang message format used by Paraglide JS. Other ICU MessageFormat files, PO, XLIFF and others are not supported. See [Supported formats](/docs/formats).
 
 ## Does it work with GitLab or Bitbucket?
 
@@ -51,7 +51,7 @@ Your draft is stored locally, but opening a project and pushing need GitHub.
 
 ## Do I need a project.inlang folder?
 
-Yes. It tells Fink your languages and where the files are. i18next and Paraglide JS projects can create one with a single command. See [Set up a project](/docs/set-up-a-project).
+Yes. It tells Fink your languages and where the files are. i18next and Paraglide JS projects can create one with a single command; for next-intl it is one small file. See [Set up a project](/docs/set-up-a-project).
 
 ## How is Fink different from Crowdin or Lokalise?
 

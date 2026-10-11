@@ -1,11 +1,11 @@
 ---
 title: Fink vs Lokalise
 seoTitle: Fink vs Lokalise: a free Lokalise alternative for GitHub repos
-description: Lokalise is an AI localization platform with GitHub sync. Fink is a free editor for the i18next and Paraglide files in your repo. When to pick which.
+description: Lokalise is an AI localization platform with GitHub sync. Fink is a free editor for the i18next, next-intl and Paraglide files in your repo. When to pick which.
 order: 2
 ---
 
-**Short answer:** Lokalise is a commercial localization platform with AI translation, automated workflows and many integrations. Fink is a free editor for the translation files in your GitHub repository. Pick Lokalise for automation and professional translation at scale. Pick Fink as a free Lokalise alternative if your team edits i18next or Paraglide JS translations and you'd rather keep everything in git.
+**Short answer:** Lokalise is a commercial localization platform with AI translation, automated workflows and many integrations. Fink is a free editor for the translation files in your GitHub repository. Pick Lokalise for automation and professional translation at scale. Pick Fink as a free Lokalise alternative if your team edits i18next, next-intl or Paraglide JS translations and you'd rather keep everything in git.
 
 ## How they work
 
@@ -19,7 +19,7 @@ order: 2
 |---|---|---|
 | Where translations live | Your GitHub repository | Lokalise project, synced to your repository |
 | GitHub workflow | Direct commits, or a pull request from a fork | Pull requests from a Lokalise branch, via the GitHub app or Actions |
-| File formats | i18next JSON, inlang message format | Many formats, including i18next JSON |
+| File formats | i18next JSON, next-intl, inlang message format | Many formats, including i18next JSON |
 | AI and machine translation | No | Yes |
 | Translation memory | No | Yes |
 | Automated workflows, review steps | No (review in GitHub) | Yes |
@@ -37,7 +37,7 @@ order: 2
 
 ## Choose Fink if
 
-- Your translations are i18next or Paraglide JS files in a GitHub repository.
+- Your translations are i18next, next-intl or Paraglide JS files in a GitHub repository.
 - You want no sync, no second copy and no per-word pricing.
 - Reviewing translations as commits and pull requests suits your team.
 

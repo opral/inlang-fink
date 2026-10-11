@@ -32,9 +32,10 @@ const faq: [string, ReactNode][] = [
 export function LandingMore() {
   return <>
     <section className="landing-section" aria-labelledby="setup-title">
-      <header className="section-header"><div><h2 id="setup-title">Set up in one command</h2><p>Fink reads a small <code>project.inlang</code> folder that lists your languages and where the files are. Your translation files stay as they are.</p></div><a className="section-link" href="/docs/set-up-a-project">Setup guide</a></header>
+      <header className="section-header"><div><h2 id="setup-title">Set up in a minute</h2><p>Fink reads a small <code>project.inlang</code> folder that lists your languages and where the files are. Your translation files stay as they are.</p></div><a className="section-link" href="/docs/set-up-a-project">Setup guide</a></header>
       <div className="setup-grid">
         <article className="setup-card"><h3>i18next</h3><p>Creates <code>project.inlang/settings.json</code> for your JSON files, including namespaces. <a href="/docs/i18next">i18next guide</a></p><pre><code>npx i18next-cli init --inlang</code></pre></article>
+        <article className="setup-card"><h3>next-intl</h3><p>Add a <code>project.inlang/settings.json</code> that points at your <code>messages/{"{locale}"}.json</code>. Namespaces, plurals and rich text work as they are. <a href="/docs/next-intl">next-intl guide</a></p><pre><code>{`"plugin.inlang.nextIntl": {\n  "pathPattern": "./messages/{locale}.json"\n}`}</code></pre></article>
         <article className="setup-card"><h3>Paraglide JS</h3><p>Projects set up with Paraglide JS already have a <code>project.inlang</code> folder. <a href="/docs/paraglide-js">Paraglide JS guide</a></p><pre><code>npx @inlang/paraglide-js@latest init</code></pre></article>
       </div>
     </section>

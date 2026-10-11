@@ -1,7 +1,7 @@
 ---
 title: Set up a project
-seoTitle: Add a project.inlang folder for Fink (i18next and Paraglide JS)
-description: Fink needs an inlang project folder in your repository. Create project.inlang/settings.json for i18next JSON or Paraglide JS with one command, or by hand.
+seoTitle: Add a project.inlang folder for Fink (i18next, next-intl)
+description: Fink needs an inlang project folder in your repository. Create project.inlang/settings.json for i18next JSON, next-intl or Paraglide JS.
 order: 2
 ---
 
@@ -42,6 +42,26 @@ With namespaces (several files per language), use one entry per namespace. See [
 }
 ```
 
+## next-intl projects
+
+Create `project.inlang/settings.json` next to your app's `package.json`, with the locales of your next-intl routing:
+
+```json
+{
+  "$schema": "https://inlang.com/schema/project-settings",
+  "baseLocale": "en",
+  "locales": ["en", "de"],
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-next-intl@2/dist/index.js"
+  ],
+  "plugin.inlang.nextIntl": {
+    "pathPattern": "./messages/{locale}.json"
+  }
+}
+```
+
+With one file per namespace, use one entry per namespace. See [next-intl](/docs/next-intl).
+
 ## Paraglide JS projects
 
 `npx @inlang/paraglide-js@latest init` creates `project.inlang` with the inlang message format plugin. Its settings look like this:
@@ -66,9 +86,9 @@ See [Paraglide JS](/docs/paraglide-js).
 ## Rules Fink checks
 
 - `baseLocale` must be set and included in `locales`. Older projects that use `sourceLanguageTag` and `languageTags` must be migrated first.
-- Configure **exactly one** format plugin: `plugin.inlang.i18next` or `plugin.inlang.messageFormat`, with a `pathPattern`. Fink reports any other format plugin as unsupported. See [Supported formats](/docs/formats).
+- Configure **exactly one** format plugin: `plugin.inlang.i18next`, `plugin.inlang.nextIntl` or `plugin.inlang.messageFormat`, with a `pathPattern`. Fink reports any other format plugin as unsupported. See [Supported formats](/docs/formats).
 - `pathPattern` must be relative and stay inside the repository.
-- Fink uses its own pinned copies of the two plugins. It never runs code from the `modules` URLs in your repository. Keep `modules` for other inlang tools, such as the Paraglide compiler or the inlang CLI.
+- Fink uses its own pinned copies of these plugins. It never runs code from the `modules` URLs in your repository. Keep `modules` for other inlang tools, such as the Paraglide compiler or the inlang CLI.
 
 ## Several projects in one repository
 

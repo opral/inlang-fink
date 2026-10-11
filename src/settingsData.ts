@@ -11,4 +11,8 @@ export function validateSettingsEdit(before: ProjectSettings, after: ProjectSett
   if (after.experimental !== undefined && (!after.experimental || typeof after.experimental !== "object" || Array.isArray(after.experimental) || Object.values(after.experimental).some(value => value !== true))) throw new Error("Experimental settings must be enabled flags.");
   const config = (settings: ProjectSettings) => Object.fromEntries(Object.entries(settings).filter(([key]) => !["baseLocale", "locales", "experimental"].includes(key)));
   if (settingsSignature(config(before)) !== settingsSignature(config(after))) throw new Error("The settings form can edit locales, reference locale, and experimental flags only.");
+  // next-intl's sourceLanguageFilePath is the file of the reference locale: with another one, the file
+  // of the previous reference locale would be written as the new one's.
+  const sourceFile = (before["plugin.inlang.nextIntl"] as { sourceLanguageFilePath?: unknown } | undefined)?.sourceLanguageFilePath;
+  if (typeof sourceFile === "string" && after.baseLocale !== before.baseLocale) throw new Error(`This project reads the reference locale from ${sourceFile} (next-intl sourceLanguageFilePath). Change the reference locale in project.inlang/settings.json in the repository.`);
 }

@@ -11,7 +11,7 @@ order: 4
 
 **Tolgee** stores keys and translations in a Tolgee project, in the cloud or self-hosted. Developers push and pull files with the Tolgee CLI or API from their CI, or deliver translations through Tolgee's content delivery. Its SDKs let people edit text inside the running app.
 
-**Fink** reads your i18next or Paraglide JS files from GitHub and commits edits back. Nothing to push or pull.
+**Fink** reads your i18next, next-intl or Paraglide JS files from GitHub and commits edits back. Nothing to push or pull.
 
 ## Comparison
 
@@ -20,7 +20,7 @@ order: 4
 | Where translations live | Your GitHub repository | Tolgee project, exported to your repository or served by Tolgee |
 | Getting changes into the repo | Commit or pull request from Fink | Tolgee CLI or API in your CI |
 | In-context editing in your app | No | Yes, with Tolgee SDKs |
-| File formats | i18next JSON, inlang message format | Many import and export formats, including i18next JSON |
+| File formats | i18next JSON, next-intl, inlang message format | Many import and export formats, including i18next JSON |
 | Translation memory, glossary | No | Yes |
 | AI and machine translation | No | Yes |
 | Translator accounts | GitHub account | Tolgee account, invited to the project |
@@ -36,7 +36,7 @@ order: 4
 
 ## Choose Fink if
 
-- Your translations are i18next or Paraglide JS files on GitHub, and they should stay the only source of truth.
+- Your translations are i18next, next-intl or Paraglide JS files on GitHub, and they should stay the only source of truth.
 - You don't want to add an SDK, a CLI step or a sync to your build.
 
 Sources, last checked October 11, 2026: [tolgee.io](https://tolgee.io), [CLI push and pull](https://docs.tolgee.io/tolgee-cli/push-pull-strings), [supported formats](https://docs.tolgee.io/platform/supported_formats), [pricing](https://tolgee.io/pricing), [license](https://github.com/tolgee/tolgee-platform/blob/main/LICENSE).

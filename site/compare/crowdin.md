@@ -5,7 +5,7 @@ description: Crowdin is a full localization platform that syncs with GitHub. Fin
 order: 1
 ---
 
-**Short answer:** Crowdin is a complete localization platform for teams that work with professional translators, machine translation and many integrations. Fink is a free, much smaller tool: a browser editor for the i18next or Paraglide JS files already in your GitHub repository. Pick Crowdin for scale and translator tooling. Pick Fink as a free Crowdin alternative if you want to edit translations where they live, without a sync.
+**Short answer:** Crowdin is a complete localization platform for teams that work with professional translators, machine translation and many integrations. Fink is a free, much smaller tool: a browser editor for the i18next, next-intl or Paraglide JS files already in your GitHub repository. Pick Crowdin for scale and translator tooling. Pick Fink as a free Crowdin alternative if you want to edit translations where they live, without a sync.
 
 ## How they work
 
@@ -20,7 +20,7 @@ order: 1
 | Where translations live | Your GitHub repository | Crowdin project, synced to your repository |
 | GitHub workflow | Direct commits, or a pull request from a fork | Pull requests from a service branch, via the GitHub integration, CLI or Action |
 | Other hosts | github.com only | GitHub, GitLab, Bitbucket and many more integrations |
-| File formats | i18next JSON, inlang message format | Dozens of formats, including i18next JSON |
+| File formats | i18next JSON, next-intl, inlang message format | Dozens of formats, including i18next JSON |
 | Translation memory, glossary | No | Yes |
 | Machine translation, AI | No | Yes, many engines |
 | QA checks | Missing translations, variables, plural forms, markup | Many QA checks |
@@ -34,12 +34,12 @@ order: 1
 
 - An agency or many professional translators work in the tool every day.
 - You need translation memory, machine translation, glossaries or screenshots.
-- You localize more than i18next or Paraglide files, such as mobile, docs or design files.
+- You localize more than i18next, next-intl or Paraglide files, such as mobile, docs or design files.
 - Your code lives outside github.com.
 
 ## Choose Fink if
 
-- Your app uses i18next or Paraglide JS and its translations are in a GitHub repository.
+- Your app uses i18next, next-intl or Paraglide JS and its translations are in a GitHub repository.
 - Developers, PMs or community volunteers translate, and you want changes as normal commits and pull requests.
 - You want no second source of truth, no sync configuration and no per-word pricing.
 
