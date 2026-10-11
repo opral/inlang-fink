@@ -54,13 +54,13 @@ const SHOWN_ISSUES = 50;
 export function UsageStatus({ status, codeUrl, scope }: { status: UsageState; codeUrl: string; scope: string }) {
   if (status.state === "idle") return null;
   if (status.state === "loading") return <span className="usage-status">Finding usage in code…</span>;
-  if (status.state === "error") return <span className="usage-status failed" title={status.error}>Usage in code unavailable</span>;
-  const unavailable = status.state === "unavailable", issues = status.state === "ready" ? status.issues : [];
-  if (!unavailable && !issues.length) return null;
-  const label = unavailable ? "Usage in code unavailable" : `Usage in code incomplete`;
-  return <Dropdown className="usage-trigger" title={unavailable ? status.reason : "Why no message is labelled Not used in code"} align="end" panelClassName="usage-panel" label={<><span className="usage-dot" aria-hidden="true" />{label}</>}>{() => <>
-    {unavailable ? <p className="usage-panel-text">{status.reason}</p> : <>
-      <p className="usage-panel-text">Fink couldn't resolve every message call, so it labels no message <strong>Not used in code</strong>. The usages it found are shown on the messages.</p>
+  const issues = status.state === "ready" ? status.issues : [];
+  if (status.state === "ready" && !issues.length) return null;
+  const reason = status.state === "error" ? `Fink couldn't load the code: ${status.error}` : status.state === "unavailable" ? status.reason : undefined;
+  const label = reason ? "Usage in code unavailable" : "Usage in code incomplete";
+  return <Dropdown className={status.state === "error" ? "usage-trigger failed" : "usage-trigger"} title={reason ?? "Why no message is labelled Not used in code"} align="end" panelClassName="usage-panel" label={<><span className="usage-dot" aria-hidden="true" />{label}</>}>{() => <>
+    {reason ? <p className="usage-panel-text">{reason}</p> : <>
+      <p className="usage-panel-text">Fink can't be sure which messages are unused, so it labels none <strong>Not used in code</strong>. The usages it found are shown on the messages.</p>
       <ul className="usage-issues" aria-label="Unresolved usage">{issues.slice(0, SHOWN_ISSUES).map((issue, index) => <li key={index}>
         <span>{issue.reason}</span>
         {issue.path && <a href={fileUrl(codeUrl, issue.path, issue.start?.line)} target="_blank" rel="noreferrer" aria-label={`${issue.path}${issue.start ? `, line ${issue.start.line}` : ""}, open on GitHub (new tab)`}>{relative(issue.path, scope)}{issue.start ? `:${issue.start.line}` : ""}</a>}

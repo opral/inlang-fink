@@ -40,8 +40,8 @@ const app: Record<string, string> = {
   "src/app/[locale]/page.tsx": `import { useTranslations } from "next-intl";\n\nexport default function Page() {\n  const t = useTranslations("Home");\n  return <h1>{t("title", { appName: "Shop" })}</h1>;\n}\n`,
   "src/app/[locale]/checkout/page.mdx": `import { useTranslations } from "next-intl";\n\nexport function Summary() {\n  const t = useTranslations("Checkout.Summary");\n  return <h2>{t("title")}</h2>;\n}\n\n<Summary />\n`,
 };
-async function stubApi(page: import("@playwright/test").Page, options: { files?: Record<string, string>; code?: Record<string, string>; pushes?: { files: Record<string, string> }[]; sourceRequests?: URL[] } = {}) {
-  const { files: resources = files, code = app, pushes = [], sourceRequests = [] } = options;
+async function stubApi(page: import("@playwright/test").Page, options: { files?: Record<string, string>; code?: Record<string, string>; unanalyzed?: { skipped?: string[]; outside?: string[] }; pushes?: { files: Record<string, string> }[]; sourceRequests?: URL[] } = {}) {
+  const { files: resources = files, code = app, unanalyzed = {}, pushes = [], sourceRequests = [] } = options;
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     let data: unknown;
@@ -51,7 +51,7 @@ async function stubApi(page: import("@playwright/test").Page, options: { files?:
     else if (url.pathname === "/api/github/branches") data = ["main"];
     else if (url.pathname === "/api/github/commits") data = [];
     else if (url.pathname === "/api/github/file") data = { content: resources[url.searchParams.get("path")!] };
-    else if (url.pathname === "/api/github/source") { sourceRequests.push(url); data = { files: code, skipped: [] }; }
+    else if (url.pathname === "/api/github/source") { sourceRequests.push(url); data = { files: code, skipped: [], outside: [], ...unanalyzed }; }
     else if (url.pathname === "/api/github/push") { pushes.push(route.request().postDataJSON()); data = { head: "c".repeat(40), tree: "d".repeat(40), url: "https://github.com/example/repo/commit/ccc" }; }
     else throw new Error(`Unexpected request ${url}`);
     await route.fulfill({ json: data });
@@ -137,4 +137,29 @@ test("i18next: Fink says usage in code is unavailable instead of hiding it", asy
   await expect(page.locator(".usage-panel")).toContainText("Fink can't analyze i18next code yet");
   await expect(page.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);
   expect(sourceRequests).toHaveLength(0);
+});
+
+test("next-intl: files Fink didn't analyze, or code that calls no message, make usage incomplete instead of labelling messages unused", async ({ page }) => {
+  await stubApi(page, { unanalyzed: { skipped: ["src/app/[locale]/huge.tsx"], outside: ["packages/ui/src/Card.tsx"] } });
+  await openRepository(page);
+  await expect(page.locator('[data-bundle="Home.title"] .message-where')).toHaveText("A heading on Home · code", { timeout: 90_000 });
+  const status = page.getByRole("button", { name: "Usage in code incomplete" });
+  await expect(status).toBeVisible();
+  await expect(page.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);
+  await status.click();
+  const issues = page.getByRole("list", { name: "Unresolved usage" }).getByRole("listitem");
+  await expect(issues).toHaveCount(2);
+  await expect(issues.nth(0)).toContainText("Larger than 512 KB");
+  await expect(issues.nth(1)).toContainText("outside the scanned package");
+  await expect(issues.nth(1).getByRole("link")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/packages/ui/src/Card.tsx`);
+});
+
+test("next-intl: code that calls no message at all is incomplete, not every message unused", async ({ page }) => {
+  await stubApi(page, { code: { "src/lib/format.ts": "export const format = (value: number) => value.toFixed(2);\n" } });
+  await openRepository(page);
+  const status = page.getByRole("button", { name: "Usage in code incomplete" });
+  await expect(status).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);
+  await status.click();
+  await expect(page.locator(".usage-panel")).toContainText("No message is called in the code Fink scanned");
 });

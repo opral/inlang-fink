@@ -150,11 +150,12 @@ export default {
           await archive.body?.cancel();
           throw new HttpError(archive.status === 404 ? 404 : [401, 403, 429].includes(archive.status) ? archive.status : 502, archive.status === 404 ? "Repository or commit not found. Check GitHub App access." : `GitHub archive request failed (${archive.status}). Check permissions and rate limits.`);
         }
-        // The format's usage analysis: oversized files that call messages make it incomplete.
-        const plugin = url.searchParams.get("plugin") ?? "", mentions = Object.hasOwn(USAGE_SOURCES, plugin) ? USAGE_SOURCES[plugin]!.mentions : undefined;
-        const { files, skipped } = await extractSource(archive.body, path => isSourcePath(path, scope), mentions);
+        // The format's usage analysis: only the files it gets are sent; oversized files and code outside
+        // the scope that call messages are listed, so the result is incomplete instead of wrong.
+        const plugin = url.searchParams.get("plugin") ?? "", source = Object.hasOwn(USAGE_SOURCES, plugin) ? USAGE_SOURCES[plugin] : undefined;
+        const { files, skipped, outside } = await extractSource(archive.body, { keep: path => isSourcePath(path, scope), source, scope });
         // Signed-in requests may include private code: never cache it. Public source is pinned to a commit.
-        return Response.json({ files, skipped }, { headers: { "Cache-Control": token ? "no-store" : "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+        return Response.json({ files, skipped, outside }, { headers: { "Cache-Control": token ? "no-store" : "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
       }
       if (url.pathname === "/api/github/commits") {
         const branch = url.searchParams.get("branch") ?? "", path = url.searchParams.get("path") ?? "";

@@ -20,7 +20,7 @@ import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, Branc
 import type { Showcase } from "./showcaseList";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
 import { UsageStatus } from "./UsagePeek";
-import { formatName, sourceSnapshot, usagesFromReferences, usageState, type Usage, type UsageState } from "./usage";
+import { formatName, sourceSnapshot, usagesFromReferences, usageState, type UnanalyzedSource, type Usage, type UsageState } from "./usage";
 import { USAGE_SOURCES, usagePlugin } from "./sourcePaths";
 import { RECENT_KEY, forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
@@ -108,10 +108,10 @@ export default function App() {
   const searchIndex = useRef(new WeakMap<BundleNested, string>());
   const table = useRef<HTMLDivElement>(null);
   // The app's source at the draft's base commit, its usages (inlang SDK findUsages) and the SDK's check results.
-  const [source, setSource] = useState<{ key: string; raw: Record<string, string>; files: SourceFile[]; skipped: string[] }>();
+  const [source, setSource] = useState<{ key: string; raw: Record<string, string>; files: SourceFile[]; unanalyzed: UnanalyzedSource }>();
   const [usage, setUsage] = useState<{ key: string; byBundle: Map<string, Usage[]> }>();
   const [usageStatus, setUsageStatus] = useState<UsageState>({ state: "idle" });
-  const usageCache = useRef(new Map<string, Promise<{ files: Record<string, string>; skipped?: string[] }>>());
+  const usageCache = useRef(new Map<string, Promise<{ files: Record<string, string>; skipped?: string[]; outside?: string[] }>>());
   const [diagnostics, setDiagnostics] = useState<{ byBundle: Map<string, CheckDiagnostic[]>; usage?: CheckStatus }>();
   const checked = useRef<{ project?: InlangProject; key: string; files?: SourceFile[]; bundles: Map<string, BundleNested> }>({ key: "", bundles: new Map() });
   const checkQueue = useRef<Promise<void>>(Promise.resolve());
@@ -606,12 +606,12 @@ export default function App() {
     if (!local || !usageKey || !usageFormat) { setSource(undefined); setUsage(undefined); setUsageStatus(local ? { state: "unavailable", reason: `Fink can't analyze ${formatName(local.context.settings)} code yet, so it shows no usages and labels no message Not used in code.` } : { state: "idle" }); return; }
     let live = true, request = usageCache.current.get(usageKey);
     if (!request) {
-      request = api<{ files: Record<string, string>; skipped?: string[] }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: usageScope, plugin: usageFormat })}`);
+      request = api<{ files: Record<string, string>; skipped?: string[]; outside?: string[] }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: usageScope, plugin: usageFormat })}`);
       usageCache.current.set(usageKey, request);
       request.catch(() => usageCache.current.delete(usageKey));
     }
     setUsageStatus({ state: "loading" });
-    request.then(result => { if (live) setSource({ key: usageKey, raw: result.files, files: sourceSnapshot(result.files, USAGE_SOURCES[usageFormat]!), skipped: result.skipped ?? [] }); }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
+    request.then(result => { if (live) setSource({ key: usageKey, raw: result.files, files: sourceSnapshot(result.files, USAGE_SOURCES[usageFormat]!), unanalyzed: { skipped: result.skipped, outside: result.outside } }); }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
     return () => { live = false; };
   }, [usageKey, local ? formatName(local.context.settings) : undefined]);
   const sourceFiles = source && source.key === usageKey ? source.files : undefined;
@@ -621,7 +621,7 @@ export default function App() {
     findUsages({ project: local.project, files: source.files }).then(result => {
       if (!live) return;
       setUsage({ key: source.key, byBundle: usagesFromReferences(result.references, source.raw) });
-      setUsageStatus(usageState(result, source.skipped, usageScope));
+      setUsageStatus(usageState(result, source.unanalyzed, usageScope, id => bundleIndex.current.has(id)));
     }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
     return () => { live = false; };
   }, [local, source, usageKey]);

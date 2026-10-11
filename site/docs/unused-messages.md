@@ -11,9 +11,9 @@ In Paraglide JS and next-intl projects, Fink labels messages that your code neve
 
 When you open a project, Fink downloads the repository's source code at the commit your draft is based on and finds the calls of each message, such as `m.greeting()` in Paraglide JS or `t("greeting")` in next-intl. The analysis comes from the format's inlang plugin.
 
-Fink scans the package that contains your project: the nearest folder with a `package.json` at or above the project and its translation files, or the whole repository if there is none. Tests, stories, type declarations, `node_modules`, build output and minified files are skipped.
+Fink scans the package that contains your project: the nearest folder with a `package.json` at or above the project and its translation files, or the whole repository if there is none. Tests, stories, type declarations, `node_modules`, build output and minified files are skipped. Code in other packages of the repository that imports next-intl, or imports from a `paraglide` folder, makes the result incomplete, unless that package has its own inlang project.
 
-If Fink can't be sure about every call, it labels no message unused rather than a wrong one. The project bar then shows **Usage in code incomplete**. Click it to see each call Fink couldn't resolve, with a link to the line on GitHub. Usages it found are still shown.
+If Fink can't be sure about every call, it labels no message unused rather than a wrong one. The project bar then shows **Usage in code incomplete**. Click it to see each call or file Fink couldn't analyze, with a link to it on GitHub. Usages it found are still shown.
 
 ## Paraglide JS
 
@@ -22,7 +22,7 @@ If Fink can't be sure about every call, it labels no message unused rather than 
 
 ## next-intl
 
-- **JavaScript, TypeScript and MDX files** are analyzed. Markdown or other files that import next-intl or call its functions, such as `useTranslations`, make the result incomplete: Fink can't analyze them. A README that only names next-intl doesn't.
+- **JavaScript, TypeScript and MDX files** are analyzed. Markdown or other files that import next-intl or name one of its functions, such as `useTranslations`, outside code blocks make the result incomplete: Fink can't analyze them. A README that only names next-intl doesn't.
 - Fink resolves `useTranslations("Home")` and `await getTranslations("Home")` followed by `t("title")`, `t.rich("title")` or `t.markup("title")` to `Home.title`. It also resolves `t("Home.title")` without a namespace, nested namespaces, `createTranslator`, keys from constants, and arrays of keys:
 
   ```tsx
@@ -36,10 +36,14 @@ These make the result incomplete:
 
 - **Dynamic keys and namespaces,** such as ``t(`items.${id}`)``, `t(key)` or `useTranslations(namespace)`.
 - **A `t` passed on:** to a function or component, returned from a hook, exported or stored.
-- **Wrapper packages:** next-intl functions imported from your own module or package, such as `import { useTranslations } from "@repo/i18n"`, or re-exported.
+- **Wrappers:** next-intl functions imported under their own names from your own module or package, such as `import { useTranslations } from "@repo/i18n"`, re-exports, and wrappers in other packages of the repository.
 - **`t.raw()` and `t.has()` on a namespace,** such as `t.raw("links")` for an array or object of messages.
 - **Messages read directly:** `useMessages()` or `getMessages()` other than for `NextIntlClientProvider`, an imported message file, or globbed catalogs such as `import.meta.glob`.
+- **Message files nested under another key** than their namespace, such as `messages: { Legacy: en }`.
 - **Key types,** such as `MessageKeys`, `keyof Messages` or `Parameters<typeof t>`. Typing next-intl itself (`Messages: typeof messages`) is fine.
+- **`useExtracted()` and `getExtracted()`,** and files the plugin can't parse.
+
+A wrapper with another name from a package that isn't in the repository, such as `useT` from a shared npm package, can't be detected. Its messages can be labelled unused. Check before deleting.
 
 ## i18next
 
@@ -47,9 +51,9 @@ Fink can't analyze i18next calls yet. i18next projects show no usages and no unu
 
 ## Limits
 
-- **Code outside the scanned package isn't seen.** If your messages live in a shared package, for example `packages/i18n`, and the app in `apps/web`, the app's calls aren't found. If no message is called in the scanned code at all, Fink treats the result as incomplete.
+- **Code outside the scanned package isn't analyzed.** If your messages live in a shared package, for example `packages/i18n`, and the app in `apps/web`, the app's files are listed as not analyzed and the result is incomplete. If no message is called in the scanned code at all, the result is incomplete too.
 - Messages you add in your draft are never labelled unused.
-- Source files over 512 KiB aren't analyzed. If one of them mentions messages, the result is incomplete. Very large repositories can't be scanned.
+- Source files over 512 KB aren't analyzed. If one of them mentions messages, the result is incomplete. Very large repositories can't be scanned.
 
 ## Removing unused messages
 

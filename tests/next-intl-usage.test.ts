@@ -46,7 +46,7 @@ export function Title() {
 const source = { "src/app/[locale]/page.tsx": page, "src/components/Nav.tsx": nav, "src/app/[locale]/about/page.mdx": about };
 
 async function load(projectSettings = settings) {
-  const project = await loadProjectInMemory({ blob: await newProject({ settings: projectSettings }), providePlugins: editorPlugins(projectSettings) });
+  const project = await loadProjectInMemory({ blob: await newProject({ settings: projectSettings }), providePlugins: await editorPlugins(projectSettings) });
   if ("plugin.inlang.nextIntl" in projectSettings) await project.importFiles({ pluginKey: "plugin.inlang.nextIntl", files: [{ locale: "en", content: new TextEncoder().encode(en) }] });
   return project;
 }
@@ -56,14 +56,14 @@ async function analyze(files: Record<string, string>) {
   const [usages, checks] = await Promise.all([findUsages({ project, files: snapshot }), checkProject({ project, files: snapshot, referenceLocale: "en" })]);
   await project.close();
   const unused = checks.diagnostics.filter(diagnostic => diagnostic.checkId === "unused-message").map(diagnostic => diagnostic.bundleId).sort();
-  return { snapshot: snapshot.map(file => file.path), usages, unused, state: usageState(usages, [], ""), byBundle: usagesFromReferences(usages.references, files) };
+  return { snapshot: snapshot.map(file => file.path), usages, unused, state: usageState(usages, {}, ""), byBundle: usagesFromReferences(usages.references, files) };
 }
 
 describe("next-intl usage in code", () => {
-  it("uses the next-intl plugin's analysis, not the Paraglide matcher", () => {
+  it("uses the next-intl plugin's analysis, not the Paraglide matcher", async () => {
     expect(usagePlugin(settings)).toBe("plugin.inlang.nextIntl");
-    expect(editorPlugins(settings).map(plugin => plugin.key)).toEqual(["plugin.inlang.nextIntl"]);
-    expect(editorPlugins({ ...settings, "plugin.inlang.nextIntl": undefined, "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } } as unknown as ProjectSettings).map(plugin => plugin.key)).toEqual(["plugin.inlang.messageFormat", "plugin.inlang.mFunctionMatcher"]);
+    expect((await editorPlugins(settings)).map(plugin => plugin.key)).toEqual(["plugin.inlang.nextIntl"]);
+    expect((await editorPlugins({ ...settings, "plugin.inlang.nextIntl": undefined, "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } } as unknown as ProjectSettings)).map(plugin => plugin.key)).toEqual(["plugin.inlang.messageFormat", "plugin.inlang.mFunctionMatcher"]);
   });
 
   it("labels messages that no call reaches as unused, also counting calls in MDX", async () => {
@@ -113,19 +113,24 @@ describe("next-intl usage in code", () => {
 });
 
 describe("usage state", () => {
-  it("files too large to analyze and code that calls no message at all are incomplete, not unused", () => {
+  it("oversized files, code outside the scanned package and code that calls no message are incomplete, not unused", () => {
     const reference = { bundleId: "Home.title", path: "src/app/page.tsx", start: { line: 1, column: 0 }, end: { line: 1, column: 10 } };
-    expect(usageState({ status: "complete", references: [reference] }, ["src/app/huge.tsx"], "")).toEqual({ state: "ready", issues: [{ path: "src/app/huge.tsx", reason: expect.stringContaining("512 KB") }] });
-    expect(usageState({ status: "complete", references: [] }, [], "packages/i18n")).toEqual({ state: "ready", issues: [{ reason: expect.stringContaining("(packages/i18n/)") }] });
-    expect(usageState({ status: "complete", references: [reference] }, [], "")).toEqual({ state: "ready", issues: [] });
-    expect(usageState({ status: "unavailable", reason: "The source snapshot is empty.", references: [] }, [], "")).toEqual({ state: "unavailable", reason: expect.stringContaining("no code that can call messages in the repository") });
+    expect(usageState({ status: "complete", references: [reference] }, { skipped: ["src/app/huge.tsx"] }, "")).toEqual({ state: "ready", issues: [{ path: "src/app/huge.tsx", reason: expect.stringContaining("512 KB") }] });
+    expect(usageState({ status: "complete", references: [reference] }, { outside: ["packages/ui/Card.tsx"] }, "apps/web")).toEqual({ state: "ready", issues: [{ path: "packages/ui/Card.tsx", reason: expect.stringContaining("outside the scanned package (apps/web/)") }] });
+    expect(usageState({ status: "complete", references: [] }, {}, "packages/i18n")).toEqual({ state: "ready", issues: [{ reason: expect.stringContaining("Fink scanned: packages/i18n/.") }] });
+    // calls of keys that aren't this project's messages don't count
+    expect(usageState({ status: "complete", references: [{ ...reference, bundleId: "Other.key" }] }, {}, "", id => id === "Home.title").state === "ready" && usageState({ status: "complete", references: [{ ...reference, bundleId: "Other.key" }] }, {}, "", id => id === "Home.title")).toMatchObject({ issues: [{ reason: expect.stringContaining("the whole repository") }] });
+    expect(usageState({ status: "complete", references: [reference] }, {}, "")).toEqual({ state: "ready", issues: [] });
+    expect(usageState({ status: "unavailable", reason: "The source snapshot is empty.", references: [] }, {}, "")).toEqual({ state: "unavailable", reason: expect.stringContaining("no code that can call messages in the whole repository") });
+    // every file too large: the snapshot is empty, but Fink did find code
+    expect(usageState({ status: "unavailable", reason: "The source snapshot is empty.", references: [] }, { skipped: ["src/app/huge.tsx"] }, "")).toEqual({ state: "ready", issues: [{ path: "src/app/huge.tsx", reason: expect.any(String) }] });
   });
 
   it("i18next has no usage analysis: the SDK reports it unavailable, never unused", async () => {
     const i18next = { baseLocale: "en", locales: ["en"], modules: [], "plugin.inlang.i18next": { pathPattern: "./locales/{locale}.json" } } as ProjectSettings;
     expect(usagePlugin(i18next)).toBeUndefined();
     const project = await load(i18next);
-    expect(editorPlugins(i18next).map(plugin => plugin.key)).toEqual(["plugin.inlang.i18next"]);
+    expect((await editorPlugins(i18next)).map(plugin => plugin.key)).toEqual(["plugin.inlang.i18next"]);
     const result = await findUsages({ project, files: [{ path: "src/a.ts", content: "i18next.t('greeting')" }] });
     expect(result.status).toBe("unavailable");
     await project.close();

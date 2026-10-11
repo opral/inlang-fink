@@ -27,15 +27,22 @@ export type UsageState =
   | { state: "unavailable"; reason: string }
   | { state: "ready"; issues: readonly UsageIssue[] };
 
-/** The analysis result, plus what Fink itself couldn't hand to it. */
-export function usageState(result: Pick<FindUsagesResult, "status" | "reason" | "issues" | "references">, skipped: readonly string[], scope: string): UsageState {
-  const where = scope ? `${scope}/` : "the repository";
+/** What Fink itself didn't hand to the analysis, from the Worker: oversized files and code outside the scanned package that can call messages. */
+export type UnanalyzedSource = { skipped?: readonly string[]; outside?: readonly string[] };
+
+/** The analysis result, plus what Fink itself couldn't hand to it. `known`: the project's message IDs. */
+export function usageState(result: Pick<FindUsagesResult, "status" | "reason" | "issues" | "references">, source: UnanalyzedSource, scope: string, known: (bundleId: string) => boolean = () => true): UsageState {
+  const where = scope ? `${scope}/` : "the whole repository";
+  const own: UsageIssue[] = [
+    ...(source.skipped ?? []).map(path => ({ path, reason: "Larger than 512 KB, so Fink didn't analyze it. Its calls are unknown." })),
+    ...(source.outside ?? []).map(path => ({ path, reason: `Can call messages, but it is outside the scanned package (${where}), so Fink didn't analyze it.` })),
+  ];
   // The analysis is unavailable only without source files: the snapshot is empty.
-  if (result.status === "unavailable") return { state: "unavailable", reason: `Fink found no code that can call messages in ${where}, so it labels no message Not used in code.` };
-  const issues: UsageIssue[] = [...(result.issues ?? []), ...skipped.map(path => ({ path, reason: "Larger than 512 KB, so Fink didn't analyze it. Its calls are unknown." }))];
+  if (result.status === "unavailable") return own.length ? { state: "ready", issues: own } : { state: "unavailable", reason: `Fink found no code that can call messages in ${where}, so it labels no message Not used in code.` };
+  const issues: UsageIssue[] = [...(result.issues ?? []), ...own];
   if (result.status === "incomplete" && !issues.length) issues.push({ reason: result.reason ?? "The analysis couldn't resolve every usage." });
-  // No call at all is almost always code outside the scanned folder (a shared i18n package), not an app that uses no message.
-  if (!issues.length && !result.references.length) issues.push({ reason: `No message is called in the code Fink scanned (${where}). If your app's code is in another folder, Fink can't see it.` });
+  // No call of any message is almost always code outside the scanned package (a shared i18n package), not an app that uses no message.
+  if (!issues.length && !result.references.some(reference => known(reference.bundleId))) issues.push({ reason: `No message is called in the code Fink scanned: ${where}. If your app's code is in another folder, Fink can't see it.` });
   return { state: "ready", issues };
 }
 

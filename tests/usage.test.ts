@@ -98,3 +98,13 @@ test("only generated and output roots are left out; markup that mentions message
   const { analysis } = await usages({ "docs/intro.mdx": "import { m } from '../src/paraglide/messages.js';\n# {m.title()}", "src/a.ts": "import { m } from './paraglide/messages.js'; m.other();" });
   expect(analysis.status).toBe("incomplete");
 });
+
+test("Paraglide: prose doesn't count as a call, code spans in mdsvex do", () => {
+  const paths = (files: Record<string, string>) => sourceSnapshot(files, paraglide).map(file => file.path);
+  expect(paths({
+    "CHANGELOG.md": "Upgrade to paraglide 2. Builds run at 5 p.m. every day.",
+    "docs/usage.md": "Call `m.hello()`:\n\n```js\nimport { m } from './paraglide/messages.js';\n```\n",
+    "src/routes/price.svx": "<script>\n\timport * as m from '$lib/i18n/messages';\n</script>\n\n{`${m.price()} total`}\n",
+    "src/routes/about.md": "<script>import { m } from '$lib/paraglide/messages.js';</script>\n\n{m.about()}\n",
+  })).toEqual(["src/routes/price.svx", "src/routes/about.md"]);
+});

@@ -45,25 +45,32 @@ export function isTestPath(path: string): boolean {
 /** A file whose type can call messages: code, or markup such as MDX. Type declarations can't call them. */
 export const mayCallMessages = (path: string) => (CODE.test(path) || MARKUP.test(path)) && !/\.d\.[cm]?ts$/i.test(path);
 
-/** Markdown code blocks and spans are examples, not code that runs. */
-const withoutMarkdownCode = (content: string) => content.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm, "").replace(/`[^`\n]+`/g, "");
+/** Markdown code blocks (and in plain Markdown, code spans) are examples, not code that runs. MDX and mdsvex keep spans: a template literal in an expression looks like one. */
+const withoutMarkdownCode = (path: string, content: string) => {
+  const blocks = content.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm, "");
+  return /\.md$/i.test(path) ? blocks.replace(/`[^`\n]+`/g, "") : blocks;
+};
 const MARKDOWN = /\.(?:mdx|svx|md)$/i;
 
 /**
  * How a format's usage analysis reads the source. `analyzes`: files that always go to the analysis
  * (it reads them, or reports them as unsupported). `mentions`: how any other file that may call
  * messages shows that it does; such files go to the analysis too, which reports them as unsupported.
+ * `imports`: how code outside the scanned package shows that it can call the project's messages.
  */
-export type UsageSource = { analyzes: RegExp; mentions: RegExp };
+export type UsageSource = { analyzes: RegExp; mentions: RegExp; imports: RegExp };
 
+const NEXT_INTL = /\bfrom\s*["']next-intl\b|\b(?:require|import)\s*\(\s*["']next-intl\b|\b(?:useTranslations|getTranslations|createTranslator|useMessages|getMessages|useExtracted|getExtracted)\b/;
 /** The format plugins whose usage analysis Fink runs, by settings key. Formats without one have no usage information. */
 export const USAGE_SOURCES: Record<string, UsageSource> = {
   // Paraglide JS: the m-function matcher reads JavaScript, TypeScript and Svelte. Vue and Astro
   // components are always included, so the analysis is incomplete rather than blind to them.
-  "plugin.inlang.messageFormat": { analyzes: CODE, mentions: /paraglide|\bm\s*(?:\.\s*[A-Za-z_$]|\[)/ },
+  // A file that calls messages imports them from Paraglide's output or reads `m.name` / `m[...]`;
+  // "5 p.m. every day" or "upgrade to paraglide 2" in prose doesn't.
+  "plugin.inlang.messageFormat": { analyzes: CODE, mentions: /\bfrom\s*["'][^"'\n]*paraglide|\bimport\s*\(\s*["'][^"'\n]*paraglide|\bm\.[A-Za-z_$]|\bm\s*\[/, imports: /\bfrom\s*["'][^"'\n]*paraglide|\bimport\s*\(\s*["'][^"'\n]*paraglide/ },
   // next-intl: the plugin's own analysis reads JavaScript, TypeScript and MDX. Other files can only
   // call next-intl through an import of it or one of its functions; a README that names next-intl can't.
-  "plugin.inlang.nextIntl": { analyzes: /\.(?:[cm]?[jt]sx?|mdx)$/i, mentions: /\bfrom\s*["']next-intl\b|\b(?:require|import)\s*\(\s*["']next-intl\b|\b(?:useTranslations|getTranslations|createTranslator|useMessages|getMessages|useExtracted|getExtracted)\b/ },
+  "plugin.inlang.nextIntl": { analyzes: /\.(?:[cm]?[jt]sx?|mdx)$/i, mentions: NEXT_INTL, imports: NEXT_INTL },
 };
 
 /** The settings key of the project's format plugin that has a usage analysis, if any. */
@@ -72,5 +79,5 @@ export const usagePlugin = (settings: Record<string, unknown>): string | undefin
 /** Whether a file that passed the path filters goes to `source`'s analysis. */
 export function analyzedFile(source: UsageSource, path: string, content: string): boolean {
   if (source.analyzes.test(path)) return true;
-  return source.mentions.test(MARKDOWN.test(path) ? withoutMarkdownCode(content) : content);
+  return source.mentions.test(MARKDOWN.test(path) ? withoutMarkdownCode(path, content) : content);
 }
