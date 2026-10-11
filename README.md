@@ -1,5 +1,7 @@
 # Fink
 
+Fink is free and open source under the [MIT license](./LICENSE). User documentation: [fink.inlang.com/docs](https://fink.inlang.com/docs). The docs and comparison pages are Markdown in `site/`, rendered to static HTML by `scripts/build-site.mjs` during `pnpm build`.
+
 A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository, select a branch and `.inlang` project, edit messages, review the generated resources, and commit directly to that branch.
 
 ## Architecture
@@ -10,9 +12,9 @@ Edits update one bundle and compare persisted semantic baselines in memory; unch
 
 The React SPA runs the inlang SDK and the prototype's published message editor components in the browser. Lix stores each repository/branch/project draft in OPFS. Browser reloads restore the draft; editing needs no server database. Clearing browser storage deletes drafts. OPFS requires a supported browser and a secure origin (or localhost).
 
-One Cloudflare Worker serves static assets, handles GitHub App OAuth, and calls GitHub's REST API. There is no git client, git proxy, Render service, or analytics. Tokens stay in encrypted HttpOnly cookies. Login uses PKCE and encrypted state; sessions expire after at most eight hours. The existing **Inlang** GitHub App is reused. Install the App on repositories you want to push to.
+One Cloudflare Worker serves static assets, handles GitHub App OAuth, and calls GitHub's REST API. There is no git client, git proxy or Render service. Anonymous usage counts go to PostHog through the Worker's `/ingest` proxy (see `src/telemetry.ts` and [/docs/privacy](https://fink.inlang.com/docs/privacy)). Tokens stay in encrypted HttpOnly cookies. Login uses PKCE and encrypted state; sessions expire after at most eight hours. The existing **Inlang** GitHub App is reused. Install the App on repositories you want to push to.
 
-Commits preserve the existing Git tree and update the branch without force. Fink rejects a push if the branch changed after opening the project. Drafts remain local. Automatic conflict reconciliation is not implemented; opening the project again restores its draft rather than discarding it.
+Commits preserve the existing Git tree and update the branch without force. If the branch moved since the draft was opened, Fink merges the remote changes into the draft first (the remote wins when both sides changed the same message in the same locale) and retries the push. Drafts remain local.
 
 ## Supported projects
 

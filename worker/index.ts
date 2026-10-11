@@ -77,10 +77,31 @@ async function ingest(request: Request, url: URL): Promise<Response> {
   return fetch(new Request(`https://${host}${path}${url.search}`, { method: request.method, headers, body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body, redirect: "follow" }));
 }
 
+/**
+ * Docs and comparison pages are static HTML (scripts/build-site.mjs). Assets answer unknown paths
+ * with the app's index.html (single-page-application fallback); under /docs/ and /compare/ that
+ * would be a soft 404, so those get the docs' not-found page with status 404 instead.
+ */
+async function staticPage(request: Request, env: Env, url: URL): Promise<Response> {
+  const head = request.method === "HEAD";
+  // A HEAD response has no body to check, so look at the GET response and drop the body after.
+  const response = url.pathname === "/docs/not-found" ? undefined : await env.ASSETS.fetch(head ? new Request(request, { method: "GET" }) : request);
+  const fallback = !response || (response.status === 200 && (response.headers.get("Content-Type") ?? "").includes("text/html") && (await response.clone().text()).includes('<div id="root">'));
+  if (!fallback) {
+    const headers = new Headers(response.headers);
+    // Markdown twins of the pages (for AI tools) point search engines at the HTML page.
+    if (url.pathname.endsWith(".md")) headers.set("Link", `<${PRODUCTION_ORIGIN}${url.pathname.slice(0, -3)}>; rel="canonical"`);
+    return new Response(head ? null : response.body, { status: response.status, statusText: response.statusText, headers });
+  }
+  const notFound = await env.ASSETS.fetch(new Request(new URL("/docs/not-found", url)));
+  return new Response(head ? null : notFound.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" } });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/ingest/")) return ingest(request, url);
+    if (url.pathname.startsWith("/docs/") || url.pathname.startsWith("/compare/")) return staticPage(request, env, url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
     try {
       const authResult = await auth(request, env, url); if (authResult) return authResult;

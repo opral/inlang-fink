@@ -39,6 +39,6 @@
 	"publisherName": "inlang",
 	"publisherIcon": "https://inlang.com/favicon/safari-pinned-tab.svg",
 	"website": "https://fink.inlang.com/",
-	"license": "Fair Core License, Version 1.0, MIT Future License",
-	"pricing": "Free Beta"
+	"license": "MIT",
+	"pricing": "Free"
 }

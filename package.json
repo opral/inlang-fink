@@ -1,6 +1,7 @@
 {
   "name": "@inlang/fink",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "engines": {
@@ -9,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev",
-    "build": "vite build && node scripts/prepare-assets.mjs",
+    "build": "vite build && node scripts/prepare-assets.mjs && node scripts/build-site.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -39,6 +40,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "marked": "^16.4.2",
     "typescript": "^5.9.3",
     "vite": "8.3.3",
     "vitest": "^4.0.0",

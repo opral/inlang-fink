@@ -1,0 +1,23 @@
+/* Landing page: why Fink, setup, FAQ. Tokens come from style.css. */
+.benefits { list-style: none; margin: 56px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; text-align: left; }
+.benefits li { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.benefits h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.benefits p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.benefits code, .setup-card p code, .section-header p code { font-size: .86em; }
+.section-header p a, .faq-list a, .setup-card > a { color: var(--text); font-weight: 500; text-underline-offset: 3px; }
+.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.setup-card { display: flex; flex-direction: column; gap: 10px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.setup-card h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.setup-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.setup-card pre { margin: 4px 0; padding: 10px 12px; background: var(--subtle); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.setup-card pre code { font-family: var(--mono); font-size: 13px; }
+.setup-card > a { margin-top: auto; font-size: 14px; }
+.faq-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 32px; margin: 0; }
+.faq-list > div { padding: 18px 0; border-top: 1px solid var(--border); }
+.faq-list dt { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.faq-list dd { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+@media (max-width: 960px) { .benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .benefits, .setup-grid, .faq-list { grid-template-columns: 1fr; }
+  .benefits { margin-top: 40px; }
+}
