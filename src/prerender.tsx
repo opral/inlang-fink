@@ -18,6 +18,6 @@ export function renderLanding(): string {
     <main className="welcome">
       <Landing url="" setUrl={noop} submit={noop} busy={false} recent={[]} openRecent={noop} forget={noop} openShowcase={noop} />
     </main>
-    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source (MIT) · Anonymous usage counts, no content</span><span className="footer-links"><a href="/docs">Docs</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="https://github.com/opral/inlang-fink">GitHub</a><a href="https://inlang.com">inlang</a><a href="https://paraglidejs.com">Paraglide JS</a></span></div></footer>
+    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source (MIT) · Anonymous usage counts, no content</span><span className="footer-links"><a href="/docs">Docs</a><a href="/teams">For teams</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="https://github.com/opral/inlang-fink">GitHub</a><a href="https://inlang.com">inlang</a><a href="https://paraglidejs.com">Paraglide JS</a></span></div></footer>
   </div>);
 }

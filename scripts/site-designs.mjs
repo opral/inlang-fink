@@ -36,7 +36,7 @@ const ICONS = {
   code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 };
-const repoForm = (id, hint = "") => `<form class="cta-form" action="/" method="get"><label class="visually-hidden" for="${id}">GitHub repository</label><input id="${id}" name="repo" placeholder="github.com/owner/repo" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" required><button type="submit">Open</button></form>${hint}`;
+const repoForm = (id, hint = "") => `<form class="cta-form" action="/" method="get"><input type="hidden" name="open" value="1"><label class="visually-hidden" for="${id}">GitHub repository</label><input id="${id}" name="repo" placeholder="github.com/owner/repo" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" required><button type="submit">Open</button></form>${hint}`;
 const ctaBand = (id, hint) => `<section class="cta-band" aria-labelledby="${id}-title"><div class="cta-text"><h2 id="${id}-title">Try Fink on your repository</h2><p>Free and open source (MIT). Sign in with GitHub to push.</p></div><div class="cta-side">${repoForm(id, hint)}</div></section>`;
 const prose = section => `<section class="d-section prose" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2>${blocks(section.tokens)}</section>`;
 
@@ -53,13 +53,13 @@ const flowCard = (title, steps, text, fink) => `<div class="flow-card${fink ? " 
 const box = (text, kind = "") => `<span class="flow-box ${kind}">${text}</span>`;
 const verb = text => `<span class="flow-verb">${text}</span>`;
 
-function compareTable(table) {
+function compareTable(table, label) {
   const head = `<thead><tr>${table.header.map((cell, index) => `<th scope="col"${index === 1 ? ' class="ours"' : ""}>${inline(cell.text)}</th>`).join("")}</tr></thead>`;
   const rows = table.rows.map(row => {
     const label = row[0].text.trim(), marks = COMPARE_MARKS[label] ?? [];
-    return `<tr><th scope="row">${inline(label)}</th>${row.slice(1).map((cell, index) => { const mark = marks[index] === "yes" ? yes : marks[index] === "no" ? no : ""; return `<td${index === 0 ? ' class="ours"' : ""}><span class="cell">${mark}<span>${inline(cell.text)}</span></span></td>`; }).join("")}</tr>`;
+    return `<tr><th scope="row">${inline(label)}</th>${row.slice(1).map((cell, index) => { const mark = marks[index] === "yes" ? yes : marks[index] === "no" ? no : ""; return `<td${index === 0 ? ' class="ours"' : ""} data-label="${escape(table.header[index + 1].text)}"><span class="cell">${mark}<span>${inline(cell.text)}</span></span></td>`; }).join("")}</tr>`;
   }).join("");
-  return `<div class="table-wrap"><table class="compare-table">${head}<tbody>${rows}</tbody></table></div>`;
+  return `<div class="table-wrap" tabindex="0" role="region" aria-label="${escape(label)}"><table class="compare-table">${head}<tbody>${rows}</tbody></table></div>`;
 }
 
 export function compareMain(page, breadcrumbs) {
@@ -73,21 +73,24 @@ export function compareMain(page, breadcrumbs) {
     const list = tokens.find(token => token.type === "list");
     if (section.id !== "how-they-work" && !section.id.endsWith("fits-when")) flushFits();
     if (section.id === "how-they-work") {
-      const paragraphs = tokens.filter(token => token.type === "paragraph").map(token => leadOf(token.text));
-      const text = name => inline(paragraphs.find(([lead]) => lead.toLowerCase() === name)?.[1] ?? "");
+      const used = [];
+      const text = name => { const token = tokens.find(token => token.type === "paragraph" && leadOf(token.text)[0].toLowerCase() === name); if (!token) return ""; used.push(token); return inline(leadOf(token.text)[1]); };
       out.push(`<section class="flows" aria-labelledby="${section.id}"><h2 id="${section.id}" class="visually-hidden">${inline(section.title)}</h2>`
         + flowCard("With a TMS", `${box("Your repo", "mono")}${verb("upload")}${arrow}${box("TMS copy", "tms")}${arrow}${verb("sync PR")}${arrow}${box("Your repo", "mono")}`, text("with a tms"), false)
         + flowCard("With Fink", `${box("Your repo", "mono")}${verb("read")}${arrow}${box("Fink editor", "fink")}${arrow}${verb("commit")}${arrow}${box("Your repo", "mono")}`, text("with fink"), true)
+        + (tokens.some(token => !used.includes(token)) ? `<div class="d-note">${blocks(tokens.filter(token => !used.includes(token)))}</div>` : "")
         + `</section>`);
     } else if (table) {
-      out.push(`<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2>${compareTable(table)}${blocks(tokens.filter(token => token !== table))}</section>`);
+      out.push(`<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2>${compareTable(table, section.title)}${blocks(tokens.filter(token => token !== table))}</section>`);
     } else if (section.id.endsWith("fits-when") && list) {
       const ours = /^fink\b/i.test(section.title);
       fits.push(`<div class="fit-card${ours ? " fink" : ""}"><h2 id="${section.id}">${inline(section.title)}</h2>${blocks(tokens)}</div>`);
     } else if (list && list.items.every(item => /^\[[^\]]+\]\(\/compare\//.test(item.text))) {
       const cards = list.items.map(item => {
         const [, name, href, line] = /^\[([^\]]+)\]\(([^)]+)\):?\s*([\s\S]*)$/.exec(item.text);
-        return `<a class="tool-card" href="${escape(href)}"><span class="tool-name">${escape(name)}</span>${line ? `<span class="tool-line">${inline(line)}</span>` : ""}<span class="tool-more">Read the comparison</span></a>`;
+        // Links inside the description would nest inside the card's link: keep their text only.
+        const text = line.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+        return `<a class="tool-card" href="${escape(href)}"><span class="tool-name">${escape(name)}</span>${text ? `<span class="tool-line">${inline(text)}</span>` : ""}<span class="tool-more">Read the comparison</span></a>`;
       }).join("");
       out.push(`<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2><div class="tool-grid">${cards}</div><div class="facts">${blocks(tokens.filter(token => token !== list))}</div></section>`);
     } else out.push(prose(section));
@@ -101,15 +104,23 @@ export function compareMain(page, breadcrumbs) {
 
 const ROLE = { "translator or pm": ["translator", "Translator or PM"], developer: ["developer", "Developer"], fink: ["fink", "Fink"] };
 const roleOf = lead => ROLE[lead.toLowerCase()] ?? ["other", lead];
-const STEP_ICONS = ["link", "edit", "commit", "pull", "release"];
+/** A step's icon, from what it says: open a link, commit, pull request, release, or else edit. */
+export function stepIcon(role, text) {
+  if (role === "fink" || /\bcommit/i.test(text) && !/pull request/i.test(text)) return "commit";
+  if (/pull request/i.test(text)) return "pull";
+  if (/releas/i.test(text)) return "release";
+  if (/\blink\b/i.test(text)) return "link";
+  return "edit";
+}
 
 function steps(section, tokens) {
-  const list = tokens.find(token => token.type === "list" && token.ordered);
+  const list = tokens.find(token => token.type === "list");
   const items = list.items.map((item, index) => {
     const [lead, text] = leadOf(item.text), [role, label] = roleOf(lead);
-    return `<li class="step ${role}"><span class="step-top"><span class="step-icon">${svg(ICONS[STEP_ICONS[index]] ?? ICONS.edit)}</span><span class="step-role">${escape(label)}</span></span><span class="step-number">Step ${index + 1}</span><span class="step-text">${inline(text)}</span></li>`;
+    return `<li class="step ${role}"><span class="step-top"><span class="step-icon">${svg(ICONS[stepIcon(role, text)])}</span><span class="step-role">${escape(label)}</span></span><span class="step-number">Step ${index + 1}</span><span class="step-text">${inline(text)}</span></li>`;
   }).join("");
-  return `<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2><ol class="steps">${items}</ol><div class="d-note">${blocks(tokens.filter(token => token !== list))}</div></section>`;
+  const before = tokens.slice(0, tokens.indexOf(list)), after = tokens.slice(tokens.indexOf(list) + 1);
+  return `<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2>${before.length ? `<div class="d-intro">${blocks(before)}</div>` : ""}<${list.ordered ? "ol" : "ul"} class="steps">${items}</${list.ordered ? "ol" : "ul"}>${after.length ? `<div class="d-note">${blocks(after)}</div>` : ""}</section>`;
 }
 
 function checks(section, tokens) {
@@ -129,7 +140,8 @@ function roles(section, tokens) {
     const icon = role === "translator" ? ICONS.person : role === "developer" ? ICONS.code : ICONS.eye;
     return `<li class="role-card ${role}"><span class="role-icon">${svg(icon, 22)}</span><h3>${escape(lead)}</h3><div>${inline(text)}</div></li>`;
   }).join("");
-  return `<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2><ul class="roles">${cards}</ul><div class="d-note">${blocks(tokens.filter(token => token !== list))}</div></section>`;
+  const before = tokens.slice(0, tokens.indexOf(list)), after = tokens.slice(tokens.indexOf(list) + 1);
+  return `<section class="d-section" aria-labelledby="${section.id}"><h2 id="${section.id}">${inline(section.title)}</h2>${before.length ? `<div class="d-intro">${blocks(before)}</div>` : ""}<ul class="roles">${cards}</ul>${after.length ? `<div class="d-note">${blocks(after)}</div>` : ""}</section>`;
 }
 
 export const TEAMS_LINK = "fink.inlang.com/?repo=owner/repo&amp;project=project.inlang&amp;branch=translations";

@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { NAV, ORIGIN, headingId, internalLinks, llmsTxt, loadPages, renderMarkdown, renderNotFound, renderPage, robots, sitemap } from "../scripts/site.mjs";
-import { COMPARE_MARKS, splitSections } from "../scripts/site-designs.mjs";
+import { COMPARE_MARKS, splitSections, stepIcon } from "../scripts/site-designs.mjs";
 
 const pages = loadPages("site");
 const bySlug = new Map(pages.map(page => [page.slug, page]));
@@ -97,10 +97,12 @@ describe("static docs and comparison pages", () => {
     const markdownRows = page.body.split("\n").filter(line => line.startsWith("| ") && !line.startsWith("| |")).map(line => line.split("|")[1].trim());
     expect(rows).toEqual(markdownRows);
     // Every row has a Fink cell (tinted) and a TMS cell; every mark has a label.
-    expect(table.match(/<td class="ours">/g)).toHaveLength(rows.length);
+    expect(table.match(/<td class="ours" data-label="Fink">/g)).toHaveLength(rows.length);
     for (const label of Object.keys(COMPARE_MARKS)) expect(rows, label).toContain(label);
     expect(table.match(/<svg[^>]*class="mark (yes|no)"[^>]*>/g)!.every(mark => /role="img" aria-label="(Yes|No)"/.test(mark))).toBe(true);
-    expect(table).toContain("Weblate (GPL-3.0) and Tolgee (Apache-2.0) are open source. Crowdin and Lokalise are not.");
+    expect(table).toContain("Weblate (GPL-3.0) and Tolgee (Apache-2.0, enterprise features under a separate license) are open source. Crowdin and Lokalise are not.");
+    expect(html).toContain('<div class="table-wrap" tabindex="0" role="region" aria-label="Fink and a typical TMS, side by side">');
+    expect(table).toContain('<td class="ours" data-label="Fink">');
     expect(html).toContain('<div class="fit-card fink"><h2 id="fink-fits-when">Fink fits when</h2>');
     for (const tool of ["crowdin", "lokalise", "weblate", "tolgee"]) expect(html).toContain(`<a class="tool-card" href="/compare/${tool}">`);
     expect(html).toContain("last checked October 11, 2026");
@@ -118,6 +120,25 @@ describe("static docs and comparison pages", () => {
     expect(html.match(/<li class="role-card /g)!.length).toBeGreaterThanOrEqual(2);
     expect(html).toContain("Send this link to your translators: <code>fink.inlang.com/?repo=owner/repo&amp;project=project.inlang&amp;branch=translations</code>");
     expect(html).toMatch(/<img src="\/images\/editor.webp"[^>]* width="1840" height="1520" alt="Fink editor[^"]+"/);
+  });
+
+  test("designed layouts keep Markdown they don't know and pick step icons by meaning", () => {
+    const compare = bySlug.get("compare")!;
+    const extra = { ...compare, body: compare.body.replace("**With Fink:**", "Also a note about formats.\n\n**With Fink:**") };
+    expect(renderPage(extra, pages)).toContain("Also a note about formats.");
+    const teams = bySlug.get("teams")!;
+    const bullets = { ...teams, body: teams.body.replace(/^\d\. /gm, "- ") };
+    const html = renderPage(bullets, pages);
+    expect(html).toContain('<ul class="steps">');
+    expect(stepIcon("translator", "Open the link a developer sent you.")).toBe("link");
+    expect(stepIcon("fink", "Commits your changes.")).toBe("commit");
+    expect(stepIcon("developer", "Opens a pull request on GitHub.")).toBe("pull");
+    expect(stepIcon("developer", "Releases a new version.")).toBe("release");
+    expect(stepIcon("translator", "Type the translations.")).toBe("edit");
+  });
+
+  test("/compare stays in the reading order of the comparison pages", () => {
+    expect(renderPage(bySlug.get("compare/crowdin")!, pages)).toContain('<a href="/compare" rel="prev">');
   });
 
   test("the not-found page isn't indexed", () => {

@@ -1,7 +1,7 @@
 import { readFile, writeFile, readdir, cp, mkdir, unlink, rm } from "node:fs/promises";
 import path from "node:path";
-// Self-hosted fonts don't change under a name (a new version gets a new file name); screenshots may.
-const headers = ["/fonts/*\n  Cache-Control: public, max-age=31536000, immutable", "/images/*\n  Cache-Control: public, max-age=86400"];
+// Self-hosted fonts and the screenshots have stable names, so they are cached for a while, not forever.
+const headers = ["/fonts/*\n  Cache-Control: public, max-age=2592000", "/images/*\n  Cache-Control: public, max-age=86400"];
 for (const name of await readdir("dist/assets")) {
   if (!name.endsWith(".wasm")) continue;
   const file = path.join("dist/assets", name);

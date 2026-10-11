@@ -106,8 +106,8 @@ function sidebar(pages, current) {
 }
 
 function pager(pages, current) {
-  // Standalone pages (layout: page) are listed in the sidebar but not part of the reading order.
-  const standalone = new Set(pages.filter(page => page.layout === "page").map(page => page.slug));
+  // Standalone pages outside docs and compare (e.g. /teams) are in the sidebar but not in the reading order.
+  const standalone = new Set(pages.filter(page => page.layout === "page" && !inSection(page.slug, "docs") && !inSection(page.slug, "compare")).map(page => page.slug));
   const order = NAV.flatMap(group => group.pages).filter(slug => !standalone.has(slug)), index = order.indexOf(current);
   const title = slug => { const page = pages.find(page => page.slug === slug); return escape(page ? (page.navTitle ?? page.title) : slug); };
   const previous = order[index - 1], next = order[index + 1];
@@ -119,8 +119,9 @@ export const siteHeader = (current = "", pageSlug = "") => `<header class="site-
 export const siteFooter = `<footer class="site-footer"><div class="site-footer-inner"><span>© ${new Date().getFullYear()} Opral · Fink is open source (MIT). Part of inlang.</span><nav aria-label="Footer"><a href="/docs">Docs</a><a href="/teams">For teams</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="${REPOSITORY}">GitHub</a><a href="https://inlang.com">inlang</a><a href="https://paraglidejs.com">Paraglide JS</a></nav></div></footer>`;
 
 const pageMeta = page => `Maintained by <a href="https://opral.com">Opral</a>, the team behind inlang · <a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="${REPOSITORY}/issues">Report an issue</a> · <a href="/${page.slug}.md">Markdown</a>`;
-/** The editor screenshot from the landing page (src/Landing.tsx HERO_SHOT). */
-const HERO_SHOT = `<img src="/images/editor.webp" srcset="/images/editor-920.webp 920w, /images/editor.webp 1840w" sizes="(max-width: 740px) 150vw, 640px" width="1840" height="1520" alt="Fink editor as a translator sees it: the message files_remaining in English and German, with a warning that the German text is missing {count}" fetchpriority="high">`;
+/** The editor screenshot from the landing page (src/heroShot.json). */
+const shot = JSON.parse(readFileSync(new URL("../src/heroShot.json", import.meta.url), "utf8"));
+const HERO_SHOT = `<img src="${shot.src}" srcset="${shot.srcSet}" sizes="(max-width: 740px) 150vw, 640px" width="${shot.width}" height="${shot.height}" alt="${escape(shot.alt)}" fetchpriority="high">`;
 
 /** One static HTML page. */
 export function renderPage(page, pages) {

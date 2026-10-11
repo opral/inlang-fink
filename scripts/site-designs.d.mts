@@ -3,3 +3,4 @@ export function splitSections(markdown: string): { intro: unknown[]; sections: {
 export function leadOf(text: string): [string, string];
 export const COMPARE_MARKS: Record<string, (string | undefined)[]>;
 export const TEAMS_LINK: string;
+export function stepIcon(role: string, text: string): string;

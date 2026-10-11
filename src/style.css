@@ -122,7 +122,6 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 
 /* Layout */
 main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
-.welcome { padding-top: 0; padding-bottom: 64px; }
 .error, .notice { margin: 0 0 20px; padding: 12px 14px; border-radius: var(--radius); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .error { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .error > span { flex: 1; }
@@ -453,6 +452,7 @@ body:has(.lixfloat) footer { padding-bottom: 72px; }
   .float-composer { flex-direction: column; }
   .usage-status { display: none; }
   .footer-grid { flex-direction: column; text-align: center; }
+  .footer-links { flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
   .dialog-backdrop { padding: 12px; }
   .bundle { overflow-x: auto; }
   .app-header { position: relative; }

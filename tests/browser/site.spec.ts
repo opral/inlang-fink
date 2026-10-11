@@ -62,7 +62,13 @@ test("a deep link to a project doesn't flash the static landing page", async ({ 
 });
 
 test("the compare and teams pages are designed pages with a table, steps and a working repository form", async ({ page }) => {
-  await page.route("**/api/**", route => route.fulfill({ json: null }));
+  const opened: string[] = [];
+  await page.route("**/api/**", route => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== "/api/github/tree") return route.fulfill({ json: null });
+    opened.push(`${url.searchParams.get("owner")}/${url.searchParams.get("repo")}`);
+    return route.fulfill({ json: { head: "a".repeat(40), tree: "b".repeat(40), branch: "main", paths: [], projects: [] } });
+  });
   await page.goto("/compare");
   const table = page.getByRole("table");
   await expect(table.getByRole("columnheader", { name: "Fink" })).toBeVisible();
@@ -71,8 +77,11 @@ test("the compare and teams pages are designed pages with a table, steps and a w
   await expect(page.getByRole("link", { name: /Fink vs Weblate/ })).toHaveAttribute("href", "/compare/weblate");
   await page.getByLabel("GitHub repository").fill("github.com/acme/web");
   await page.getByRole("button", { name: "Open" }).click();
+  // The app opens the repository right away and drops open=1 from the address.
+  await expect.poll(() => opened).toEqual(["acme/web"]);
   await expect(page).toHaveURL(/\/\?repo=github.com%2Facme%2Fweb$/);
   await expect(page.getByLabel("GitHub repository")).toHaveValue("github.com/acme/web");
+  await expect(page.getByRole("alert")).toContainText("No unpacked project.inlang");
 
   await page.goto("/teams");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your team edits translations. Nobody touches JSON or git.");

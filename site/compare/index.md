@@ -28,7 +28,7 @@ A translation management system (TMS) such as Crowdin, Lokalise, Weblate or Tolg
 | Translation memory, machine translation, glossary | No | Yes |
 | Review workflows, vendors, agencies | No, review happens on GitHub | Yes |
 | Price | Free | Free tiers or open source plans, then paid plans |
-| Source code | Open source (MIT) | Weblate (GPL-3.0) and Tolgee (Apache-2.0) are open source. Crowdin and Lokalise are not. |
+| Source code | Open source (MIT) | Weblate (GPL-3.0) and Tolgee (Apache-2.0, enterprise features under a separate license) are open source. Crowdin and Lokalise are not. |
 
 ## Fink fits when
 

@@ -47,6 +47,8 @@ async function headCommit(project: InlangProject): Promise<string> {
 
 export default function App() {
   const [url, setUrl] = useState(() => new URLSearchParams(location.search).get("repo") ?? "");
+  /** Set when the page was opened with ?repo=…&open=1; the repository opens once `url` is set. */
+  const [autoOpen, setAutoOpen] = useState(false);
   const [repo, setRepo] = useState<Repo>();
   const [tree, setTree] = useState<RepoTree>();
   const [branches, setBranches] = useState<string[]>([]);
@@ -168,7 +170,11 @@ export default function App() {
       const repository = params.get("repo"), project = params.get("project");
       setInitializing(false);
       if (repository && project) void openLocation(repository, params.get("branch") ?? "", project);
-      else if (repository) setUrl(repository);
+      else if (repository) {
+        setUrl(repository);
+        // The repository forms on /compare and /teams send ?repo=…&open=1: open it right away.
+        if (params.get("open") === "1") { history.replaceState(null, "", `/?${new URLSearchParams({ repo: repository })}`); setAutoOpen(true); }
+      }
     })();
     return () => { flushRef.current(); void queue.current.then(() => localRef.current?.close()).catch(report); };
   }, []);
@@ -305,6 +311,7 @@ export default function App() {
     setUrl(repositoryUrl); setRepo(repository); setBranch(nextTree.branch); setPath(projectPath); setTree(undefined);
     await loadProject(repository, nextTree, projectPath, repositoryUrl);
   });
+  useEffect(() => { if (autoOpen && url) { setAutoOpen(false); void discover(); } }, [autoOpen, url]);
   const openShowcase = (showcase: Showcase) => void openLocation(`https://github.com/${showcase.repository}`, showcase.branch, showcase.projectPath);
   const openRecent = (project: RecentProject) => void openLocation(`https://github.com/${project.owner}/${project.name}`, project.branch, project.projectPath);
   const switchBranch = (name: string) => void run(async () => {
@@ -894,6 +901,6 @@ export default function App() {
           push={() => void publish()} mode={floatMode} />
       </>}
     </main>
-    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source (MIT) · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="/docs">Docs</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
+    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source (MIT) · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="/docs">Docs</a><a href="/teams">For teams</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
   </>;
 }

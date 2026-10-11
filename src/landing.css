@@ -19,6 +19,7 @@
 .home-nav nav a:hover { color: var(--text); }
 main.welcome { max-width: none; padding: 0 0 96px; }
 main.welcome + footer { background: var(--bg); }
+main.welcome + footer .footer-grid { padding-left: 32px; padding-right: 32px; }
 .welcome > :not(.feature-band, .loading-status), .feature-band > .features { width: 100%; max-width: 1280px; margin-left: auto; margin-right: auto; padding-left: 32px; padding-right: 32px; }
 .welcome a:not(.button) { text-underline-offset: 3px; }
 .welcome code { font-size: .86em; }
@@ -81,7 +82,6 @@ main.welcome + footer { background: var(--bg); }
 .recent-remove { position: absolute; top: 10px; right: 8px; width: 32px; height: 32px; padding: 0; border: 0; box-shadow: none; background: transparent; color: var(--muted); font-size: 18px; opacity: 0; }
 .recent-card:hover .recent-remove, .recent-remove:focus-visible { opacity: 1; }
 .recent-remove:hover { color: var(--text); background: var(--hover); }
-.recent-open:has(.recent-time) .recent-top { padding-right: 0; }
 
 /* Setup and questions */
 .setup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
@@ -105,7 +105,7 @@ main.welcome + footer { background: var(--bg); }
 }
 @media (max-width: 740px) {
   .welcome > :not(.feature-band, .loading-status), .feature-band > .features { padding-left: 16px; padding-right: 16px; }
-  .app-header:has(+ main.welcome) .header-grid { padding-left: 16px; padding-right: 16px; }
+  .app-header:has(+ main.welcome) .header-grid, main.welcome + footer .footer-grid { padding-left: 16px; padding-right: 16px; }
   .home-nav nav { gap: 14px; }
   .hero-shot img { width: 150%; max-width: none; flex: none; }
   .hero-lead { font-size: 16px; }
