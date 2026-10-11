@@ -4,6 +4,8 @@ import type { ProjectSettings } from "@inlang/sdk/browser";
 describe("repository file mapping", () => {
   test("restricts URLs and preserves project-relative resource paths", () => {
     expect(parseRepository("opral/example.git")).toEqual({ owner: "opral", name: "example" });
+    expect(parseRepository("github.com/opral/example")).toEqual({ owner: "opral", name: "example" });
+    expect(parseRepository("GitHub.com/opral/example")).toEqual({ owner: "opral", name: "example" });
     expect(() => parseRepository("https://example.com/opral/repo")).toThrow();
     expect(() => parseRepository("https://github.com/opral/repo/tree/main")).toThrow();
     expect(resolveResourcePath("apps/web/project.inlang", "./messages/en.json")).toBe("apps/web/messages/en.json");

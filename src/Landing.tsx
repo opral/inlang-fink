@@ -4,6 +4,7 @@ import type { Showcase } from "./showcaseList";
 import type { RepoTree } from "./repository";
 import { recentKey, timeAgo, type RecentProject } from "./recent";
 import { BranchIcon, GitHubIcon } from "./Menu";
+import { Benefits, LandingMore } from "./LandingSections";
 
 type Picker = { tree: RepoTree; branches: string[]; branch: string; path: string; setBranch: (branch: string) => void; setPath: (path: string) => void; open: () => void };
 
@@ -11,9 +12,9 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
   const onSubmit = (event: FormEvent) => { event.preventDefault(); submit(); };
   return <>
     <section className="hero">
-      <p className="eyebrow">Open source · Works with any inlang project</p>
-      <h1>Translate your app,<br />right from GitHub.</h1>
-      <p className="hero-lead">Fink is a localization editor for <code>project.inlang</code> repositories. Edit messages, variables and plurals in the browser, review the diff, and push a commit to your branch.</p>
+      <p className="eyebrow">Free during beta · Works with i18next and Paraglide JS</p>
+      <h1>The translation editor<br />for your GitHub repo.</h1>
+      <p className="hero-lead">Open your repository and edit i18next or Paraglide JS translations side by side. Fink catches missing translations and broken variables, then commits only what you changed. No sync, no second copy of your strings.</p>
       <form className="repo-cta" onSubmit={onSubmit}>
         <label className="visually-hidden" htmlFor="repository-url">GitHub repository</label>
         <GitHubIcon size={20} />
@@ -29,18 +30,19 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
         </div>
       </div>}
       {status}
-      <p className="hero-hint">Requires a <code>project.inlang</code> folder. <a href="https://inlang.com/docs" target="_blank" rel="noreferrer">Learn how to get started</a></p>
+      <p className="hero-hint">Needs a small <code>project.inlang</code> folder in your repository. <a href="/docs/set-up-a-project">Set it up in one command</a></p>
+      <Benefits />
     </section>
 
     <section className="landing-section how" aria-labelledby="how-title">
-      <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No setup and no lock-in. Your repository stays the source of truth.</p></div></header>
+      <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No sync and no lock-in. Your repository stays the source of truth.</p></div></header>
       <ol className="steps">
         <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next and inlang message format.</p>
           <div aria-hidden="true" className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
         <li><span className="step-number">2</span><h3>Translate side by side</h3><p>Every locale of a message in one place, including variables, selectors and plurals. Filter for missing translations.</p>
           <div aria-hidden="true" className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>
-        <li><span className="step-number">3</span><h3>Review and push</h3><p>See a before/after diff of every change, write a commit message, and push straight to your branch.</p>
-          <div aria-hidden="true" className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Commit and push</span></div></div></li>
+        <li><span className="step-number">3</span><h3>Review and push</h3><p>See a before/after view of every change and push a commit to your branch. No write access? Fink forks the repository so you can open a pull request.</p>
+          <div aria-hidden="true" className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Push</span></div></div></li>
       </ol>
     </section>
 
@@ -61,5 +63,6 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
     </section>}
 
     <Showcases open={openShowcase} busy={busy} />
+    <LandingMore />
   </>;
 }

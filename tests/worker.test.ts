@@ -112,3 +112,21 @@ test("history lists branch commits scoped to the project without exposing upstre
   expect(Object.fromEntries(requested.searchParams)).toEqual({ sha: "feature/i18n", per_page: "30", path: "frontend" });
   expect((await worker.fetch(new Request("https://fink.test/api/github/commits?owner=example&repo=repo&branch=main&path=../x"), env)).status).toBe(400);
 });
+test("unknown docs and comparison pages are 404s instead of the app's fallback page", async () => {
+  const app = '<!doctype html><html><body><div id="root"></div></body></html>';
+  const pages: Record<string, string> = { "/docs/checks": "<!doctype html><title>Checks</title><main>Checks</main>", "/docs/not-found": "<!doctype html><title>Page not found</title>" };
+  const assets = vi.fn(async (request: Request) => new Response(pages[new URL(request.url).pathname] ?? app, { headers: { "Content-Type": "text/html; charset=utf-8" } }));
+  const env = { SESSION_SECRET: "a secure test secret with at least 32 characters", ASSETS: { fetch: assets } } as unknown as Env;
+  const found = await worker.fetch(new Request("https://fink.test/docs/checks"), env);
+  expect(found.status).toBe(200);
+  expect(await found.text()).toContain("<title>Checks</title>");
+  for (const path of ["/docs/nope", "/compare/nope"]) {
+    const missing = await worker.fetch(new Request(`https://fink.test${path}`), env);
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toContain("Page not found");
+  }
+  // The app itself, and files that aren't HTML, pass through untouched.
+  expect(await (await worker.fetch(new Request("https://fink.test/?repo=a/b"), env)).text()).toBe(app);
+  assets.mockResolvedValueOnce(new Response("# Checks", { headers: { "Content-Type": "text/markdown" } }));
+  expect((await worker.fetch(new Request("https://fink.test/docs/checks.md"), env)).status).toBe(200);
+});

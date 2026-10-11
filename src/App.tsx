@@ -819,7 +819,7 @@ export default function App() {
   </section>;
   const others = recent.filter(project => !context || recentKey(project) !== recentKey(context)).slice(0, 5);
   const account = <div className="account">
-    <a href="https://github.com/opral/inlang-fink#readme" className="help-link" target="_blank" rel="noreferrer">Help</a>
+    <a href="/docs" className="help-link" target="_blank" rel="noreferrer">Docs</a>
     <StarButton />
     {user ? <Dropdown className="account-trigger" title="Account" align="end" label={<><img className="avatar" src={`https://github.com/${user.login}.png?size=48`} alt="" width="22" height="22" referrerPolicy="no-referrer" /><span className="account-login">{user.login}</span><Chevron /></>}>
       {close => <><div className="dropdown-heading">Signed in as <strong>{user.login}</strong></div><a className="menu-item" href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a><button className="menu-item" onClick={() => { close(); void run(async () => { await api("auth/logout", {}); setUser(null); await identify(undefined); }); }}>Sign out</button></>}
@@ -894,6 +894,6 @@ export default function App() {
           push={() => void publish()} mode={floatMode} />
       </>}
     </main>
-    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
+    <footer><div className="footer-grid"><span>© {new Date().getFullYear()} Opral · Fink is open source · <span title="Fink sends anonymous counts (projects opened, project size, pushes) to help decide what to build. No message text, keys, file names or repository names.">Anonymous usage counts, no content</span></span><span className="footer-links"><a href="/docs">Docs</a><a href="https://github.com/opral/inlang-fink" target="_blank" rel="noreferrer">GitHub</a><a href="https://inlang.com" target="_blank" rel="noreferrer">inlang</a><a href="https://github.com/apps/inlang/installations/new" target="_blank" rel="noreferrer">Grant repository access</a></span></div></footer>
   </>;
 }

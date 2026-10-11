@@ -1,0 +1,77 @@
+/* Docs and comparison pages. Same tokens as the app (src/style.css). No JavaScript. */
+:root {
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bg: #fafafa; --surface: #fff; --subtle: #f4f4f5;
+  --border: #e4e4e7; --border-strong: #d4d4d8;
+  --text: #18181b; --text-2: #3f3f46; --muted: #63636d;
+  --blue: #1d4ed8; --focus: #2563eb;
+  --radius: 6px; --radius-lg: 10px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font); color: var(--text); background: var(--bg); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+
+.site-header { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; }
+.site-header-inner, .site-layout, .site-footer-inner { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+.site-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 56px; }
+.site-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; text-decoration: none; }
+.site-nav { display: flex; align-items: center; gap: 20px; font-size: 14px; }
+.site-nav a { text-decoration: none; color: var(--text-2); }
+.site-nav a:hover { color: var(--text); }
+.site-nav .site-cta { padding: 6px 12px; border-radius: var(--radius); background: var(--text); color: #fff; font-weight: 500; }
+.site-nav .site-cta:hover { background: var(--text-2); color: #fff; }
+
+.site-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-top: 32px; padding-bottom: 64px; }
+.site-sidebar { position: sticky; top: 88px; align-self: start; max-height: calc(100vh - 104px); overflow-y: auto; font-size: 14px; }
+.nav-group + .nav-group { margin-top: 20px; }
+.nav-title { margin: 0 0 6px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.site-sidebar ul { list-style: none; margin: 0; padding: 0; }
+.site-sidebar li a { display: block; padding: 4px 10px; margin-left: -10px; border-radius: var(--radius); text-decoration: none; color: var(--text-2); }
+.site-sidebar li a:hover { background: var(--subtle); color: var(--text); }
+.site-sidebar li a[aria-current="page"] { background: var(--subtle); color: var(--text); font-weight: 600; }
+
+.site-main { min-width: 0; max-width: 760px; }
+.breadcrumbs { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.breadcrumbs a { text-decoration: none; }
+.breadcrumbs a:hover { color: var(--text); text-decoration: underline; }
+
+.prose h1 { font-size: clamp(28px, 4vw, 38px); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 20px; }
+.prose h2 { font-size: 22px; letter-spacing: -.02em; line-height: 1.3; margin: 40px 0 12px; }
+.prose h3 { font-size: 17px; margin: 28px 0 8px; }
+.prose p, .prose ul, .prose ol { margin: 0 0 16px; }
+.prose ul, .prose ol { padding-left: 22px; }
+.prose li + li { margin-top: 6px; }
+.prose a { color: var(--blue); text-underline-offset: 3px; }
+.prose code { font-family: var(--mono); font-size: .88em; background: var(--subtle); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
+.prose pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; overflow-x: auto; margin: 0 0 20px; }
+.prose pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+.prose table { width: 100%; border-collapse: collapse; margin: 0 0 24px; font-size: 14px; display: block; overflow-x: auto; }
+.prose th, .prose td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.prose th { font-weight: 600; background: var(--subtle); white-space: nowrap; }
+.prose blockquote { margin: 0 0 16px; padding: 4px 16px; border-left: 3px solid var(--border-strong); color: var(--text-2); }
+.prose h2[id], .prose h3[id] { scroll-margin-top: 80px; }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px; }
+.pager a { display: flex; flex-direction: column; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); text-decoration: none; font-weight: 600; }
+.pager a:hover { border-color: var(--border-strong); }
+.pager a span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.pager a[rel="next"] { text-align: right; grid-column: 2; }
+.page-meta { margin-top: 24px; font-size: 13px; color: var(--muted); }
+.page-meta a { color: var(--muted); }
+
+.site-footer { border-top: 1px solid var(--border); background: var(--surface); }
+.site-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 18px; padding-bottom: 18px; font-size: 13px; color: var(--muted); }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
+.site-footer a { text-decoration: none; }
+.site-footer a:hover { color: var(--text); }
+
+@media (max-width: 860px) {
+  .site-layout { grid-template-columns: 1fr; gap: 0; padding-top: 20px; }
+  .site-sidebar { display: none; }
+  .site-nav { gap: 14px; }
+  .site-nav a[href^="https://github.com"] { display: none; }
+}

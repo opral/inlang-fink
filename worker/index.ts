@@ -77,10 +77,24 @@ async function ingest(request: Request, url: URL): Promise<Response> {
   return fetch(new Request(`https://${host}${path}${url.search}`, { method: request.method, headers, body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body, redirect: "follow" }));
 }
 
+/**
+ * Docs and comparison pages are static HTML (scripts/build-site.mjs). Assets answer unknown paths
+ * with the app's index.html (single-page-application fallback); under /docs/ and /compare/ that
+ * would be a soft 404, so those get the docs' not-found page with status 404 instead.
+ */
+async function staticPage(request: Request, env: Env, url: URL): Promise<Response> {
+  const response = await env.ASSETS.fetch(request);
+  if (response.status !== 200 || !(response.headers.get("Content-Type") ?? "").includes("text/html")) return response;
+  if (!(await response.clone().text()).includes('<div id="root">')) return response;
+  const notFound = await env.ASSETS.fetch(new Request(new URL("/docs/not-found", url)));
+  return new Response(notFound.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/ingest/")) return ingest(request, url);
+    if (url.pathname.startsWith("/docs/") || url.pathname.startsWith("/compare/")) return staticPage(request, env, url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
     try {
       const authResult = await auth(request, env, url); if (authResult) return authResult;

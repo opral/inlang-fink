@@ -4,7 +4,8 @@ export type Repo = { owner: string; name: string; branch?: string; projectPath?:
 export type RepoTree = { head: string; tree: string; branch: string; paths: string[]; projects: string[]; shas?: Record<string, string> };
 export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string>; shas?: Record<string, string> };
 export function parseRepository(input: string): Repo {
-  const url = new URL(input.includes("://") ? input : `https://github.com/${input}`);
+  // "https://github.com/owner/repo", "github.com/owner/repo" (the landing page's example) or "owner/repo".
+  const url = new URL(input.includes("://") ? input : /^github\.com\//i.test(input) ? `https://${input}` : `https://github.com/${input}`);
   if (url.protocol !== "https:" || url.hostname !== "github.com" || url.username || url.password) throw new Error("Use a github.com repository URL.");
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts.length < 2 || !parts.slice(0, 2).every(p => /^[\w.-]+$/.test(p))) throw new Error("Enter a repository such as https://github.com/owner/repo.");

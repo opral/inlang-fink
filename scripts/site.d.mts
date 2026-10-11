@@ -1,0 +1,22 @@
+// Types for scripts/site.mjs, used by tests/site.test.ts.
+export type Page = { slug: string; file: string; title: string; seoTitle: string; description: string; body: string; source: string };
+export const ORIGIN: string;
+export const REPOSITORY: string;
+export const NAV: { title: string; pages: string[] }[];
+export function parseFrontmatter(source: string): { data: Record<string, string>; body: string };
+export function loadPages(root: string): Page[];
+export function url(slug: string): string;
+export function headingId(text: string): string;
+export function renderMarkdown(markdown: string): string;
+export function structuredData(page: Page): Record<string, unknown>[];
+export function faqEntries(markdown: string): { question: string; answer: string }[];
+export function renderPage(page: Page, pages: Page[]): string;
+export function renderNotFound(pages: Page[]): string;
+export function sitemap(pages: Page[]): string;
+export function robots(): string;
+export function llmsTxt(pages: Page[]): string;
+export function llmsFullTxt(pages: Page[]): string;
+export function pageMarkdown(page: Page): string;
+export function internalLinks(markdown: string): { path: string; hash?: string }[];
+export const siteHeader: string;
+export const siteFooter: string;
