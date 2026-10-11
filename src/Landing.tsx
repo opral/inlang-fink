@@ -12,9 +12,9 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
   const onSubmit = (event: FormEvent) => { event.preventDefault(); submit(); };
   return <>
     <section className="hero">
-      <p className="eyebrow">Free and open source · Works with i18next and Paraglide JS</p>
+      <p className="eyebrow">Free and open source · Works with i18next, next-intl and Paraglide JS</p>
       <h1>The translation editor<br />for your GitHub repo.</h1>
-      <p className="hero-lead">Open your repository and edit i18next or Paraglide JS translations side by side. Fink catches missing translations and broken variables, then commits only what you changed. No sync, no second copy of your strings.</p>
+      <p className="hero-lead">Open your repository and edit i18next, next-intl or Paraglide JS translations side by side. Fink catches missing translations and broken variables, then commits only what you changed. No sync, no second copy of your strings.</p>
       <form className="repo-cta" onSubmit={onSubmit}>
         <label className="visually-hidden" htmlFor="repository-url">GitHub repository</label>
         <GitHubIcon size={20} />
@@ -37,7 +37,7 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
     <section className="landing-section how" aria-labelledby="how-title">
       <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No sync and no lock-in. Your repository stays the source of truth.</p></div></header>
       <ol className="steps">
-        <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next and inlang message format.</p>
+        <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next, next-intl and inlang message format.</p>
           <div aria-hidden="true" className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
         <li><span className="step-number">2</span><h3>Translate side by side</h3><p>Every locale of a message in one place, including variables, selectors and plurals. Filter for missing translations.</p>
           <div aria-hidden="true" className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>

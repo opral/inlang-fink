@@ -61,7 +61,7 @@ Fink has no accounts, invitations or roles of its own. GitHub decides who can pu
 
 ## Setup for developers
 
-1. Add a `project.inlang` folder to the repository. For i18next, run `npx i18next-cli init --inlang`. Paraglide JS projects already have one. See [Set up a project](/docs/set-up-a-project).
+1. Add a `project.inlang` folder to the repository. For i18next, run `npx i18next-cli init --inlang`. For next-intl, add one small settings file, see [next-intl](/docs/next-intl). Paraglide JS projects already have one. See [Set up a project](/docs/set-up-a-project).
 2. Install the [Inlang GitHub App](https://github.com/apps/inlang/installations/new) on the repository.
 3. Add translators and PMs as collaborators on GitHub, or let them work through forks.
 4. Send them a link: `https://fink.inlang.com/?repo=OWNER/REPO&project=project.inlang&branch=BRANCH`. Without `&branch=`, Fink opens the default branch. Fink does not create branches, so create the branch on GitHub first.
@@ -70,7 +70,7 @@ Fink has no accounts, invitations or roles of its own. GitHub decides who can pu
 
 - Everyone who saves changes needs a GitHub account.
 - Only repositories on github.com.
-- Only i18next JSON and Paraglide JS (inlang message format) files. See [Supported formats](/docs/formats).
+- Only i18next JSON, next-intl and Paraglide JS (inlang message format) files. See [Supported formats](/docs/formats).
 - No comments, screenshots or translation memory. Machine translation is not available yet.
 
 Fink is free and open source (MIT).

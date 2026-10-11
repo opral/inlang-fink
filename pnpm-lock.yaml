@@ -20,6 +20,9 @@ importers:
       '@inlang/plugin-message-format':
         specifier: 4.5.0
         version: 4.5.0
+      '@inlang/plugin-next-intl':
+        specifier: 2.2.2
+        version: 2.2.2
       '@inlang/sdk':
         specifier: 4.0.0
         version: 4.0.0
@@ -615,6 +618,9 @@ packages:
 
   '@inlang/plugin-message-format@4.5.0':
     resolution: {integrity: sha512-sUiIAxNjFBciVun5bVJMZZ0fN6jU9RRaul3ThmE7kyXUtOeOE5GwrBdVCipRn/gxgMhZlCh88oO8RJbXegn+pA==}
+
+  '@inlang/plugin-next-intl@2.2.2':
+    resolution: {integrity: sha512-+9bMq+Lv3jNzXD/GiaVZI96Z4/Oq3f4cxKPTGOdbZaZwAm24vCbTwCAWK5+Qca67LclElJPOK42bC83yEqx3WQ==}
 
   '@inlang/sdk@4.0.0':
     resolution: {integrity: sha512-AwGasJATSKq9J3EVBdmIbpU++2DTI8z0J5WbejT6lqymLaoDB4cf95Zp0ijmJp7XUNP/z10qQfA2lz0TAojRYA==}
@@ -2078,6 +2084,11 @@ snapshots:
     dependencies:
       '@inlang/sdk': 4.0.0
       '@sinclair/typebox': 0.31.30
+
+  '@inlang/plugin-next-intl@2.2.2':
+    dependencies:
+      '@inlang/sdk': 4.0.0
+      '@sinclair/typebox': 0.31.28
 
   '@inlang/sdk@4.0.0':
     dependencies:

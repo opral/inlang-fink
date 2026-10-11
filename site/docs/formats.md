@@ -1,15 +1,16 @@
 ---
 title: Supported formats
-seoTitle: Supported formats: i18next JSON and Paraglide JS · Fink
-description: Fink edits i18next JSON and inlang message format files (Paraglide JS). What each supports, file and push limits, and what isn't supported yet.
+seoTitle: Supported formats: i18next, next-intl and Paraglide JS · Fink
+description: Fink edits i18next JSON, next-intl and inlang message format files (Paraglide JS). What each supports, file and push limits, and what isn't supported yet.
 order: 3
 ---
 
-Fink reads and writes translation files through inlang format plugins. It ships two of them, pinned to tested versions.
+Fink reads and writes translation files through inlang format plugins. It ships three of them, pinned to tested versions.
 
 | Format | Used by | Settings key | Notes |
 |---|---|---|---|
 | **i18next JSON** | i18next, react-i18next, next-i18next | `plugin.inlang.i18next` | Nested or flat keys, namespaces, plural suffixes, context. [Details](/docs/i18next) |
+| **next-intl** | next-intl | `plugin.inlang.nextIntl` | `messages/{locale}.json`, nested namespaces, files per namespace, ICU plurals, selects and rich text tags. [Details](/docs/next-intl) |
 | **inlang message format** | Paraglide JS | `plugin.inlang.messageFormat` | Variables, plurals, selects, exact numbers. [Unused messages](/docs/unused-messages) and usage in code. [Details](/docs/paraglide-js) |
 
 A project must configure exactly one of these. A repository can contain several projects, each with its own format.
@@ -18,7 +19,7 @@ A project must configure exactly one of these. A repository can contain several 
 
 If your project uses another format plugin, Fink shows "Unsupported resource plugins" and doesn't open it. This includes:
 
-- ICU MessageFormat files, next-intl, FormatJS / react-intl
+- ICU MessageFormat files of other libraries (the generic ICU1 plugin), FormatJS / react-intl
 - The generic inlang JSON plugin
 - gettext PO, XLIFF, YAML, Android XML, iOS `.strings` and `.xcstrings`, ARB
 

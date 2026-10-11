@@ -5,11 +5,14 @@ import { OpfsStorage } from "@lix-js/storage-opfs";
 import { draftName } from "./drafts";
 import i18next from "@inlang/plugin-i18next";
 import messageFormat from "@inlang/plugin-message-format";
+import nextIntl from "@inlang/plugin-next-intl";
 import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type Repo, type RepoTree } from "./repository";
 
 import { settingsSignature } from "./settingsData";
 
-const supported: InlangPlugin<any>[] = [i18next, messageFormat];
+const supported: InlangPlugin<any>[] = [i18next, messageFormat, nextIntl as unknown as InlangPlugin<any>];
+/** The formats of the supported plugins, by plugin key, for messages. */
+const formats: Record<string, string> = { [i18next.key]: "i18next", [messageFormat.key]: "inlang message format", [nextIntl.key]: "next-intl" };
 /** An open draft; `name` is its OPFS database (see drafts.ts). */
 export type LocalProject = { project: InlangProject; context: RepoContext; name: string; close: () => Promise<void> };
 export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
@@ -17,8 +20,8 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
   const keys = Object.keys(settings).filter(key => key.startsWith("plugin.") && (settings[key] as { pathPattern?: unknown })?.pathPattern);
   const plugins = supported.filter(plugin => keys.includes(plugin.key));
   const unsupported = keys.filter(key => !plugins.some(plugin => plugin.key === key));
-  if (unsupported.length) throw new Error(`Unsupported resource plugins: ${unsupported.join(", ")}. Supported: i18next and inlang message format.`);
-  if (plugins.length !== 1) throw new Error("Configure exactly one resource plugin (i18next or inlang message format) per project to avoid ambiguous message ownership.");
+  if (unsupported.length) throw new Error(`Unsupported resource plugins: ${unsupported.join(", ")}. Supported: i18next, next-intl and inlang message format.`);
+  if (plugins.length !== 1) throw new Error("Configure exactly one resource plugin (i18next, next-intl or inlang message format) per project to avoid ambiguous message ownership.");
   return plugins;
 }
 /** i18next can express only the exact number 0 (`key_zero`) next to plural categories. */
@@ -345,7 +348,7 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
     try { exported = await local.project.exportFiles({ pluginKey: plugin.key, files: existing }); }
     catch (error) {
       // e.g. i18next can't express an exact number other than 0: name the format, keep the plugin's reason
-      const format = plugin.key === i18next.key ? "i18next" : "inlang message format";
+      const format = formats[plugin.key] ?? plugin.key;
       throw new Error(`Couldn't write the ${format} files: ${error instanceof Error ? error.message : String(error)} Nothing was pushed.`, { cause: error });
     }
     for (const file of exported) {

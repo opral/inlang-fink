@@ -5,7 +5,7 @@ description: Weblate is an open source, git-integrated localization platform you
 order: 3
 ---
 
-**Short answer:** Weblate and Fink both treat your git repository as the place translations belong. Weblate is a full, open source localization platform (GPL-3.0) with translation memory, many formats and community translation features, which you host yourself or use as a hosted service. Fink is a much smaller browser editor with nothing to install. Pick Weblate for large community translation projects and many formats. Pick Fink as a Weblate alternative for i18next or Paraglide JS projects that want an editor without a server.
+**Short answer:** Weblate and Fink both treat your git repository as the place translations belong. Weblate is a full, open source localization platform (GPL-3.0) with translation memory, many formats and community translation features, which you host yourself or use as a hosted service. Fink is a much smaller browser editor with nothing to install. Pick Weblate for large community translation projects and many formats. Pick Fink as a Weblate alternative for i18next, next-intl or Paraglide JS projects that want an editor without a server.
 
 ## How they work
 
@@ -20,7 +20,7 @@ order: 3
 | Where translations live | Your GitHub repository | Your repository, with Weblate's working copy and database |
 | Setup | `project.inlang` folder, open the URL | Weblate server or Hosted Weblate, then components per project |
 | Git hosts | github.com only | Any git host |
-| File formats | i18next JSON, inlang message format | Many formats, including i18next JSON |
+| File formats | i18next JSON, next-intl, inlang message format | Many formats, including i18next JSON |
 | Translation memory, glossary | No | Yes |
 | Machine translation | No | Optional |
 | Quality checks | Missing translations, variables, plural forms, markup | Many checks |
@@ -36,7 +36,7 @@ order: 3
 
 ## Choose Fink if
 
-- Your project uses i18next or Paraglide JS on GitHub.
+- Your project uses i18next, next-intl or Paraglide JS on GitHub.
 - You don't want to run or configure a server.
 - Contributors should see every language side by side and send you a normal pull request.
 

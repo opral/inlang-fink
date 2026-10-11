@@ -8,8 +8,8 @@ order: 1
 Fink edits the translation files in a GitHub repository. You need three things:
 
 1. **A GitHub repository** on github.com. GitLab, Bitbucket and GitHub Enterprise Server are not supported.
-2. **An inlang project in the repository**: a folder such as `project.inlang` with a `settings.json` file that lists your languages and where the translation files are. If you don't have one, [set one up](/docs/set-up-a-project). It takes one command for i18next and Paraglide JS projects.
-3. **A supported format**: [i18next JSON or the inlang message format](/docs/formats) (used by Paraglide JS).
+2. **An inlang project in the repository**: a folder such as `project.inlang` with a `settings.json` file that lists your languages and where the translation files are. If you don't have one, [set one up](/docs/set-up-a-project). It takes one command for i18next and Paraglide JS projects, and one small file for next-intl.
+3. **A supported format**: [i18next JSON, next-intl or the inlang message format](/docs/formats) (used by Paraglide JS).
 
 ## 1. Open the repository
 

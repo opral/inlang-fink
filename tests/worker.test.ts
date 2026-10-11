@@ -53,6 +53,16 @@ test("push rejects JSON files outside the project's configured resource paths", 
   await expect(push({ ...input, files: { "package.json": "{}" } }, "test-token")).rejects.toMatchObject({ status: 400 });
   expect(mock).toHaveBeenCalledTimes(2);
 });
+test("push accepts next-intl resource files, also the sourceLanguageFilePath, and nothing else", async () => {
+  const remote = { baseLocale: "en", locales: ["en", "de"], "plugin.inlang.nextIntl": { pathPattern: "./messages/{locale}.json", sourceLanguageFilePath: "./messages/main.json" } };
+  const run = async (files: Record<string, string>) => {
+    const responses: unknown[] = [{ object: { sha: input.head } }, { encoding: "base64", size: 200, content: btoa(JSON.stringify(remote)) }, graphqlCommit];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json(responses.shift())));
+    return push({ ...input, files }, "test-token");
+  };
+  await expect(run({ "messages/de.json": "{}", "messages/main.json": "{}" })).resolves.toMatchObject({ head: "d".repeat(40) });
+  await expect(run({ "messages/other.json": "{}" })).rejects.toMatchObject({ status: 400 });
+});
 test("OAuth uses PKCE and relays sessions only to the preview that initiated login", async () => {
   const env = { GITHUB_CLIENT_ID: "test-client", GITHUB_CLIENT_SECRET: "test-secret", SESSION_SECRET: "a secure test secret with at least 32 characters", GITHUB_CALLBACK_ORIGIN: "https://fink-migration-preview.opral.workers.dev", WORKERS_SUBDOMAIN: "opral" } as Env;
   const origin = "https://fink-pr-123.opral.workers.dev";

@@ -13,7 +13,7 @@ const OG_IMAGE = `${ORIGIN}/og.png`;
 export const NAV = [
   { title: "Get started", pages: ["docs", "docs/getting-started", "docs/set-up-a-project", "docs/formats", "teams"] },
   { title: "Using Fink", pages: ["docs/editing", "docs/reference-locale", "docs/plurals-and-selects", "docs/checks", "docs/unused-messages", "docs/push", "docs/branches-forks-and-pull-requests", "docs/translators", "docs/drafts"] },
-  { title: "Integrations", pages: ["docs/i18next", "docs/paraglide-js"] },
+  { title: "Integrations", pages: ["docs/i18next", "docs/next-intl", "docs/paraglide-js"] },
   { title: "More", pages: ["docs/privacy", "docs/faq"] },
   { title: "Compare", pages: ["compare", "compare/crowdin", "compare/lokalise", "compare/weblate", "compare/tolgee"] },
 ];
@@ -190,10 +190,10 @@ export function llmsTxt(pages) {
   const bySlug = new Map(pages.map(page => [page.slug, page]));
   return `# Fink
 
-> Fink is a free, open source (MIT), browser-based translation editor for GitHub repositories. It opens the i18next JSON or inlang message format (Paraglide JS) files in a repository that has a project.inlang folder, shows every language of a message side by side, checks for missing translations, variables and plural forms, and commits the changed files back to the branch. There is no sync and no second copy of the translations: the repository is the source of truth.
+> Fink is a free, open source (MIT), browser-based translation editor for GitHub repositories. It opens the i18next JSON, next-intl or inlang message format (Paraglide JS) files in a repository that has a project.inlang folder, shows every language of a message side by side, checks for missing translations, variables and plural forms, and commits the changed files back to the branch. There is no sync and no second copy of the translations: the repository is the source of truth.
 
 Key facts:
-- Supported formats: i18next JSON (including namespaces and plurals) and the inlang message format used by Paraglide JS. Not supported: ICU MessageFormat files, next-intl, PO, XLIFF, YAML, mobile string files.
+- Supported formats: i18next JSON (including namespaces and plurals), next-intl messages (nested namespaces, ICU plurals, selects and rich text tags) and the inlang message format used by Paraglide JS. Not supported: other ICU MessageFormat files, PO, XLIFF, YAML, mobile string files.
 - Hosting: github.com repositories only. Public repositories open without signing in; pushing requires signing in with GitHub and the Inlang GitHub App installed on the repository.
 - People without write access push to a fork and open a pull request on GitHub. Fink doesn't create branches or pull requests itself.
 - Fink is not a translation management system: no translation memory, no machine translation, no vendor workflows.

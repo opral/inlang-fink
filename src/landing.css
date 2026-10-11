@@ -5,7 +5,7 @@
 .benefits p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .benefits code, .setup-card p code, .section-header p code { font-size: .86em; }
 .section-header p a, .faq-list a, .setup-card > a { color: var(--text); font-weight: 500; text-underline-offset: 3px; }
-.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .setup-card { display: flex; flex-direction: column; gap: 10px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .setup-card h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .setup-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }

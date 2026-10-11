@@ -13,7 +13,7 @@ When you open a project, Fink downloads the repository's source code at the comm
 
 ## Requirements and limits
 
-- **Paraglide JS (inlang message format) projects only.** i18next projects show no usage information.
+- **Paraglide JS (inlang message format) projects only.** i18next and next-intl projects show no usage information.
 - **JavaScript, TypeScript and Svelte files.** If the project folder also contains code Fink can't analyze, such as Vue or Astro components, or messages are called dynamically (`m[key]()`), Fink can't be sure. It then shows no unused labels at all rather than wrong ones.
 - **Code outside the project folder isn't scanned.** If your app code lives somewhere else, for example `project.inlang` in `packages/i18n` and the app in `apps/web`, messages can be wrongly labelled as unused. Check before deleting.
 - Messages you add in your draft are never labelled unused.

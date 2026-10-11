@@ -768,7 +768,7 @@ test("recent projects show above the community projects and reopen the project",
   await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
   await page.getByRole("button", { name: "Fink", exact: true }).click();
   await page.getByRole("button", { name: "Open another repository…" }).click();
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Why Fink", "How Fink works", "Recent projects", "Explore community projects", "Set up in one command", "Questions"]);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Why Fink", "How Fink works", "Recent projects", "Explore community projects", "Set up in a minute", "Questions"]);
   const recent = page.getByRole("button", { name: "Open example/repo" });
   await expect(recent).toContainText("main");
   await expect(recent).toContainText("project.inlang");
