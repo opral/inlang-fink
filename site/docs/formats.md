@@ -10,7 +10,7 @@ Fink reads and writes translation files through inlang format plugins. It ships 
 | Format | Used by | Settings key | Notes |
 |---|---|---|---|
 | **i18next JSON** | i18next, react-i18next, next-i18next | `plugin.inlang.i18next` | Nested or flat keys, namespaces, plural suffixes, context. [Details](/docs/i18next) |
-| **next-intl** | next-intl | `plugin.inlang.nextIntl` | `messages/{locale}.json`, nested namespaces, files per namespace, ICU plurals, selects and rich text tags. [Details](/docs/next-intl) |
+| **next-intl** | next-intl | `plugin.inlang.nextIntl` | `messages/{locale}.json`, nested namespaces, files per namespace, ICU plurals, selects and rich text tags. [Unused messages](/docs/unused-messages) and usage in code. [Details](/docs/next-intl) |
 | **inlang message format** | Paraglide JS | `plugin.inlang.messageFormat` | Variables, plurals, selects, exact numbers. [Unused messages](/docs/unused-messages) and usage in code. [Details](/docs/paraglide-js) |
 
 A project must configure exactly one of these. A repository can contain several projects, each with its own format.

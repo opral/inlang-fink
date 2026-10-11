@@ -19,7 +19,9 @@ import { StarButton } from "./StarButton";
 import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, BranchIcon } from "./Menu";
 import type { Showcase } from "./showcaseList";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
-import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
+import { UsageStatus } from "./UsagePeek";
+import { formatName, sourceSnapshot, usagesFromReferences, usageState, type Usage, type UsageState } from "./usage";
+import { USAGE_SOURCES, usagePlugin } from "./sourcePaths";
 import { RECENT_KEY, forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
 import { LocalDrafts } from "./LocalDrafts";
@@ -106,10 +108,10 @@ export default function App() {
   const searchIndex = useRef(new WeakMap<BundleNested, string>());
   const table = useRef<HTMLDivElement>(null);
   // The app's source at the draft's base commit, its usages (inlang SDK findUsages) and the SDK's check results.
-  const [source, setSource] = useState<{ key: string; raw: Record<string, string>; files: SourceFile[] }>();
+  const [source, setSource] = useState<{ key: string; raw: Record<string, string>; files: SourceFile[]; skipped: string[] }>();
   const [usage, setUsage] = useState<{ key: string; byBundle: Map<string, Usage[]> }>();
-  const [usageStatus, setUsageStatus] = useState<{ state: "idle" | "loading" | "ready" | "error"; error?: string }>({ state: "idle" });
-  const usageCache = useRef(new Map<string, Promise<Record<string, string>>>());
+  const [usageStatus, setUsageStatus] = useState<UsageState>({ state: "idle" });
+  const usageCache = useRef(new Map<string, Promise<{ files: Record<string, string>; skipped?: string[] }>>());
   const [diagnostics, setDiagnostics] = useState<{ byBundle: Map<string, CheckDiagnostic[]>; usage?: CheckStatus }>();
   const checked = useRef<{ project?: InlangProject; key: string; files?: SourceFile[]; bundles: Map<string, BundleNested> }>({ key: "", bundles: new Map() });
   const checkQueue = useRef<Promise<void>>(Promise.resolve());
@@ -594,22 +596,24 @@ export default function App() {
     if ((await deleteDraft(name)) === "in-use") { setError(`The draft of ${project.owner}/${project.name} is open in another tab. Close it there first.`); return; }
     setRecent(forgetRecent(project));
   };
-  // Where each message is used in the app's code, at the commit the draft is based on. The bundled
-  // matcher understands Paraglide's m.*() calls, so only message-format projects are scanned.
-  const usageKey = local && "plugin.inlang.messageFormat" in local.context.settings ? `${local.context.owner}/${local.context.name}@${local.context.head}:${projectScope(local.context)}` : undefined;
+  // Where each message is used in the app's code, at the commit the draft is based on, from the
+  // usage analysis of the project's format: Paraglide JS (m-function matcher) and next-intl.
+  // i18next has none: Fink says so instead of showing nothing.
+  const usageFormat = local ? usagePlugin(local.context.settings) : undefined;
+  const usageScope = local ? local.context.sourceScope ?? projectScope(local.context) : "";
+  const usageKey = local && usageFormat ? `${local.context.owner}/${local.context.name}@${local.context.head}:${usageScope}:${usageFormat}` : undefined;
   useEffect(() => {
-    if (!local || !usageKey) { setSource(undefined); setUsage(undefined); setUsageStatus({ state: "idle" }); return; }
+    if (!local || !usageKey || !usageFormat) { setSource(undefined); setUsage(undefined); setUsageStatus(local ? { state: "unavailable", reason: `Fink can't analyze ${formatName(local.context.settings)} code yet, so it shows no usages and labels no message Not used in code.` } : { state: "idle" }); return; }
     let live = true, request = usageCache.current.get(usageKey);
     if (!request) {
-      const scope = projectScope(local.context);
-      request = api<{ files: Record<string, string> }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: scope })}`).then(result => result.files);
+      request = api<{ files: Record<string, string>; skipped?: string[] }>(`github/source?${new URLSearchParams({ owner: local.context.owner, repo: local.context.name, ref: local.context.head, path: usageScope, plugin: usageFormat })}`);
       usageCache.current.set(usageKey, request);
       request.catch(() => usageCache.current.delete(usageKey));
     }
     setUsageStatus({ state: "loading" });
-    request.then(raw => { if (live) setSource({ key: usageKey, raw, files: sourceSnapshot(raw) }); }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
+    request.then(result => { if (live) setSource({ key: usageKey, raw: result.files, files: sourceSnapshot(result.files, USAGE_SOURCES[usageFormat]!), skipped: result.skipped ?? [] }); }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
     return () => { live = false; };
-  }, [usageKey]);
+  }, [usageKey, local ? formatName(local.context.settings) : undefined]);
   const sourceFiles = source && source.key === usageKey ? source.files : undefined;
   useEffect(() => {
     if (!local || !source || source.key !== usageKey) return;
@@ -617,7 +621,7 @@ export default function App() {
     findUsages({ project: local.project, files: source.files }).then(result => {
       if (!live) return;
       setUsage({ key: source.key, byBundle: usagesFromReferences(result.references, source.raw) });
-      setUsageStatus({ state: "ready" });
+      setUsageStatus(usageState(result, source.skipped, usageScope));
     }, (error: unknown) => { if (live) setUsageStatus({ state: "error", error: error instanceof Error ? error.message : String(error) }); });
     return () => { live = false; };
   }, [local, source, usageKey]);
@@ -803,10 +807,12 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(href), 1000);
   });
   const context = local?.context;
-  const codeUrl = context && `https://github.com/${context.owner}/${context.name}/blob/${context.head}`, codeScope = context ? projectScope(context) : "";
+  const codeUrl = context && `https://github.com/${context.owner}/${context.name}/blob/${context.head}`, codeScope = usageScope;
   const code = useMemo(() => codeUrl ? { url: codeUrl, scope: codeScope } : undefined, [codeUrl, codeScope]);
   // Results always match the commit shown; a newly created bundle is never reported as unused.
   const usageIndex = usage && usage.key === usageKey ? usage.byBundle : undefined;
+  // Unused labels only from a complete analysis; incomplete ones say why in the project bar.
+  const usageComplete = usageStatus.state === "ready" && !usageStatus.issues.length;
   const repositoryUrl = context && `https://github.com/${context.owner}/${context.name}`;
   const commitLink = context && <a className="sha" href={`${repositoryUrl}/commit/${context.head}`} target="_blank" rel="noreferrer" title="Commit your draft is based on">{context.head.slice(0, 7)}</a>;
   const showEditor = () => { setReviewState(undefined); setView("edit"); };
@@ -860,7 +866,7 @@ export default function App() {
         {tab("Changes", !!reviewState, () => void review(), <span className={pendingCount ? "badge changed" : "badge"}>{pendingCount}</span>, busy || saving)}
         {tab("History", !reviewState && view === "history", () => { setReviewState(undefined); setView("history"); })}
         {tab("Settings", !reviewState && view === "settings", () => { setReviewState(undefined); setView("settings"); })}
-        <span className="sync-status"><span role="status" className={saving ? "save-status saving" : failure.current ? "save-status failed" : "save-status"}>{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span>{usageStatus.state === "loading" && <span className="usage-status">Finding usage in code…</span>}{usageStatus.state === "error" && <span className="usage-status failed" title={usageStatus.error}>Usage in code unavailable</span>}<span className="based-on">based on {commitLink}</span></span>
+        <span className="sync-status"><span role="status" className={saving ? "save-status saving" : failure.current ? "save-status failed" : "save-status"}>{saving ? "Saving…" : failure.current ? "Save failed" : "Draft saved locally"}</span>{codeUrl && <UsageStatus status={usageStatus} codeUrl={codeUrl} scope={codeScope} />}<span className="based-on">based on {commitLink}</span></span>
       </nav>}
     </div></header>
     <main className={context ? "workspace" : "welcome"}>
@@ -893,7 +899,7 @@ export default function App() {
           <button onClick={() => setShowNewMessage(!showNewMessage)}>Add message</button></div>
         {mtRequest && <MachineTranslateDialog repository={`${context.owner}/${context.name}`} request={mtRequest} onClose={() => setMtRequest(undefined)} />}
         {showNewMessage && <form className="new-message" onSubmit={event => { event.preventDefault(); create(); }}><input aria-label="New message ID" value={newId} onChange={event => setNewId(event.target.value)} placeholder="New message ID" autoFocus /><button className="primary">Add message</button><button type="button" onClick={() => setShowNewMessage(false)}>Cancel</button></form>}
-        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
+        <div className="message-table" ref={table} inert={busy}>{focus && visible.slice(currentPage * 25, (currentPage + 1) * 25).map(bundle => <MessageCard key={bundle.id} bundle={bundle} settings={context.settings} focus={focus} diagnostics={diagnostics?.byBundle.get(bundle.id)} change={change} addLocale={addLocale} removeBundle={removeBundle} addVariant={addVariant} addMessage={addMessage} restructure={restructure} removeVariant={removeVariant} machineTranslate={machineTranslate} code={usageIndex && code} usages={usageIndex?.get(bundle.id)} replaced={replacedIds.has(bundle.id)} edited={dirty.current.has(bundle.id)} unused={usageComplete && bundle.id in baseline.current && !!diagnostics?.byBundle.get(bundle.id)?.some(diagnostic => diagnostic.checkId === "unused-message")} />)}
         {!visible.length && <p className="empty">{bundles.length ? "No messages match your filters." : "This project has no messages yet. Add a bundle to get started."}</p>}</div>
         {totalPages > 1 && <nav className="pagination" aria-label="Message pages"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {totalPages}</span><button disabled={currentPage + 1 === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
         </>)}

@@ -29,7 +29,7 @@ Fink is a free i18n editor that runs in your browser. It opens the translation f
 ## Integrations
 
 - [i18next](/docs/i18next): JSON files, namespaces and plurals.
-- [next-intl](/docs/next-intl): `messages/{locale}.json`, namespaces, ICU plurals and rich text.
+- [next-intl](/docs/next-intl): `messages/{locale}.json`, namespaces, ICU plurals and rich text, unused messages and usage in code.
 - [Paraglide JS](/docs/paraglide-js): the inlang message format, unused messages and usage in code.
 
 ## More

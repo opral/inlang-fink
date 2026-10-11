@@ -17,7 +17,7 @@ Fink checks every message with the inlang SDK's checks, comparing each translati
 | **No form for 0** | `missing-selector` | The reference has a form for an exact number that this language doesn't choose by at all. | If the message is one text, choose **Split by {count}** first. Then add the form for 0 in **Edit structure…**. |
 | **2 forms missing** | `missing-variant` | Some plural, select or exact-number forms that the language needs have no text. | Choose **+ Add … form** or **+ Add a form for 0** for each. |
 | **Form one is empty** / **3 forms are empty** | `empty-variant` | One form has no text while others do. The app would show an empty string for it. | Write the form's text, or **Remove** it if it's optional. |
-| **Not used in code** | `unused-message` | No call to this message was found in your code. Only in Paraglide JS projects. | Delete it if it's really unused. See [Unused messages](/docs/unused-messages). |
+| **Not used in code** | `unused-message` | No call to this message was found in your code. Paraglide JS and next-intl projects, when Fink could resolve every call. | Delete it if it's really unused. See [Unused messages](/docs/unused-messages). |
 
 Fink also shows **Still in English** (or your source language) when a translation started from the source text still contains source words.
 

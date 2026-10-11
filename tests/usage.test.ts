@@ -2,10 +2,13 @@ import { expect, test } from "vitest";
 import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
 import type { InlangPlugin } from "@inlang/sdk/browser";
 import { sourceSnapshot, usagesFromReferences, usageRole } from "../src/usage";
+import { USAGE_SOURCES } from "../src/sourcePaths";
+
+const paraglide = USAGE_SOURCES["plugin.inlang.messageFormat"]!;
 
 // References come from the inlang m-function matcher's usage analysis (what the SDK's findUsages returns).
 async function usages(files: Record<string, string>) {
-  const analysis = await (mFunctionMatcher as InlangPlugin).analyzeUsage!({ files: sourceSnapshot(files), settings: { baseLocale: "en", locales: ["en"] } as never });
+  const analysis = await (mFunctionMatcher as InlangPlugin).analyzeUsage!({ files: sourceSnapshot(files, paraglide), settings: { baseLocale: "en", locales: ["en"] } as never });
   return { analysis, byBundle: usagesFromReferences(analysis.references ?? [], files) };
 }
 
@@ -41,7 +44,7 @@ test("turns SDK references into snippets and roles", async () => {
 });
 
 test("the snapshot leaves out generated Paraglide code, dependencies and non-code files", () => {
-  expect(sourceSnapshot({ "src/a.ts": "", "src/lib/paraglide/messages.js": "", "node_modules/x/index.js": "", "src/app.css": "", "src/types.d.ts": "", "src/App.vue": "" }).map(file => file.path)).toEqual(["src/a.ts", "src/App.vue"]);
+  expect(sourceSnapshot({ "src/a.ts": "", "src/lib/paraglide/messages.js": "", "node_modules/x/index.js": "", "src/app.css": "", "src/types.d.ts": "", "src/App.vue": "" }, paraglide).map(file => file.path)).toEqual(["src/a.ts", "src/App.vue"]);
 });
 
 test("roles come from attributes, properties, callees and the nearest element", () => {
@@ -86,7 +89,7 @@ test("long lines are cut to a window around the call", async () => {
 });
 
 test("only generated and output roots are left out; markup that mentions messages makes usage incomplete", async () => {
-  const paths = (files: Record<string, string>) => sourceSnapshot(files).map(file => file.path);
+  const paths = (files: Record<string, string>) => sourceSnapshot(files, paraglide).map(file => file.path);
   expect(paths({
     "src/features/build/Page.tsx": "", "src/lib/dist/format.ts": "", "src/features/paraglide/Picker.tsx": "",
     "dist/index.js": "", "packages/web/build/app.js": "", "src/lib/paraglide/runtime.js": "", "src/paraglide/messages/_index.js": "", "src/paraglide/messages.js": "",

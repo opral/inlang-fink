@@ -1,17 +1,14 @@
 import { HttpError } from "./auth";
-import { isGeneratedPath, mayCallMessages } from "../src/sourcePaths";
+import { isGeneratedPath, isTestPath, mayCallMessages } from "../src/sourcePaths";
 
 /** App source and markup that can reference messages; generated, test and dependency files are skipped. */
 export function isSourcePath(path: string, scope: string): boolean {
   if (scope && !path.startsWith(`${scope}/`)) return false;
-  if (!mayCallMessages(path) || isGeneratedPath(path)) return false;
-  if (/\.(test|spec|stories)\.[^/]+$/.test(path)) return false;
-  const parts = path.split("/");
-  if (parts.some(part => !part || part === "." || part === "..")) return false;
-  return !parts.some(part => ["__tests__", "__mocks__", "tests", "test", "e2e", "cypress", "playwright"].includes(part));
+  if (!mayCallMessages(path) || isGeneratedPath(path) || isTestPath(path)) return false;
+  return !path.split("/").some(part => !part || part === "." || part === "..");
 }
 
-const MAX_FILE = 512 * 1024;
+export const MAX_FILE = 512 * 1024;
 const MAX_KEPT = 25 * 1024 * 1024;
 const MAX_ARCHIVE = 400 * 1024 * 1024;
 
@@ -50,16 +47,34 @@ class Bytes {
     }
     return true;
   }
+  /** Reads `size` bytes in chunks and tells whether their text matches `pattern`, without holding the whole file. */
+  async scan(size: number, pattern: RegExp): Promise<boolean | undefined> {
+    const decoder = new TextDecoder();
+    let left = size, tail = "";
+    while (left > 0) {
+      const chunk = await this.take(Math.min(64 * 1024, left));
+      if (!chunk) return;
+      left -= chunk.byteLength;
+      const text = tail + decoder.decode(chunk, { stream: left > 0 });
+      if (pattern.test(text)) return (await this.skip(left)) ? true : undefined;
+      tail = text.slice(-256);
+    }
+    return false;
+  }
 }
 
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const field = (header: Uint8Array, start: number, length: number) => { const raw = header.subarray(start, start + length); const end = raw.indexOf(0); return text(end < 0 ? raw : raw.subarray(0, end)); };
 const paxPath = (bytes: Uint8Array) => { for (const record of text(bytes).split("\n")) { const value = record.slice(record.indexOf(" ") + 1); if (value.startsWith("path=")) return value.slice(5); } };
 
-/** Extracts matching UTF-8 files from a gzipped tar stream; the archive's top-level folder is removed from paths. */
-export async function extractSource(archive: ReadableStream<Uint8Array>, keep: (path: string) => boolean): Promise<Record<string, string>> {
+/**
+ * Extracts matching UTF-8 files from a gzipped tar stream; the archive's top-level folder is removed
+ * from paths. Matching files over MAX_FILE are left out; those whose text matches `mentions` are
+ * listed as `skipped`, so the usage analysis is reported incomplete instead of missing their calls.
+ */
+export async function extractSource(archive: ReadableStream<Uint8Array>, keep: (path: string) => boolean, mentions?: RegExp): Promise<{ files: Record<string, string>; skipped: string[] }> {
   const bytes = new Bytes(archive.pipeThrough(new DecompressionStream("gzip")).getReader());
-  const files: Record<string, string> = {};
+  const files: Record<string, string> = {}, skipped: string[] = [];
   let kept = 0, longPath: string | undefined;
   for (;;) {
     const header = await bytes.take(512);
@@ -77,13 +92,18 @@ export async function extractSource(archive: ReadableStream<Uint8Array>, keep: (
     const prefix = field(header, 345, 155), name = longPath ?? (prefix ? `${prefix}/${field(header, 0, 100)}` : field(header, 0, 100));
     longPath = undefined;
     const path = name.split("/").slice(1).join("/");
-    if ((type === "0" || type === "\0") && size <= MAX_FILE && path && keep(path)) {
+    const wanted = (type === "0" || type === "\0") && !!path && keep(path);
+    if (wanted && size <= MAX_FILE) {
       const data = await bytes.take(padded);
       if (!data) throw new HttpError(502, "The repository archive ended early.");
       kept += size;
       if (kept > MAX_KEPT) throw new HttpError(413, "The project's source is too large to scan for message usage.");
       files[path] = text(data.subarray(0, size));
+    } else if (wanted && mentions) {
+      const found = await bytes.scan(size, mentions);
+      if (found === undefined || !(await bytes.skip(padded - size))) throw new HttpError(502, "The repository archive ended early.");
+      if (found) skipped.push(path);
     } else if (!(await bytes.skip(padded))) throw new HttpError(502, "The repository archive ended early.");
   }
-  return files;
+  return { files, skipped };
 }

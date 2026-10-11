@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { gzipSync } from "node:zlib";
-import { extractSource, isSourcePath } from "../worker/source";
+import { extractSource, isSourcePath, MAX_FILE } from "../worker/source";
+import { USAGE_SOURCES } from "../src/sourcePaths";
 
 // Minimal ustar writer for fixtures: pax headers carry paths longer than 100 bytes.
 function entry(name: string, body: string, type = "0"): Buffer {
@@ -20,7 +21,7 @@ const archive = (...entries: Buffer[]) => new Blob([gzipSync(Buffer.concat([...e
 
 test("extracts only app source within the project scope and strips the archive folder", async () => {
   const long = `repo-sha/frontend/src/routes/${"nested/".repeat(16)}+page.svelte`;
-  const files = await extractSource(archive(
+  const { files } = await extractSource(archive(
     entry("pax_global_header", "52 comment=0123456789abcdef0123456789abcdef01234567\n", "g"),
     entry("repo-sha/frontend/src/app.svelte", "<h1>{m.hello()}</h1>"),
     entry("repo-sha/frontend/src/big.png", "x".repeat(2000)),
@@ -41,7 +42,7 @@ test("truncated archives fail instead of returning partial source", async () => 
   const full = gzipSync(Buffer.concat([entry("repo-sha/src/a.ts", "x".repeat(4000))]));
   const truncated = gzipSync(Buffer.concat([entry("repo-sha/src/a.ts", "x".repeat(4000))]).subarray(0, 1500));
   await expect(extractSource(new Blob([truncated]).stream(), () => true)).rejects.toMatchObject({ status: 502 });
-  await expect(extractSource(new Blob([full]).stream(), () => true)).resolves.toHaveProperty("src/a.ts");
+  await expect(extractSource(new Blob([full]).stream(), () => true)).resolves.toHaveProperty(["files", "src/a.ts"]);
   expect(isSourcePath("src/../etc/x.ts", "")).toBe(false);
   expect(isSourcePath("e2e/login.ts", "")).toBe(false);
 });
@@ -49,4 +50,23 @@ test("truncated archives fail instead of returning partial source", async () => 
 test("source paths keep app folders named build, dist or paraglide, and markup", () => {
   for (const path of ["src/features/build/Page.tsx", "apps/web/src/dist/x.ts", "src/features/paraglide/Picker.tsx", "docs/intro.mdx", "src/routes/about.md"]) expect(isSourcePath(path, "")).toBe(true);
   for (const path of ["build/index.js", "packages/web/dist/app.js", "src/lib/paraglide/runtime.js", "src/paraglide/messages/_index.js"]) expect(isSourcePath(path, "")).toBe(false);
+});
+
+test("a test folder inside routes is a page, minified bundles are build output", () => {
+  for (const path of ["src/app/[locale]/test/page.tsx", "app/tests/page.tsx", "src/routes/e2e/+page.svelte"]) expect(isSourcePath(path, ""), path).toBe(true);
+  for (const path of ["test/setup.ts", "src/__tests__/a.tsx", "packages/web/tests/fixtures/page.tsx", "src/app/__mocks__/x.ts", "public/vendor/pdf.worker.min.js", "src/app/page.test.tsx"]) expect(isSourcePath(path, ""), path).toBe(false);
+});
+
+test("files over the size limit that call messages are reported, not silently left out", async () => {
+  const big = (body: string) => body + "\n" + "// filler\n".repeat(Math.ceil((MAX_FILE + 1) / 10));
+  const call = big("import { useTranslations } from 'next-intl';\nexport const T = () => useTranslations('Home')('title');");
+  // the call after a chunk boundary is found too
+  const late = "// filler\n".repeat(Math.ceil((MAX_FILE + 70_000) / 10)) + "const t = await getTranslations('Nav');";
+  const result = await extractSource(archive(
+    entry("repo-sha/src/app/data.ts", big("export const countries = ['DE', 'FR'];")),
+    entry("repo-sha/src/app/huge-page.tsx", call),
+    entry("repo-sha/src/app/late.tsx", late),
+    entry("repo-sha/src/app/page.tsx", "t('x')"),
+  ), path => isSourcePath(path, ""), USAGE_SOURCES["plugin.inlang.nextIntl"]!.mentions);
+  expect(result).toEqual({ files: { "src/app/page.tsx": "t('x')" }, skipped: ["src/app/huge-page.tsx", "src/app/late.tsx"] });
 });

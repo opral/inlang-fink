@@ -6,7 +6,7 @@ import { draftName } from "./drafts";
 import i18next from "@inlang/plugin-i18next";
 import messageFormat from "@inlang/plugin-message-format";
 import nextIntl from "@inlang/plugin-next-intl";
-import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type Repo, type RepoTree } from "./repository";
+import { api, outputPath, projectScope, repoQuery, resolveResourcePath, sourceScope, type RepoContext, type Repo, type RepoTree } from "./repository";
 
 import { settingsSignature } from "./settingsData";
 
@@ -26,8 +26,12 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
 }
 /** i18next can express only the exact number 0 (`key_zero`) next to plural categories. */
 export const onlyExactZero = (settings: ProjectSettings) => pluginsFor(settings).some(plugin => plugin.key === i18next.key);
-/** The editor's project also loads the m-function matcher, whose usage analysis powers checks and usages. */
-const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), mFunctionMatcher as InlangPlugin<any>];
+/**
+ * The plugins with the usage analysis behind usages and unused messages: Paraglide JS calls are
+ * analyzed by the m-function matcher, next-intl calls by the next-intl plugin itself. i18next has
+ * no usage analysis, so it gets no analyzer (the SDK reports usage as unavailable, not as unused).
+ */
+export const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), ...(messageFormat.key in settings ? [mFunctionMatcher as InlangPlugin<any>] : [])];
 export const METADATA = "/fink-context.json";
 export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectPath: string, progress: (message: string) => void = () => {}): Promise<LocalProject> {
   const name = await draftName(repo.owner, repo.name, tree.branch, projectPath);
@@ -39,6 +43,7 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     if (stored.rows[0]) {
       progress("Restoring saved draft…");
       const context: RepoContext = JSON.parse(new TextDecoder().decode(stored.rows[0].content));
+      context.sourceScope = sourceScope(projectScope(context), tree.paths);
       project = await openProject({ lix, providePlugins: editorPlugins(context.settings) });
       return { project, context, name, close: async () => { await project!.close(); await lix.close(); } };
     }
@@ -51,6 +56,7 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     await clearMessages(project);
     const context: RepoContext = { ...repo, branch: tree.branch, projectPath, head: tree.head, tree: tree.tree, settings, original: { [`${projectPath}/settings.json`]: rawSettings }, baseline: {} };
     await importResources(project, repo, tree, context, progress);
+    context.sourceScope = sourceScope(projectScope(context), tree.paths);
     progress("Preparing editor…");
     context.bundleBaseline = bundleSignatures(await readBundles(project));
     context.shas = fileShas(tree, context);
