@@ -1,11 +1,11 @@
 ---
 title: Fink vs Crowdin
 seoTitle: Fink vs Crowdin: a free, git-native Crowdin alternative
-description: Crowdin is a full localization platform that syncs with GitHub. Fink is a free editor for the translation files in your repo. Differences, and when to pick which.
+description: Crowdin is a full localization platform that syncs with GitHub. Fink is a free editor for the translation files in your repo. When to pick which.
 order: 1
 ---
 
-**Short answer:** Crowdin is a complete localization platform for teams that work with professional translators, machine translation and many integrations. Fink is a free, much smaller tool: a browser editor for the i18next or Paraglide JS files already in your GitHub repository. Pick Crowdin for scale and translator tooling. Pick Fink if you want to edit translations where they live, without a sync.
+**Short answer:** Crowdin is a complete localization platform for teams that work with professional translators, machine translation and many integrations. Fink is a free, much smaller tool: a browser editor for the i18next or Paraglide JS files already in your GitHub repository. Pick Crowdin for scale and translator tooling. Pick Fink as a free Crowdin alternative if you want to edit translations where they live, without a sync.
 
 ## How they work
 
@@ -20,7 +20,7 @@ order: 1
 | Where translations live | Your GitHub repository | Crowdin project, synced to your repository |
 | GitHub workflow | Direct commits, or a pull request from a fork | Pull requests from a service branch, via the GitHub integration, CLI or Action |
 | Other hosts | github.com only | GitHub, GitLab, Bitbucket and many more integrations |
-| File formats | i18next JSON, inlang message format | 50+ formats, including i18next JSON |
+| File formats | i18next JSON, inlang message format | Dozens of formats, including i18next JSON |
 | Translation memory, glossary | No | Yes |
 | Machine translation, AI | No | Yes, many engines |
 | QA checks | Missing translations, variables, plural forms, markup | Many QA checks |
@@ -28,7 +28,7 @@ order: 1
 | Workflows, vendors, crowdsourcing | No | Yes |
 | Translator accounts | GitHub account | Crowdin account, invited to the project |
 | Price | Free during beta | Paid plans by hosted words and managers. Free for eligible open source projects |
-| Source code | Public (FCL-1.0-MIT) | Proprietary |
+| Source code | Source-available (FCL-1.0-MIT) | Proprietary |
 
 ## Choose Crowdin if
 
@@ -47,4 +47,4 @@ order: 1
 
 Your translation files are already in your repository if Crowdin synced them there. Merge the last Crowdin pull request, [add a project.inlang folder](/docs/set-up-a-project), and open the repository in Fink. Crowdin's translation memory and glossary don't move to Fink.
 
-*Crowdin facts are from crowdin.com and support.crowdin.com, October 2026.*
+Sources, last checked October 11, 2026: [crowdin.com](https://crowdin.com), [GitHub integration](https://support.crowdin.com/github-integration/), [pricing](https://crowdin.com/pricing), [open source projects](https://crowdin.com/page/open-source-project-setup-request).

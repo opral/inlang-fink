@@ -71,7 +71,7 @@ export function structuredData(page) {
   if (page.slug !== section.slug) crumbs.push({ name: page.title, item: url(page.slug) });
   const data = [
     { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: crumbs.map((crumb, index) => ({ "@type": "ListItem", position: index + 1, ...crumb })) },
-    { "@context": "https://schema.org", "@type": "TechArticle", headline: page.title, description: page.description, url: url(page.slug), image: OG_IMAGE, inLanguage: "en", publisher: { "@type": "Organization", name: "Opral", url: "https://opral.com" }, about: { "@type": "SoftwareApplication", name: "Fink", url: ORIGIN + "/" } },
+    { "@context": "https://schema.org", "@type": page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : "TechArticle", headline: page.seoTitle, description: page.description, url: url(page.slug), mainEntityOfPage: url(page.slug), image: OG_IMAGE, inLanguage: "en", author: { "@type": "Organization", "@id": `${ORIGIN}/#org`, name: "Opral", url: "https://opral.com" }, publisher: { "@id": `${ORIGIN}/#org` }, about: { "@id": `${ORIGIN}/#app` } },
   ];
   if (page.slug === "docs/faq") data.push({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqEntries(page.body).map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) });
   return data;
@@ -149,7 +149,7 @@ ${siteHeader}
 ${renderMarkdown(page.body)}
 </article>
 ${pager(pages, page.slug)}
-<p class="page-meta"><a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="/${page.slug}.md">Markdown</a></p>
+<p class="page-meta">Maintained by <a href="https://opral.com">Opral</a>, the team behind inlang · <a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="${REPOSITORY}/issues">Report an issue</a> · <a href="/${page.slug}.md">Markdown</a></p>
 </main>
 </div>
 ${siteFooter}
@@ -163,7 +163,8 @@ export function renderNotFound(pages) {
   return renderPage({ slug: "docs", file: "site/docs/index.md", title: "Page not found", seoTitle: "Page not found · Fink docs", description: "This page doesn't exist.", body: "This page doesn't exist, or it moved. Start from the [docs overview](/docs) or [open Fink](/)." }, pages)
     .replace("<head>\n", '<head>\n<meta name="robots" content="noindex">\n')
     .replace(/<link rel="canonical"[^>]*>\n/, "")
-    .replace(/<link rel="alternate"[^>]*>\n/, "");
+    .replace(/<link rel="alternate"[^>]*>\n/, "")
+    .replace(/<script type="application\/ld\+json">.*<\/script>\n/g, "");
 }
 
 /** Routes for sitemap.xml and llms.txt: the app's home page, then every static page. */

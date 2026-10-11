@@ -1,6 +1,6 @@
 ---
 title: Fink compared with translation management systems
-seoTitle: Crowdin, Lokalise, Weblate and Tolgee alternative: Fink compared
+seoTitle: Crowdin, Lokalise, Weblate and Tolgee alternatives: Fink compared
 description: How Fink, a free browser editor for translation files in GitHub, compares with Crowdin, Lokalise, Weblate and Tolgee, and when each one is the better choice.
 order: 0
 ---
@@ -38,4 +38,4 @@ Fink is **not a TMS**. It is an editor for the translation files that are alread
 - [Fink vs Weblate](/compare/weblate)
 - [Fink vs Tolgee](/compare/tolgee)
 
-Facts about other products are taken from their own websites in October 2026. Check their pages for current details.
+Facts about other products are taken from their own websites, last checked October 11, 2026. Each comparison links its sources. Check them for current details.

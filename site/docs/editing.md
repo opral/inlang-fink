@@ -1,7 +1,7 @@
 ---
 title: Editing translations
 seoTitle: Editing translations in Fink: side by side, search and filters
-description: How to edit messages in Fink. Pick the languages you translate from and into, search keys and text, filter what's missing, insert variables, add and delete messages.
+description: How to edit messages in Fink: pick the languages you translate from and into, search, filter what's missing, insert variables, add and delete messages.
 order: 4
 ---
 

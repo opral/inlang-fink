@@ -21,7 +21,7 @@ describe("static docs and comparison pages", () => {
       expect(title.length, page.slug).toBeGreaterThan(10);
       expect(title.length, `${page.slug} title`).toBeLessThanOrEqual(66);
       expect(page.description.length, `${page.slug} description`).toBeGreaterThanOrEqual(70);
-      expect(page.description.length, `${page.slug} description`).toBeLessThanOrEqual(170);
+      expect(page.description.length, `${page.slug} description`).toBeLessThanOrEqual(160);
       titles.add(title); descriptions.add(page.description);
       expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/${page.slug}">`);
       expect(meta(html, "property", "og:url")).toBe(`${ORIGIN}/${page.slug}`);
@@ -30,7 +30,7 @@ describe("static docs and comparison pages", () => {
       expect(html.match(/<h1[ >]/g)).toHaveLength(1);
       const types = jsonLd(html).map(data => data["@type"]);
       expect(types).toContain("BreadcrumbList");
-      expect(types).toContain("TechArticle");
+      expect(types).toContain(page.slug === "compare" ? "CollectionPage" : page.slug.startsWith("compare/") ? "Article" : "TechArticle");
     }
     expect(titles.size).toBe(pages.length);
     expect(descriptions.size).toBe(pages.length);
@@ -63,6 +63,7 @@ describe("static docs and comparison pages", () => {
     const html = renderNotFound(pages);
     expect(html).toContain('<meta name="robots" content="noindex">');
     expect(html).not.toContain('rel="canonical"');
+    expect(html).not.toContain("application/ld+json");
   });
 
   test("sitemap, robots.txt and llms.txt list the site", () => {

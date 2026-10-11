@@ -1,7 +1,7 @@
 ---
 title: Checks
 seoTitle: Translation checks: missing translations, variables, plurals
-description: Every problem Fink reports, what it means and how to fix it. Missing translations, missing or unknown variables, missing plural forms, empty forms and unused messages.
+description: Every problem Fink reports, what it means and how to fix it: missing translations, missing or unknown variables, missing plural forms, unused messages.
 order: 7
 ---
 

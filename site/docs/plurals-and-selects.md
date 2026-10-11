@@ -1,11 +1,11 @@
 ---
 title: Plurals, selects and exact numbers
-seoTitle: Plurals, selects and exact numbers in Fink
+seoTitle: Plurals, selects and exact numbers (i18next and Paraglide JS)
 description: How Fink handles plural forms (one, few, many, other), selects such as gender, and forms for exact numbers like 0, per language.
 order: 6
 ---
 
-Some messages need several **forms**: "1 ticket" and "5 tickets", or a different text for each gender. Fink shows them as forms inside one message, per language.
+Some messages need several **forms**: "1 ticket" and "5 tickets", or a different text for each gender. Fink shows them as forms inside one message, per language, for i18next plural keys (`_one`, `_other`, `_zero`) and Paraglide JS plural and select messages alike.
 
 ## Plurals
 

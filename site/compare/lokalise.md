@@ -1,11 +1,11 @@
 ---
 title: Fink vs Lokalise
 seoTitle: Fink vs Lokalise: a free Lokalise alternative for GitHub repos
-description: Lokalise is an AI localization platform with GitHub sync. Fink is a free browser editor for i18next and Paraglide files in your repo. Differences, and when to pick which.
+description: Lokalise is an AI localization platform with GitHub sync. Fink is a free editor for the i18next and Paraglide files in your repo. When to pick which.
 order: 2
 ---
 
-**Short answer:** Lokalise is a commercial localization platform with AI translation, automated workflows and many integrations. Fink is a free editor for the translation files in your GitHub repository. Pick Lokalise for automation and professional translation at scale. Pick Fink if your team edits i18next or Paraglide JS translations and you'd rather keep everything in git.
+**Short answer:** Lokalise is a commercial localization platform with AI translation, automated workflows and many integrations. Fink is a free editor for the translation files in your GitHub repository. Pick Lokalise for automation and professional translation at scale. Pick Fink as a free Lokalise alternative if your team edits i18next or Paraglide JS translations and you'd rather keep everything in git.
 
 ## How they work
 
@@ -27,7 +27,7 @@ order: 2
 | Figma integration | No | Yes |
 | Translator accounts | GitHub account | Lokalise seat (free translator seats on paid plans) |
 | Price | Free during beta | Paid plans by words and seats, with a free trial |
-| Source code | Public (FCL-1.0-MIT) | Proprietary |
+| Source code | Source-available (FCL-1.0-MIT) | Proprietary |
 
 ## Choose Lokalise if
 
@@ -41,4 +41,4 @@ order: 2
 - You want no sync, no second copy and no per-word pricing.
 - Reviewing translations as commits and pull requests suits your team.
 
-*Lokalise facts are from lokalise.com and docs.lokalise.com, October 2026.*
+Sources, last checked October 11, 2026: [lokalise.com](https://lokalise.com), [GitHub app](https://docs.lokalise.com/en/articles/1684090-github), [GitHub Actions](https://developers.lokalise.com/docs/github-actions), [pricing](https://lokalise.com/pricing).

@@ -83,11 +83,13 @@ async function ingest(request: Request, url: URL): Promise<Response> {
  * would be a soft 404, so those get the docs' not-found page with status 404 instead.
  */
 async function staticPage(request: Request, env: Env, url: URL): Promise<Response> {
-  const response = await env.ASSETS.fetch(request);
-  if (response.status !== 200 || !(response.headers.get("Content-Type") ?? "").includes("text/html")) return response;
-  if (!(await response.clone().text()).includes('<div id="root">')) return response;
+  const head = request.method === "HEAD";
+  // A HEAD response has no body to check, so look at the GET response and drop the body after.
+  const response = url.pathname === "/docs/not-found" ? undefined : await env.ASSETS.fetch(head ? new Request(request, { method: "GET" }) : request);
+  const fallback = !response || (response.status === 200 && (response.headers.get("Content-Type") ?? "").includes("text/html") && (await response.clone().text()).includes('<div id="root">'));
+  if (!fallback) return head ? new Response(null, { status: response.status, headers: response.headers }) : response;
   const notFound = await env.ASSETS.fetch(new Request(new URL("/docs/not-found", url)));
-  return new Response(notFound.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+  return new Response(head ? null : notFound.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" } });
 }
 
 export default {

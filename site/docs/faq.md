@@ -15,7 +15,7 @@ Fink is free during the beta.
 
 ## Is Fink open source?
 
-The source is public at [github.com/opral/inlang-fink](https://github.com/opral/inlang-fink) under the Fair Core License (FCL-1.0-MIT). Each release becomes MIT-licensed two years after it's published.
+Fink is source-available, not OSI open source. The code is public at [github.com/opral/inlang-fink](https://github.com/opral/inlang-fink) under the Fair Core License (FCL-1.0-MIT), and each release becomes MIT-licensed two years after it's published.
 
 ## Which formats does Fink support?
 

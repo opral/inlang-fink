@@ -1,11 +1,11 @@
 ---
 title: Fink vs Weblate
-seoTitle: Fink vs Weblate: a lighter, git-based translation editor
-description: Weblate is an open source, git-integrated localization platform you can host yourself. Fink is a browser editor with nothing to host. Differences, and when to pick which.
+seoTitle: Fink vs Weblate: a lightweight Weblate alternative for GitHub
+description: Weblate is an open source, git-integrated localization platform you host or rent. Fink is a browser editor with nothing to host. When to pick which.
 order: 3
 ---
 
-**Short answer:** Weblate and Fink both treat your git repository as the place translations belong. Weblate is a full, open source localization platform (GPL-3.0) with translation memory, many formats and community translation features, which you host yourself or use as a hosted service. Fink is a much smaller browser editor with nothing to install. Pick Weblate for large community translation projects and many formats. Pick Fink for i18next or Paraglide JS projects that want an editor without a server.
+**Short answer:** If you want a lighter Weblate alternative, Weblate and Fink both treat your git repository as the place translations belong. Weblate is a full, open source localization platform (GPL-3.0) with translation memory, many formats and community translation features, which you host yourself or use as a hosted service. Fink is a much smaller browser editor with nothing to install. Pick Weblate for large community translation projects and many formats. Pick Fink as a Weblate alternative for i18next or Paraglide JS projects that want an editor without a server.
 
 ## How they work
 
@@ -40,4 +40,4 @@ order: 3
 - You don't want to run or configure a server.
 - Contributors should see every language side by side and send you a normal pull request.
 
-*Weblate facts are from weblate.org and docs.weblate.org, October 2026.*
+Sources, last checked October 11, 2026: [weblate.org](https://weblate.org/en/), [version control integration](https://docs.weblate.org/en/latest/vcs.html), [formats](https://docs.weblate.org/en/latest/formats.html), [hosting and Libre plan](https://weblate.org/en/hosting/).

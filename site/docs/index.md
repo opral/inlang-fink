@@ -5,7 +5,7 @@ description: How to use Fink, the browser translation editor for GitHub reposito
 order: 0
 ---
 
-Fink is a translation editor that runs in your browser. It opens the translation files in a GitHub repository, shows every language of a message side by side, flags problems, and commits your changes back to the branch. Your repository stays the only copy of your translations: there is nothing to import, export or sync.
+Fink is a free i18n editor that runs in your browser. It opens the translation files in a GitHub repository, shows every language of a message side by side, flags problems, and commits your changes back to the branch. Your repository stays the only copy of your translations: there is nothing to import, export or sync.
 
 ## Start here
 

@@ -1,11 +1,11 @@
 ---
 title: Fink vs Tolgee
-seoTitle: Fink vs Tolgee: git-native editing instead of in-app editing
-description: Tolgee is an open source localization platform with in-context editing. Fink is a browser editor for the translation files in your GitHub repo. When to pick which.
+seoTitle: Fink vs Tolgee: a Tolgee alternative that edits files in git
+description: Tolgee is an open source localization platform with in-context editing. Fink edits the translation files in your GitHub repo. When to pick which.
 order: 4
 ---
 
-**Short answer:** Tolgee is an open source localization platform built around in-context editing and its own SDKs. Translations live in Tolgee, and you move them with its CLI or API. Fink edits the translation files in your GitHub repository directly. Pick Tolgee if you want in-app editing, translation memory and AI translation. Pick Fink if your files in git should stay the only source of truth.
+**Short answer:** Tolgee is an open source localization platform built around in-context editing and its own SDKs. Translations live in Tolgee, and you move them with its CLI or API. Fink edits the translation files in your GitHub repository directly. Pick Tolgee if you want in-app editing, translation memory and AI translation. Pick Fink as a Tolgee alternative if your files in git should stay the only source of truth.
 
 ## How they work
 
@@ -39,4 +39,4 @@ order: 4
 - Your translations are i18next or Paraglide JS files on GitHub, and they should stay the only source of truth.
 - You don't want to add an SDK, a CLI step or a sync to your build.
 
-*Tolgee facts are from tolgee.io and docs.tolgee.io, October 2026.*
+Sources, last checked October 11, 2026: [tolgee.io](https://tolgee.io), [CLI push and pull](https://docs.tolgee.io/tolgee-cli/push-pull-strings), [supported formats](https://docs.tolgee.io/platform/supported_formats), [pricing](https://tolgee.io/pricing), [license](https://github.com/tolgee/tolgee-platform/blob/main/LICENSE).

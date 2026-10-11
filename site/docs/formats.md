@@ -1,7 +1,7 @@
 ---
 title: Supported formats
 seoTitle: Supported formats: i18next JSON and Paraglide JS · Fink
-description: Fink edits i18next JSON and inlang message format files (Paraglide JS). See what each supports, the limits on file size and pushes, and what isn't supported yet.
+description: Fink edits i18next JSON and inlang message format files (Paraglide JS). What each supports, file and push limits, and what isn't supported yet.
 order: 3
 ---
 
