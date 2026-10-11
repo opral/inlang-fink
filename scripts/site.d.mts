@@ -1,5 +1,5 @@
 // Types for scripts/site.mjs, used by tests/site.test.ts.
-export type Page = { slug: string; file: string; title: string; seoTitle: string; description: string; body: string; source: string; layout?: string; navTitle?: string };
+export type Page = { slug: string; file: string; title: string; seoTitle: string; description: string; body: string; source: string; layout?: string; design?: string; navTitle?: string };
 export const ORIGIN: string;
 export const REPOSITORY: string;
 export const NAV: { title: string; pages: string[] }[];
@@ -18,5 +18,5 @@ export function llmsTxt(pages: Page[]): string;
 export function llmsFullTxt(pages: Page[]): string;
 export function pageMarkdown(page: Page): string;
 export function internalLinks(markdown: string): { path: string; hash?: string }[];
-export const siteHeader: string;
+export function siteHeader(current?: string, pageSlug?: string): string;
 export const siteFooter: string;

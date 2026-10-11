@@ -31,4 +31,4 @@ On fink.inlang.com, Fink sends four anonymous events to PostHog (US) to count us
 
 Fink never sends message text, keys, file names or repository names. Signed-in users are counted by a hashed GitHub login. URLs are cut to the page path. There is no autocapture, page view tracking or session recording. Events go through Fink's own domain, and PostHog receives your IP address as with any web request. PostHog also records standard browser and device properties.
 
-Other services the page loads: Google Fonts, GitHub avatars and GitHub's API for the star count.
+Other services the page loads: GitHub avatars and GitHub's API for the star count. Fonts are served by Fink itself.

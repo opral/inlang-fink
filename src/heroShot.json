@@ -1,0 +1,7 @@
+{
+  "src": "/images/editor.webp",
+  "srcSet": "/images/editor-920.webp 920w, /images/editor.webp 1840w",
+  "width": 1840,
+  "height": 1520,
+  "alt": "Fink editor showing the plural message files_remaining in English and German, with a warning that the German text is missing {count}"
+}

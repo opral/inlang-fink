@@ -1,17 +1,22 @@
 import type { ReactNode } from "react";
-import "./landing.css";
 
-// Marketing sections of the landing page. They are static, so scripts/build-site.mjs renders the
-// same markup into index.html for crawlers that don't run JavaScript.
+// Static sections of the landing page. scripts/build-site.mjs renders them into index.html too, for
+// crawlers that don't run JavaScript.
 
-/** Why Fink: right under the repository input. */
-export function Benefits() {
-  return <section aria-labelledby="benefits-title"><h2 id="benefits-title" className="visually-hidden">Why Fink</h2><ul className="benefits">
-    <li><h3>One message, every language</h3><p>Stop juggling <code>en.json</code>, <code>de.json</code> and <code>fr.json</code>. Each message shows all its translations and plural forms in one card.</p></li>
-    <li><h3>Catch mistakes before they ship</h3><p>Checks find missing translations, missing or unknown <code>{"{variables}"}</code> and missing plural forms, with one-click fixes.</p></li>
-    <li><h3>Nothing to sync</h3><p>Your repository stays the only copy of your translations. No import, no export, no integration that breaks.</p></li>
-    <li><h3>Clean commits</h3><p>Only the messages you edit change. The rest of each file keeps its exact formatting, so the diff is easy to review.</p></li>
-  </ul><p className="benefits-teams">Translators or PMs who don't use git? <a href="/teams">Fink for teams</a></p></section>;
+const icon = (paths: ReactNode) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>;
+const features: [string, ReactNode, ReactNode][] = [
+  ["Side by side", icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M9 9v11" /></>), "All languages and plural forms of a message in one place."],
+  ["Checks", icon(<><path d="M12 3l9 16H3z" /><path d="M12 10v4M12 17v.5" /></>), "Missing translations, broken variables and missing plural forms, with one-click fixes."],
+  ["Clean commits", icon(<><circle cx="6" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="9" r="2" /><path d="M6 8v8M18 11c0 4-6 3-12 6" /></>), "Only edited messages change. The rest of each file stays byte for byte."],
+  ["Nothing to sync", icon(<><path d="M4 12a8 8 0 0 1 14-5M20 12a8 8 0 0 1-14 5" /><path d="M18 3v4h-4M6 21v-4h4" /></>), "Your repository stays the only copy. No import, no export."],
+];
+
+/** What Fink does, in one ruled band under the hero. */
+export function Features() {
+  return <section className="feature-band" aria-labelledby="features-title">
+    <h2 id="features-title" className="visually-hidden">What Fink does</h2>
+    <ul className="features">{features.map(([title, svg, text]) => <li key={title}>{svg}<h3>{title}</h3><p>{text}</p></li>)}</ul>
+  </section>;
 }
 
 const faq: [string, ReactNode][] = [
@@ -23,21 +28,21 @@ const faq: [string, ReactNode][] = [
   ["Is Fink a translation management system?", <>No. There is no translation memory or machine translation, and only GitHub is supported. See how Fink compares with <a href="/compare/crowdin">Crowdin</a>, <a href="/compare/lokalise">Lokalise</a>, <a href="/compare/weblate">Weblate</a> and <a href="/compare/tolgee">Tolgee</a>.</>],
 ];
 
-/** Setup, FAQ and links to the docs: after the community projects. */
+/** Setup and questions, after the community projects. */
 export function LandingMore() {
   return <>
     <section className="landing-section" aria-labelledby="setup-title">
-      <header className="section-header"><div><h2 id="setup-title">Set up in a minute</h2><p>Fink reads a small <code>project.inlang</code> folder that lists your languages and where the files are. Your translation files stay as they are.</p></div><a className="button" href="/docs/set-up-a-project">Setup guide</a></header>
+      <header className="section-header"><div><h2 id="setup-title">Set up in a minute</h2><p>Fink reads a small <code>project.inlang</code> folder that lists your languages and where the files are. Your translation files stay as they are.</p></div><a className="section-link" href="/docs/set-up-a-project">Setup guide</a></header>
       <div className="setup-grid">
-        <article className="setup-card"><h3>i18next</h3><p>Creates <code>project.inlang/settings.json</code> for your existing JSON files, including namespaces.</p><pre><code>npx i18next-cli init --inlang</code></pre><a href="/docs/i18next">i18next guide</a></article>
-        <article className="setup-card"><h3>next-intl</h3><p>Add <code>project.inlang/settings.json</code> that points at your <code>messages/{"{locale}"}.json</code>. Namespaces, plurals and rich text work as they are.</p><pre><code>{`"plugin.inlang.nextIntl": {\n  "pathPattern": "./messages/{locale}.json"\n}`}</code></pre><a href="/docs/next-intl">next-intl guide</a></article>
-        <article className="setup-card"><h3>Paraglide JS</h3><p>Projects set up with Paraglide JS already have a <code>project.inlang</code> folder. Paste the repository URL above.</p><pre><code>npx @inlang/paraglide-js@latest init</code></pre><a href="/docs/paraglide-js">Paraglide JS guide</a></article>
+        <article className="setup-card"><h3>i18next</h3><p>Creates <code>project.inlang/settings.json</code> for your JSON files, including namespaces. <a href="/docs/i18next">i18next guide</a></p><pre><code>npx i18next-cli init --inlang</code></pre></article>
+        <article className="setup-card"><h3>next-intl</h3><p>Add a <code>project.inlang/settings.json</code> that points at your <code>messages/{"{locale}"}.json</code>. Namespaces, plurals and rich text work as they are. <a href="/docs/next-intl">next-intl guide</a></p><pre><code>{`"plugin.inlang.nextIntl": {\n  "pathPattern": "./messages/{locale}.json"\n}`}</code></pre></article>
+        <article className="setup-card"><h3>Paraglide JS</h3><p>Projects set up with Paraglide JS already have a <code>project.inlang</code> folder. <a href="/docs/paraglide-js">Paraglide JS guide</a></p><pre><code>npx @inlang/paraglide-js@latest init</code></pre></article>
       </div>
     </section>
 
     <section className="landing-section" aria-labelledby="faq-title">
       <header className="section-header"><div><h2 id="faq-title">Questions</h2><p>More answers in the <a href="/docs/faq">FAQ</a> and the <a href="/docs">docs</a>.</p></div></header>
-      <dl className="faq-list">{faq.map(([question, answer]) => <div key={question}><dt>{question}</dt><dd>{answer}</dd></div>)}</dl>
+      <div className="faq-list">{faq.map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div>
     </section>
   </>;
 }
