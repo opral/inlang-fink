@@ -77,7 +77,11 @@ export default function App() {
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
   // Projects opened or removed in another tab show up here too.
   useEffect(() => {
-    const update = (event: StorageEvent) => { if (event.key === RECENT_KEY || event.key === null) setRecent(readRecent()); };
+    const update = (event: StorageEvent) => {
+      if (event.key !== RECENT_KEY && event.key !== null) return;
+      const next = readRecent();
+      setRecent(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+    };
     window.addEventListener("storage", update); return () => window.removeEventListener("storage", update);
   }, []);
   const [newId, setNewId] = useState("");
@@ -192,7 +196,7 @@ export default function App() {
   }, [report]);
   // Typing is written once it pauses: one commit (and one undo step) per pause, not per keystroke.
   const pendingWrites = useRef(new Map<string, ChangeEventDetail>());
-  /** Inputs declared because they were typed into the reference ("bundle\0name"); only these are dropped when unused. */
+  /** Inputs of new messages declared because they were typed into the reference ("draft\0bundle\0name"). */
   const autoDeclared = useRef(new Set<string>());
   const writeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flushRef = useRef<() => void>(() => {});
@@ -364,9 +368,12 @@ export default function App() {
           const next = { ...bundle, messages: bundle.messages.map(message => message.id === variant.message_id ? { ...message, variants: message.variants.map(value => value.id === variant.id ? variant : value) } : message) };
           working.set(bundleId, next);
           if (bundle.messages.find(message => message.id === variant.message_id)?.locale !== baseLocale) continue;
-          const inputs = referenceInputs(bundle, variant, name => autoDeclared.current.has(`${bundleId}\u0000${name}`));
+          // Inputs GitHub's version declares always stay; of a new message's inputs, only ones declared this way go.
+          const pushed = baseline.current[bundleId] === undefined ? undefined : new Set((JSON.parse(baseline.current[bundleId]!) as Pick<BundleNested, "declarations">).declarations.filter(value => value.type === "input-variable").map(value => value.name));
+          const key = (name: string) => `${local.name}\u0000${bundleId}\u0000${name}`;
+          const inputs = referenceInputs(bundle, variant, name => pushed ? !pushed.has(name) : autoDeclared.current.has(key(name)));
           if (!inputs) continue;
-          for (const name of inputs.added) autoDeclared.current.add(`${bundleId}\u0000${name}`);
+          for (const name of inputs.added) autoDeclared.current.add(key(name));
           working.set(bundleId, { ...next, declarations: inputs.declarations });
           await tx.updateTable("inlang_bundle").set({ declarations: inputs.declarations }).where("id", "=", bundleId).execute();
         }
@@ -437,10 +444,14 @@ export default function App() {
     });
   }, [enqueue, refresh]);
   /** Replaces a translation's selectors and forms (split by count or gender, or back to one text). */
-  const restructure = useCallback((bundleId: string, messageId: string, next: Restructure) => {
+  const restructure = useCallback((bundleId: string, messageId: string, restructured: (bundle: BundleNested, message: MessageNested) => Restructure) => {
     const local = localRef.current;
     if (!local) return;
     enqueue(async () => {
+      // Computed from the saved bundle, so text typed right before (written by the flush ahead of this task) is kept.
+      const bundle = bundleIndex.current.get(bundleId), message = bundle?.messages.find(value => value.id === messageId);
+      if (!bundle || !message) return;
+      const next = restructured(bundle, message);
       await local.project.db.transaction().execute(async tx => {
         if (next.declarations) await tx.updateTable("inlang_bundle").set({ declarations: next.declarations }).where("id", "=", bundleId).execute();
         await tx.updateTable("inlang_message").set({ selectors: next.selectors }).where("id", "=", messageId).execute();
@@ -483,15 +494,18 @@ export default function App() {
   const created = useRef<string | undefined>(undefined);
   const create = () => {
     if (!local || !newId.trim()) return;
-    const id = newId.trim(), messageId = crypto.randomUUID();
-    if (bundleIndex.current.has(id)) { setError(`A message with the ID ${id} already exists.`); return; }
+    const id = newId.trim(), messageId = crypto.randomUUID(), exists = () => setError(`A message with the ID ${id} already exists.`);
+    if (bundleIndex.current.has(id)) { exists(); return; }
+    // Cleared right away, so a second Enter doesn't queue the same message again.
+    setNewId(""); setShowNewMessage(false); setError("");
     enqueue(async () => {
+      if (await local.project.db.selectFrom("inlang_bundle").select("id").where("id", "=", id).executeTakeFirst()) { exists(); return; }
       await local.project.db.transaction().execute(async tx => {
         await tx.insertInto("inlang_bundle").values({ id, declarations: [] }).execute();
         await tx.insertInto("inlang_message").values({ id: messageId, bundle_id: id, locale: local.context.settings.baseLocale, selectors: [] }).execute();
         await tx.insertInto("inlang_variant").values({ id: crypto.randomUUID(), message_id: messageId, matches: [], pattern: [] }).execute();
       });
-      await refresh(local, id); setNewId(""); setShowNewMessage(false);
+      await refresh(local, id);
       created.current = id; setSearchInput(""); setFilter("all"); setTodoKind("all");
     });
   };
@@ -764,7 +778,7 @@ export default function App() {
     // The page and the card render after this effect; look for the editor for a few frames.
     let frames = 30;
     const focusNew = () => {
-      const card = document.querySelector<HTMLElement>(`[data-bundle="${CSS.escape(id!)}"]`), editor = card?.querySelector<InlangPatternEditor>(".message-row.reference inlang-pattern-editor");
+      const card = document.querySelector<HTMLElement>(`[data-bundle="${CSS.escape(id!)}"]`), editor = card?.querySelector<InlangPatternEditor>(`.message-row[data-locale="${CSS.escape(localRef.current?.context.settings.baseLocale ?? "")}"] inlang-pattern-editor`);
       if (!card || !editor) { if (frames--) requestAnimationFrame(focusNew); return; }
       card.scrollIntoView({ block: "center" }); editor.focus();
     };

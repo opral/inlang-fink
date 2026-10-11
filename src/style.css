@@ -289,6 +289,7 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-locale b { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
 .locale-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ref-badge { font-size: 11px; font-weight: 600; background: #52525b; color: #fff; border-radius: 4px; padding: 1px 6px; }
+.ref-badge.from { background: var(--subtle); color: var(--text-2); }
 .todo-dot { width: 7px; height: 7px; border-radius: 50%; background: #d97706; margin-left: auto; align-self: flex-start; margin-top: 6px; flex-shrink: 0; }
 .message-target { display: flex; flex-direction: column; min-width: 0; }
 .message-cell { padding: 11px 16px; font-size: 15px; line-height: 1.55; color: var(--text); min-width: 0; overflow-wrap: anywhere; }

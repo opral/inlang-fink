@@ -732,10 +732,25 @@ test("reference forms, splitting the reference, and a new message start in the r
   await expect(page.locator('[data-bundle="greeting"]').getByRole("button", { name: "Translate to German…" })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  // An existing ID is refused, and pressing Enter twice adds a message once.
+  await page.getByRole("button", { name: "Add message" }).click();
+  await page.getByLabel("New message ID").fill("greeting");
+  await page.getByLabel("New message ID").press("Enter");
+  await expect(page.getByRole("alert")).toContainText("A message with the ID greeting already exists.");
+  await page.getByLabel("New message ID").fill("farewell");
+  await page.getByLabel("New message ID").press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(referenceText(page, "farewell")).toBeFocused();
+  await page.keyboard.type("Bye");
+  await page.keyboard.press("Tab");
+  await expect(page.locator('[data-bundle="farewell"]')).toHaveCount(1);
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await page.getByRole("button", { name: "Push", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
   expect(Object.keys(pushes[0]!.files!)).toEqual(["messages/en.json"]);
+  expect(JSON.parse(pushes[0]!.files!["messages/en.json"]!).farewell).toBe("Bye");
   const pushed = JSON.parse(pushes[0]!.files!["messages/en.json"]!);
   expect(pushed.greeting).toBe("Good morning");
   expect(pushed.items[0].match).toEqual({ "countPlural=one": "One item", "countPlural=*": "{count} items" });

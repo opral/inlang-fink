@@ -30,7 +30,8 @@ type Props = {
   change: (detail: ChangeEventDetail, immediate?: boolean) => void; addLocale: (bundle: BundleNested, locale: string) => void; removeBundle: (id: string) => void;
   addVariant: (bundleId: string, variant: Variant) => void; removeVariant: (bundleId: string, variantId: string) => void;
   addMessage: (bundle: BundleNested, locale: string, shape: { id: string; selectors: MessageNested["selectors"]; variants: Variant[] }) => void;
-  restructure: (bundleId: string, messageId: string, next: Restructure) => void;
+  /** Restructures a message; computed from the saved bundle once earlier edits are written. */
+  restructure: (bundleId: string, messageId: string, next: (bundle: BundleNested, message: MessageNested) => Restructure) => void;
   machineTranslate: (request: MachineTranslationRequest) => void;
 };
 
@@ -238,7 +239,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
   const untranslated = (variant: Variant) => { const seed = seeded.get(variant.id); return seed ? untranslatedWords(seed.words, variant.pattern).join("|") || undefined : undefined; };
   const localeCell = (locale: string, todo: boolean) => <div className="message-locale">
     <b>{locale}</b><span className="locale-name">{languageName(locale)}</span>
-    {locale === settings.baseLocale && <span className="ref-badge">ref</span>}
+    {locale === settings.baseLocale ? <span className="ref-badge">ref</span> : locale === focus.source && <span className="ref-badge from" title={`Translating from ${languageName(locale)}`}>from</span>}
     {todo && <span className="todo-dot" aria-label="Needs work" />}
   </div>;
   /** Creates the translation shaped like the source: empty forms, or the source text to translate word by word. */
@@ -266,7 +267,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
       return <p key={`split-${issue.selector}`} className="field-note defect">{numbers ? <>{sourceName} has a form for exactly {listOf(numbers)}.</> : <>{sourceName} uses different words depending on {`{${issue.name}}`}.</>}{afterPlural
         ? <> Add it in <b>Edit structure…</b> after splitting by {`{${issue.name}}`}.</>
         : isSimple(message)
-        ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
+        ? <> <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, (current, latest) => splitMessage(current, latest, plural ? { plural: issue.name } : { selector: issue.selector }))}>Split by {`{${issue.name}}`}</button></>
         : <> Add it in <b>Edit structure…</b>.</>}</p>;
     }) : [];
     let cells: React.ReactNode;
@@ -278,7 +279,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
     else if (isSimple(message)) cells = message.variants.map(variant => <div key={variant.id} className="message-cell edit" data-untranslated={untranslated(variant)}>
       {editor(locale, variant, `${name} ${isTarget ? "translation" : "text"} of ${bundle.id}`)}
       {notes(locale, variant, locale, false)}
-      {numberSplit && <p className="field-note">{name} uses different words depending on the number ({pluralCategories(locale).length} forms). <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, splitMessage(bundle, message, { plural: numberSplit }))}>Split by {`{${numberSplit}}`}</button></p>}
+      {numberSplit && <p className="field-note">{name} uses different words depending on the number ({pluralCategories(locale).length} forms). <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, (current, latest) => splitMessage(current, latest, { plural: numberSplit }))}>Split by {`{${numberSplit}}`}</button></p>}
       {isTarget && sourceSplits && pluralCategories(locale).length <= 1 && source!.selectors.every(selector => isPluralSelector(selector.name, bundle.declarations)) && <p className="field-note">{name} uses the same words for every number, so one text covers all counts.</p>}
     </div>);
     else if (groups.length === 1) {
@@ -307,7 +308,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
             {!form.required && <button type="button" className="inline-link remove-form" aria-label={`Remove the ${form.label} form`} onClick={() => removeVariant(bundle.id, variant.id)}>Remove</button>}
           </div>;
         })}
-        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${groups[0]!.input}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage(bundle, message))}>Use one text again</button></div>}
+        {isTarget && targetSplits && !sourceSplits && <div className="message-cell actions">Only {name} splits this message by {`{${groups[0]!.input}}`}. <button type="button" className="inline-link" onClick={() => restructure(bundle.id, message.id, joinMessage)}>Use one text again</button></div>}
         <div className="message-cell actions">
           {complete && tokens.length > 0 && <span className="check">✓ {listOf(tokens)} {tokens.length === 1 ? "is" : "are"} in every form</span>}
           <button type="button" className="inline-link" aria-expanded={preview === locale} onClick={() => { setPreview(preview === locale ? undefined : locale); setMatched(undefined); }}>{preview === locale ? "Hide preview" : "Preview"}</button>
@@ -317,7 +318,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
       </>;
     }
     else cells = <div className="message-cell edit complex"><ComplexTranslation bundle={bundle} message={message} source={source} referenceVariants={referenceVariants} issues={localeIssues} variants={variants} addVariant={add} editorProps={editorProps} /></div>;
-    return <div className={isTarget ? "message-row" : "message-row reference"} key={locale}>
+    return <div className={isTarget ? "message-row" : "message-row reference"} key={locale} data-locale={locale}>
       {localeCell(locale, localeIssues.length > 0)}
       <div className={isTarget ? "message-target" : "message-target message-ref"}>{cells}{unsplit.length > 0 && <div className="message-cell actions">{unsplit}</div>}</div>
     </div>;
@@ -326,10 +327,10 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
   const splits = [focus.source, ...targets.filter(locale => locale !== focus.source)].flatMap(locale => {
     const message = bundle.messages.find(value => value.locale === locale);
     if (!message || !isSimple(message)) return [];
-    const byNumber = pluralCategories(locale).length > 1 ? numberInputs(message, bundle.declarations).map(input => ({ label: `Split ${languageName(locale)} by {${input}}`, next: () => splitMessage(bundle, message, { plural: input }) })) : [];
+    const byNumber = pluralCategories(locale).length > 1 ? numberInputs(message, bundle.declarations).map(input => ({ label: `Split ${languageName(locale)} by {${input}}`, next: (current: BundleNested, latest: MessageNested) => splitMessage(current, latest, { plural: input }) })) : [];
     // Selects other languages use; an exact number that belongs to a plural (ICU =0) is part of that plural.
     const used = [...new Set(bundle.messages.flatMap(value => selectorGroups(value, bundle.declarations)).filter(group => !group.isPlural).map(group => group.selector))];
-    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${resolveInputVariable(selector, bundle.declarations)}}`, next: () => splitMessage(bundle, message, { selector }) }));
+    const bySelector = used.map(selector => ({ label: `Split ${languageName(locale)} by {${resolveInputVariable(selector, bundle.declarations)}}`, next: (current: BundleNested, latest: MessageNested) => splitMessage(current, latest, { selector }) }));
     return [...byNumber, ...bySelector].map(item => ({ ...item, message_id: message.id }));
   });
   return <article className="message-card" data-bundle={bundle.id} ref={root} aria-label={bundle.id}>
@@ -339,7 +340,7 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
         {status && <span className={`message-status ${tone}`}>{status.label}</span>}
         <Dropdown className="message-menu" title="More actions" align="end" label={<span aria-label={`More actions for ${bundle.id}`}>···</span>}>
           {close => <>
-            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.message_id, item.next()); }}>{item.label}</button>)}
+            {splits.map(item => <button key={item.label} type="button" className="menu-item" onClick={() => { close(); restructure(bundle.id, item.message_id, item.next); }}>{item.label}</button>)}
             <button type="button" className="menu-item" onClick={() => { close(); setStructure(true); }}>Edit structure…</button>
             <button type="button" className="menu-item" onClick={() => { close(); removeBundle(bundle.id); }}>Delete message</button>
           </>}
