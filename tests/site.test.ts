@@ -1,6 +1,7 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { NAV, ORIGIN, headingId, internalLinks, llmsTxt, loadPages, renderMarkdown, renderNotFound, renderPage, robots, sitemap } from "../scripts/site.mjs";
+import { COMPARE_MARKS, splitSections } from "../scripts/site-designs.mjs";
 
 const pages = loadPages("site");
 const bySlug = new Map(pages.map(page => [page.slug, page]));
@@ -69,6 +70,54 @@ describe("static docs and comparison pages", () => {
     expect(teams.body).toContain("You submit the pull request on GitHub.");
     expect(sitemap(pages)).toContain("<loc>https://fink.inlang.com/teams</loc>");
     expect(llmsTxt(pages)).toContain("(https://fink.inlang.com/teams.md)");
+  });
+
+  test("designed pages render every section of their Markdown", () => {
+    for (const slug of ["compare", "teams"]) {
+      const page = bySlug.get(slug)!;
+      const html = renderPage(page, pages);
+      expect(html, slug).toContain(`class="section-${slug} design design-${page.design}"`);
+      expect(html).not.toContain('class="site-sidebar"');
+      for (const section of splitSections(page.body).sections) expect(html, `${slug}: ${section.title}`).toContain(`id="${section.id}"`);
+      expect(html).toContain('<form class="cta-form" action="/" method="get">');
+      expect(html).toContain('name="repo"');
+    }
+  });
+
+  test("the compare page has the flows, an accessible comparison table and the one-on-one cards", () => {
+    const page = bySlug.get("compare")!;
+    const html = renderPage(page, pages);
+    expect(html).toContain("<h1>A Crowdin, Lokalise, Weblate and Tolgee alternative without the sync</h1>");
+    expect(html).toContain("<title>Crowdin, Lokalise, Weblate and Tolgee alternatives: Fink compared</title>");
+    expect(html).toContain('<h3>With a TMS</h3>');
+    expect(html).toContain('<span class="flow-box fink">Fink editor</span>');
+    const table = /<table class="compare-table">([\s\S]*?)<\/table>/.exec(html)![1];
+    expect(table).toContain('<th scope="col" class="ours">Fink</th>');
+    const rows = [...table.matchAll(/<tr><th scope="row">([^<]*)<\/th>/g)].map(match => match[1]);
+    const markdownRows = page.body.split("\n").filter(line => line.startsWith("| ") && !line.startsWith("| |")).map(line => line.split("|")[1].trim());
+    expect(rows).toEqual(markdownRows);
+    // Every row has a Fink cell (tinted) and a TMS cell; every mark has a label.
+    expect(table.match(/<td class="ours">/g)).toHaveLength(rows.length);
+    for (const label of Object.keys(COMPARE_MARKS)) expect(rows, label).toContain(label);
+    expect(table.match(/<svg[^>]*class="mark (yes|no)"[^>]*>/g)!.every(mark => /role="img" aria-label="(Yes|No)"/.test(mark))).toBe(true);
+    expect(table).toContain("Weblate (GPL-3.0) and Tolgee (Apache-2.0) are open source. Crowdin and Lokalise are not.");
+    expect(html).toContain('<div class="fit-card fink"><h2 id="fink-fits-when">Fink fits when</h2>');
+    for (const tool of ["crowdin", "lokalise", "weblate", "tolgee"]) expect(html).toContain(`<a class="tool-card" href="/compare/${tool}">`);
+    expect(html).toContain("last checked October 11, 2026");
+    expect(jsonLd(html).map(data => data["@type"])).toEqual(["BreadcrumbList", "CollectionPage"]);
+  });
+
+  test("the teams page shows who does each step and what Fink checks", () => {
+    const html = renderPage(bySlug.get("teams")!, pages);
+    const steps = [...html.matchAll(/<li class="step (\w+)">/g)].map(match => match[1]);
+    expect(steps).toEqual(["translator", "translator", "fink", "developer", "developer"]);
+    expect(html).toMatch(/<li class="step developer">[\s\S]*?Opens a pull request on GitHub/);
+    expect(html).toContain("Fink does not open a pull request.");
+    expect(html.match(/<span class="check-chip">/g)).toHaveLength(4);
+    expect(html).toContain('<span class="check-chip">Missing {count} in German</span>');
+    expect(html.match(/<li class="role-card /g)!.length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain("Send this link to your translators: <code>fink.inlang.com/?repo=owner/repo&amp;project=project.inlang&amp;branch=translations</code>");
+    expect(html).toMatch(/<img src="\/images\/editor.webp"[^>]* width="1840" height="1520" alt="Fink editor[^"]+"/);
   });
 
   test("the not-found page isn't indexed", () => {

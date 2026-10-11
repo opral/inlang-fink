@@ -393,7 +393,7 @@ test("opens the selected showcase directly and pages large catalogs without losi
     return route.fulfill({ json: { content: JSON.stringify(path?.endsWith("settings.json") ? { ...settings, locales: ["en"] } : catalog) } });
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Explore community projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Community projects" })).toBeVisible();
   await page.getByRole("button", { name: "Open Pocket ID", exact: true }).click();
   await expect(page.locator("[data-bundle]")).toHaveCount(25, { timeout: 90_000 });
   await expect(page).toHaveURL(/project=frontend%2Fproject.inlang/);
@@ -758,25 +758,40 @@ test("reference forms, splitting the reference, and a new message start in the r
   expect(pushed.hello[0].match["countPlural=one"]).toBe("Hello, one");
 });
 
-test("recent projects show above the community projects and reopen the project", async ({ page }) => {
+test("your projects show above the community projects and reopen the project", async ({ page }) => {
   await stubApi(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Explore community projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Community projects" })).toBeVisible();
   // Nothing opened yet: no section, no empty state.
-  await expect(page.getByRole("heading", { name: "Recent projects" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Your projects" })).toHaveCount(0);
   await openRepository(page);
   await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
   await page.getByRole("button", { name: "Fink", exact: true }).click();
   await page.getByRole("button", { name: "Open another repository…" }).click();
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Why Fink", "How Fink works", "Recent projects", "Explore community projects", "Set up in one command", "Questions"]);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["What Fink does", "Your projects", "Community projects", "Set up in one command", "Questions"]);
   const recent = page.getByRole("button", { name: "Open example/repo" });
-  await expect(recent).toContainText("main");
-  await expect(recent).toContainText("project.inlang");
+  await expect(recent).toContainText("main · project.inlang");
+  await expect(recent).toContainText("just now");
+  await expect(recent.locator("img")).toHaveAttribute("src", "https://github.com/example.png?size=80");
   await recent.click();
   await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
   expect(new URL(page.url()).searchParams.get("project")).toBe("project.inlang");
   // Removing the entry removes the section.
   await page.goto("/");
   await page.getByRole("button", { name: "Remove example/repo and its local draft" }).click();
-  await expect(page.getByRole("heading", { name: "Recent projects" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Your projects" })).toHaveCount(0);
+});
+
+test("a recent project's avatar falls back to the owner's initials, and unpushed changes stand out", async ({ page }) => {
+  await page.route("**/api/**", route => route.fulfill({ json: null }));
+  await page.route("https://github.com/*.png*", route => route.abort());
+  await page.addInitScript(() => localStorage.setItem("fink:recent-projects", JSON.stringify([{ owner: "acme-inc", name: "web", branch: "translations", projectPath: "apps/web/project.inlang", openedAt: Date.now(), pending: 3 }])));
+  await page.goto("/");
+  const card = page.getByRole("button", { name: "Open acme-inc/web" });
+  await expect(card.locator(".initials")).toHaveText("AI");
+  await expect(card.locator("img")).toHaveCount(0);
+  await expect(card).toContainText("translations · apps/web/project.inlang");
+  await expect(card.locator(".recent-pending")).toHaveText("3 unpushed changes");
+  // The community projects show their icons.
+  await expect(page.getByRole("button", { name: "Open Pocket ID" }).locator("img")).toHaveAttribute("src", /avatars\.githubusercontent\.com/);
 });

@@ -4,6 +4,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { Marked } from "marked";
+import { compareMain, teamsMain } from "./site-designs.mjs";
 
 export const ORIGIN = "https://fink.inlang.com";
 export const REPOSITORY = "https://github.com/opral/inlang-fink";
@@ -37,14 +38,14 @@ export function loadPages(root) {
   for (const file of readdirSync(root).filter(name => name.endsWith(".md")).sort()) {
     const source = readFileSync(path.join(root, file), "utf8");
     const { data, body } = parseFrontmatter(source);
-    pages.push({ slug: file.slice(0, -3), file: `site/${file}`, title: data.title, seoTitle: data.seoTitle, description: data.description, layout: data.layout, navTitle: data.navTitle, body, source });
+    pages.push({ slug: file.slice(0, -3), file: `site/${file}`, title: data.title, seoTitle: data.seoTitle, description: data.description, layout: data.layout, design: data.design, navTitle: data.navTitle, body, source });
   }
   for (const section of ["docs", "compare"]) {
     for (const file of readdirSync(path.join(root, section)).filter(name => name.endsWith(".md")).sort()) {
       const source = readFileSync(path.join(root, section, file), "utf8");
       const { data, body } = parseFrontmatter(source);
       const slug = file === "index.md" ? section : `${section}/${file.slice(0, -3)}`;
-      pages.push({ slug, file: `site/${section}/${file}`, title: data.title, seoTitle: data.seoTitle, description: data.description, body, source });
+      pages.push({ slug, file: `site/${section}/${file}`, title: data.title, seoTitle: data.seoTitle, description: data.description, layout: data.layout, design: data.design, body, source });
     }
   }
   return pages;
@@ -113,14 +114,20 @@ function pager(pages, current) {
   return `<nav class="pager" aria-label="Previous and next page">${previous ? `<a href="/${previous}" rel="prev"><span>Previous</span>${title(previous)}</a>` : "<span></span>"}${next ? `<a href="/${next}" rel="next"><span>Next</span>${title(next)}</a>` : "<span></span>"}</nav>`;
 }
 
-export const siteHeader = `<header class="site-header"><div class="site-header-inner"><a class="site-brand" href="/"><img src="/%F0%9F%90%A6.png" alt="" width="24" height="24">Fink</a><nav class="site-nav" aria-label="Site"><a href="/docs">Docs</a><a href="/compare">Compare</a><a href="${REPOSITORY}">GitHub</a><a class="site-cta" href="/">Open Fink</a></nav></div></header>`;
-export const siteFooter = `<footer class="site-footer"><div class="site-footer-inner"><span>© ${new Date().getFullYear()} Opral · Fink is a translation editor for GitHub repositories</span><nav aria-label="Footer"><a href="/docs">Docs</a><a href="/docs/privacy">Privacy</a><a href="${REPOSITORY}">GitHub</a><a href="https://inlang.com">inlang</a><a href="https://paraglidejs.com">Paraglide JS</a></nav></div></footer>`;
+/** The site header; marks the link of the page's section ("docs", "teams", "compare"). */
+export const siteHeader = (current = "", pageSlug = "") => `<header class="site-header"><div class="site-header-inner"><a class="site-brand" href="/"><img src="/%F0%9F%90%A6.png" alt="" width="24" height="24">Fink</a><nav class="site-nav" aria-label="Site">${[["docs", "Docs"], ["teams", "For teams"], ["compare", "Compare"]].map(([slug, name]) => `<a href="/${slug}"${slug === current ? ` aria-current="${slug === pageSlug ? "page" : "true"}"` : ""}>${name}</a>`).join("")}</nav><span class="site-spacer"></span><a class="site-github" href="${REPOSITORY}">GitHub</a><a class="site-cta" href="/">Open Fink</a></div></header>`;
+export const siteFooter = `<footer class="site-footer"><div class="site-footer-inner"><span>© ${new Date().getFullYear()} Opral · Fink is open source (MIT). Part of inlang.</span><nav aria-label="Footer"><a href="/docs">Docs</a><a href="/teams">For teams</a><a href="/compare">Compare</a><a href="/docs/privacy">Privacy</a><a href="${REPOSITORY}">GitHub</a><a href="https://inlang.com">inlang</a><a href="https://paraglidejs.com">Paraglide JS</a></nav></div></footer>`;
+
+const pageMeta = page => `Maintained by <a href="https://opral.com">Opral</a>, the team behind inlang · <a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="${REPOSITORY}/issues">Report an issue</a> · <a href="/${page.slug}.md">Markdown</a>`;
+/** The editor screenshot from the landing page (src/Landing.tsx HERO_SHOT). */
+const HERO_SHOT = `<img src="/images/editor.webp" srcset="/images/editor-920.webp 920w, /images/editor.webp 1840w" sizes="(max-width: 740px) 150vw, 640px" width="1840" height="1520" alt="Fink editor as a translator sees it: the message files_remaining in English and German, with a warning that the German text is missing {count}" fetchpriority="high">`;
 
 /** One static HTML page. */
 export function renderPage(page, pages) {
   const section = sectionOf(page);
   const canonical = url(page.slug);
   const crumbs = page.slug === section.slug ? `<a href="/">Fink</a><span aria-hidden="true">/</span><span>${section.name}</span>` : `<a href="/">Fink</a><span aria-hidden="true">/</span><a href="/${section.slug}">${section.name}</a><span aria-hidden="true">/</span><span>${escape(page.title)}</span>`;
+  const breadcrumbs = `<nav class="breadcrumbs" aria-label="Breadcrumb">${crumbs}</nav>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -143,25 +150,27 @@ export function renderPage(page, pages) {
 <meta name="twitter:description" content="${escape(page.description)}">
 <meta name="twitter:image" content="${OG_IMAGE}">
 <link rel="icon" href="/%F0%9F%90%A6.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/site.css">
 ${structuredData(page).map(data => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`).join("\n")}
 </head>
-<body>
-${siteHeader}
-<div class="site-layout${page.layout === "page" ? " page-layout" : ""}">
+<body class="section-${section.slug}${page.design ? ` design design-${page.design}` : ""}">
+${siteHeader(section.slug, page.slug)}
+${page.design ? `<main class="design-main">
+${(page.design === "teams" ? teamsMain(page, breadcrumbs, HERO_SHOT) : compareMain(page, breadcrumbs))}
+<p class="page-meta">${pageMeta(page)}</p>
+</main>` : `<div class="site-layout${page.layout === "page" ? " page-layout" : ""}">
 ${page.layout === "page" ? "" : `<nav class="site-sidebar" aria-label="${section.name}">${sidebar(pages, page.slug)}</nav>`}
 <main class="site-main">
-<nav class="breadcrumbs" aria-label="Breadcrumb">${crumbs}</nav>
+${breadcrumbs}
 <article class="prose">
 <h1>${escape(page.title)}</h1>
 ${renderMarkdown(page.body)}
 </article>
 ${page.layout === "page" ? "" : pager(pages, page.slug)}
-<p class="page-meta">Maintained by <a href="https://opral.com">Opral</a>, the team behind inlang · <a href="${REPOSITORY}/edit/main/${page.file}">Edit this page on GitHub</a> · <a href="${REPOSITORY}/issues">Report an issue</a> · <a href="/${page.slug}.md">Markdown</a></p>
+<p class="page-meta">${pageMeta(page)}</p>
 </main>
-</div>
+</div>`}
 ${siteFooter}
 </body>
 </html>
