@@ -290,10 +290,9 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .locale-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ref-badge { font-size: 11px; font-weight: 600; background: #52525b; color: #fff; border-radius: 4px; padding: 1px 6px; }
 .todo-dot { width: 7px; height: 7px; border-radius: 50%; background: #d97706; margin-left: auto; align-self: flex-start; margin-top: 6px; flex-shrink: 0; }
-.message-ref, .message-target { display: flex; flex-direction: column; min-width: 0; }
+.message-target { display: flex; flex-direction: column; min-width: 0; }
 .message-cell { padding: 11px 16px; font-size: 15px; line-height: 1.55; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
 .message-cell + .message-cell { border-top: 1px solid #f4f4f5; }
-.message-cell.source { color: var(--text-2); }
 .message-cell.edit { cursor: text; --inlang-pattern-padding: 0; --inlang-pattern-min-height: 24px; --inlang-pattern-background: transparent; --inlang-pattern-hover-background: transparent; --inlang-pattern-font-size: 15px; --inlang-pattern-line-height: 1.55; --inlang-pattern-color: var(--text); --inlang-pattern-focus-ring: none; }
 .message-cell.edit:hover { background: #fcfcfd; }
 .message-cell.edit:focus-within { box-shadow: inset 0 0 0 2px var(--focus); background: var(--surface); }
@@ -317,7 +316,7 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-cell.empty { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; box-shadow: none; background: transparent; font-weight: 400; color: var(--muted); }
 .message-cell.empty:hover { color: var(--text); background: #fcfcfd; }
 .message-cell.form { display: flex; align-items: baseline; gap: 12px; }
-.message-cell.form > inlang-pattern-editor, .message-cell.form > inlang-pattern-view { flex: 1; min-width: 0; }
+.message-cell.form > inlang-pattern-editor { flex: 1; min-width: 0; }
 .form-label { display: inline-flex; align-items: baseline; gap: 6px; flex: 0 0 112px; font-size: 12px; color: var(--text-2); }
 .form-label b { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 .form-label small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -331,7 +330,6 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .check { color: #166534; font-size: 13px; }
 ::highlight(inlang-untranslated) { text-decoration: underline dotted #d97706; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .message-cell.actions { padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
-.message-ref inlang-pattern-view { font-size: 15px; }
 .message-foot { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-top: 1px solid #efeff1; font-size: 13px; color: var(--text-2); }
 .message-foot .inline-link { color: var(--text); }
 .chev { display: inline-block; margin-right: 6px; color: #a1a1aa; transition: transform .12s; }

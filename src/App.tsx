@@ -8,7 +8,7 @@ import { LixFloat, type FloatMode } from "./LixFloat";
 import { MachineTranslateDialog, SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { MessageCard } from "./MessageCard";
 import type { InlangPatternEditor } from "@inlang/editor-component";
-import { unsupportedExactNumber, type Restructure } from "./flows";
+import { referenceInputs, unsupportedExactNumber, type Restructure } from "./flows";
 import { LanguageMenu } from "./LanguageMenu";
 import { languageName, readFocus, writeFocus, type LanguageFocus } from "./languages";
 import { issueKind, type Issue, type IssueKind } from "./issues";
@@ -20,7 +20,7 @@ import { CheckIcon, Chevron, Dropdown, DownloadIcon, GitHubIcon, RepoIcon, Branc
 import type { Showcase } from "./showcaseList";
 import { highlightMatches, markUntranslated, searchTerms, searchText } from "./search";
 import { sourceSnapshot, usagesFromReferences, type Usage } from "./usage";
-import { forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
+import { RECENT_KEY, forgetRecent, readRecent, recentKey, rememberRecent, setRecentPending, type RecentProject } from "./recent";
 import { cleanupDrafts, deleteDraft, draftName, readDrafts, recordDraft, registerExisting, setDraftPending } from "./drafts";
 import { LocalDrafts } from "./LocalDrafts";
 import { capture, hashId, identify, telemetryEnabled } from "./telemetry";
@@ -75,6 +75,11 @@ export default function App() {
   const [projects, setProjects] = useState<string[]>([]);
   const [initializing, setInitializing] = useState(() => { const params = new URLSearchParams(location.search); return !!params.get("repo") && !!params.get("project"); });
   const [recent, setRecent] = useState<RecentProject[]>(readRecent);
+  // Projects opened or removed in another tab show up here too.
+  useEffect(() => {
+    const update = (event: StorageEvent) => { if (event.key === RECENT_KEY || event.key === null) setRecent(readRecent()); };
+    window.addEventListener("storage", update); return () => window.removeEventListener("storage", update);
+  }, []);
   const [newId, setNewId] = useState("");
   const [view, setView] = useState<"edit" | "settings" | "history">("edit");
   const [settingsDirty, setSettingsDirty] = useState(false);
@@ -187,6 +192,8 @@ export default function App() {
   }, [report]);
   // Typing is written once it pauses: one commit (and one undo step) per pause, not per keystroke.
   const pendingWrites = useRef(new Map<string, ChangeEventDetail>());
+  /** Inputs declared because they were typed into the reference ("bundle\0name"); only these are dropped when unused. */
+  const autoDeclared = useRef(new Set<string>());
   const writeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flushRef = useRef<() => void>(() => {});
   /** Other draft operations first write pending text, so they see it and stay in order. */
@@ -342,13 +349,26 @@ export default function App() {
     pendingWrites.current.clear();
     if (!local || !details.length) return;
     enqueueNow(async () => {
-      const ids = new Set<string>();
+      const ids = new Set<string>(), working = new Map<string, BundleNested>();
+      const { baseLocale } = local.context.settings;
       await local.project.db.transaction().execute(async tx => {
         for (const detail of details) {
           const bundleId = ownerOf(detail);
           if (!bundleId) throw new Error("The edited message could not be located. Reload the project to inspect your saved draft.");
           ids.add(bundleId);
           await write(tx as unknown as LocalProject["project"]["db"], detail);
+          // The reference defines the inputs: a variable typed into it is declared in the same commit (one undo step),
+          // and an input declared that way is dropped again once nothing uses it.
+          const variant = detail.newData as BundleNested["messages"][number]["variants"][number] | undefined, bundle = working.get(bundleId) ?? bundleIndex.current.get(bundleId);
+          if (!variant || !bundle) continue;
+          const next = { ...bundle, messages: bundle.messages.map(message => message.id === variant.message_id ? { ...message, variants: message.variants.map(value => value.id === variant.id ? variant : value) } : message) };
+          working.set(bundleId, next);
+          if (bundle.messages.find(message => message.id === variant.message_id)?.locale !== baseLocale) continue;
+          const inputs = referenceInputs(bundle, variant, name => autoDeclared.current.has(`${bundleId}\u0000${name}`));
+          if (!inputs) continue;
+          for (const name of inputs.added) autoDeclared.current.add(`${bundleId}\u0000${name}`);
+          working.set(bundleId, { ...next, declarations: inputs.declarations });
+          await tx.updateTable("inlang_bundle").set({ declarations: inputs.declarations }).where("id", "=", bundleId).execute();
         }
       });
       for (const id of ids) await refresh(local, id);
@@ -459,12 +479,20 @@ export default function App() {
       await refresh(local, id);
     });
   }, [enqueue, refresh]);
+  /** Creates a message with an empty reference text and puts the cursor in it. */
+  const created = useRef<string | undefined>(undefined);
   const create = () => {
     if (!local || !newId.trim()) return;
-    const id = newId.trim();
+    const id = newId.trim(), messageId = crypto.randomUUID();
+    if (bundleIndex.current.has(id)) { setError(`A message with the ID ${id} already exists.`); return; }
     enqueue(async () => {
-      await local.project.db.insertInto("inlang_bundle").values({ id, declarations: [] }).execute();
+      await local.project.db.transaction().execute(async tx => {
+        await tx.insertInto("inlang_bundle").values({ id, declarations: [] }).execute();
+        await tx.insertInto("inlang_message").values({ id: messageId, bundle_id: id, locale: local.context.settings.baseLocale, selectors: [] }).execute();
+        await tx.insertInto("inlang_variant").values({ id: crypto.randomUUID(), message_id: messageId, matches: [], pattern: [] }).execute();
+      });
       await refresh(local, id); setNewId(""); setShowNewMessage(false);
+      created.current = id; setSearchInput(""); setFilter("all"); setTodoKind("all");
     });
   };
   const saveSettings = (settings: ProjectSettings) => {
@@ -727,6 +755,21 @@ export default function App() {
     observer.observe(root, { subtree: true, childList: true, characterData: true });
     return () => { observer.disconnect(); cancelAnimationFrame(frame); highlightMatches(null, []); };
   }, [terms, visible, page, view, reviewState, local]);
+  // A new message opens on its page with the cursor in its reference text.
+  useEffect(() => {
+    const id = created.current, index = id ? visible.findIndex(bundle => bundle.id === id) : -1;
+    if (index < 0 || search) return;
+    created.current = undefined;
+    setPage(Math.floor(index / 25));
+    // The page and the card render after this effect; look for the editor for a few frames.
+    let frames = 30;
+    const focusNew = () => {
+      const card = document.querySelector<HTMLElement>(`[data-bundle="${CSS.escape(id!)}"]`), editor = card?.querySelector<InlangPatternEditor>(".message-row.reference inlang-pattern-editor");
+      if (!card || !editor) { if (frames--) requestAnimationFrame(focusNew); return; }
+      card.scrollIntoView({ block: "center" }); editor.focus();
+    };
+    requestAnimationFrame(focusNew);
+  }, [visible, search]);
   const totalPages = Math.max(1, Math.ceil(visible.length / 25));
   const currentPage = Math.min(page, totalPages - 1);
   const download = () => void run(async () => {

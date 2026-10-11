@@ -32,6 +32,19 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
       <p className="hero-hint">Requires a <code>project.inlang</code> folder. <a href="https://inlang.com/docs" target="_blank" rel="noreferrer">Learn how to get started</a></p>
     </section>
 
+    <section className="landing-section how" aria-labelledby="how-title">
+      <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No setup and no lock-in. Your repository stays the source of truth.</p></div></header>
+      <ol className="steps">
+        <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next and inlang message format.</p>
+          <div aria-hidden="true" className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
+        <li><span className="step-number">2</span><h3>Translate side by side</h3><p>Every locale of a message in one place, including variables, selectors and plurals. Filter for missing translations.</p>
+          <div aria-hidden="true" className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>
+        <li><span className="step-number">3</span><h3>Review and push</h3><p>See a before/after diff of every change, write a commit message, and push straight to your branch.</p>
+          <div aria-hidden="true" className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Commit and push</span></div></div></li>
+      </ol>
+    </section>
+
+    {/* Projects opened in this browser, newest first, right above the community projects. */}
     {recent.length > 0 && <section className="landing-section" aria-labelledby="recent-title">
       <header className="section-header"><div><h2 id="recent-title">Recent projects</h2><p>Drafts stay in this browser until you push them.</p></div></header>
       <div className="recent-grid">{recent.map(project => <article className="recent-card" key={recentKey(project)}>
@@ -46,18 +59,6 @@ export function Landing({ url, setUrl, submit, busy, picker, recent, openRecent,
         <button className="recent-remove" aria-label={`Remove ${project.owner}/${project.name} and its local draft`} title="Remove and delete the local draft" onClick={() => forget(project)}>×</button>
       </article>)}</div>
     </section>}
-
-    <section className="landing-section how" aria-labelledby="how-title">
-      <header className="section-header"><div><h2 id="how-title">How Fink works</h2><p>No setup and no lock-in. Your repository stays the source of truth.</p></div></header>
-      <ol className="steps">
-        <li><span className="step-number">1</span><h3>Paste a repository</h3><p>Fink finds every <code>project.inlang</code> on the branch and loads its messages. Works with i18next and inlang message format.</p>
-          <div aria-hidden="true" className="step-visual mock-input"><GitHubIcon /> github.com/acme/web<span className="mock-button">Open</span></div></li>
-        <li><span className="step-number">2</span><h3>Translate side by side</h3><p>Every locale of a message in one place, including variables, selectors and plurals. Filter for missing translations.</p>
-          <div aria-hidden="true" className="step-visual mock-rows"><div><b>en</b><span className="ref">ref</span>Add {"{count}"} tickets</div><div><b>de</b>{"{count}"} Tickets hinzufügen</div><div className="mock-missing"><b>fr</b>+ Add translation</div></div></li>
-        <li><span className="step-number">3</span><h3>Review and push</h3><p>See a before/after diff of every change, write a commit message, and push straight to your branch.</p>
-          <div aria-hidden="true" className="step-visual mock-diff"><div><span className="del">tasks</span> → <span className="ins">tickets</span></div><div className="mock-commit"><BranchIcon /> main<span className="mock-push">Commit and push</span></div></div></li>
-      </ol>
-    </section>
 
     <Showcases open={openShowcase} busy={busy} />
   </>;

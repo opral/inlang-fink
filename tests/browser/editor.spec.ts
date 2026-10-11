@@ -33,9 +33,10 @@ async function openRepository(page: import("@playwright/test").Page) {
   // Repositories with one project open directly.
   await page.getByRole("button", { name: "Open", exact: true }).click();
 }
-// The editable translation in a message card (the reference is read-only text).
-const translation = (page: import("@playwright/test").Page, id: string, nth = 0) => page.locator(`[data-bundle="${id}"] .message-target inlang-pattern-editor [contenteditable]`).nth(nth);
-const reference = (page: import("@playwright/test").Page, id: string) => page.locator(`[data-bundle="${id}"] .message-ref`).first();
+// The editable translation in a message card, and the reference row (editable too) above the translations.
+const translation = (page: import("@playwright/test").Page, id: string, nth = 0) => page.locator(`[data-bundle="${id}"] .message-row:not(.reference) .message-target inlang-pattern-editor [contenteditable]`).nth(nth);
+const reference = (page: import("@playwright/test").Page, id: string) => page.locator(`[data-bundle="${id}"] .message-row.reference .message-target`).first();
+const referenceText = (page: import("@playwright/test").Page, id: string, nth = 0) => page.locator(`[data-bundle="${id}"] .message-row.reference inlang-pattern-editor [contenteditable]`).nth(nth);
 async function editStructure(page: import("@playwright/test").Page, id: string) {
   await page.getByRole("button", { name: `More actions for ${id}` }).click();
   await page.getByRole("button", { name: "Edit structure…" }).click();
@@ -71,7 +72,7 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   await page.getByRole("button", { name: /English.*All languages/ }).click();
   await page.getByRole("checkbox", { name: /German/ }).click();
   await page.keyboard.press("Escape");
-  await expect(page.locator('[data-bundle="hello"] .message-target')).toHaveCount(1);
+  await expect(page.locator('[data-bundle="hello"] .message-row:not(.reference)')).toHaveCount(1);
   await page.getByRole("button", { name: /^Changes/ }).click();
   await expect(page.getByText("No changes to push.")).toBeVisible();
   await page.getByRole("button", { name: "Back to editor" }).first().click();
@@ -89,13 +90,13 @@ test("production bundle edits a focused language, persists to OPFS, and pushes o
   await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("1 change");
   await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
   // Editing one message leaves other cards' editor state untouched.
-  await page.locator('[data-bundle="items"] .message-target inlang-pattern-editor').first().evaluate(element => {
+  await page.locator('[data-bundle="items"] .message-row:not(.reference) .message-target inlang-pattern-editor').first().evaluate(element => {
     const node = element as HTMLElement & { variant: unknown; originalVariantForTest?: unknown };
     node.originalVariantForTest = node.variant;
   });
   await german.fill("Hallo von Fink"); await german.press("Tab");
   await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("2 changes");
-  expect(await page.locator('[data-bundle="items"] .message-target inlang-pattern-editor').first().evaluate(element => {
+  expect(await page.locator('[data-bundle="items"] .message-row:not(.reference) .message-target inlang-pattern-editor').first().evaluate(element => {
     const node = element as HTMLElement & { variant: unknown; originalVariantForTest?: unknown };
     return node.variant === node.originalVariantForTest;
   })).toBe(true);
@@ -659,4 +660,108 @@ test("signed out, a repository GitHub refuses without an account prompts to sign
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Sign in with GitHub to open this repository");
   await expect(alert.getByRole("link", { name: "Sign in with GitHub" })).toHaveAttribute("href", "/api/auth/login");
+});
+
+test("the reference is edited like a translation: checks rerun, undo works, and the push changes only that entry", async ({ page }) => {
+  const en = '{\n\t"hello": "Hello",\n\t"zeta": "Caf\\u00e9"\n}\n', de = '{\n\t"hello": "Hallo",\n\t"zeta": "Café"\n}\n';
+  const pushes: { owner: string; repo: string; message: string; files?: Record<string, string> }[] = [];
+  await stubApi(page, { ...resources, "messages/en.json": en, "messages/de.json": de }, {}, undefined, pushes);
+  await openRepository(page);
+  const english = referenceText(page, "hello"), card = page.locator('[data-bundle="hello"]');
+  await expect(english).toHaveText("Hello", { timeout: 90_000 });
+  await expect(card.locator(".message-row.reference .ref-badge")).toHaveText("ref");
+  await english.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" {count}");
+  await expect(english).toHaveText("Hello {count}");
+  // German is checked against the new reference.
+  await expect(card.locator(".message-status")).toHaveText("Missing {count} in German");
+  await expect(card.getByText("{count} is missing.")).toBeVisible();
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  // The same undo as translations: one step back and forth.
+  await page.keyboard.press("Control+z");
+  await expect(english).toHaveText("Hello");
+  await expect(card.locator(".message-status")).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+z");
+  await expect(english).toHaveText("Hello {count}");
+  await expect(card.locator(".message-status")).toHaveText("Missing {count} in German");
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(page.locator('[data-diff-message="hello"] [data-diff-side="before"]')).toContainText("Hello");
+  await expect(page.locator('[data-diff-message="hello"] [data-diff-side="after"]')).toContainText("{count}");
+  await page.getByRole("button", { name: "Push", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
+  expect(pushes).toHaveLength(1);
+  // Only the edited entry of the reference file changes; formatting and the other entries stay byte for byte.
+  expect(pushes[0]!.files).toEqual({ "messages/en.json": en.replace('"Hello"', '"Hello {count}"') });
+});
+
+test("reference forms, splitting the reference, and a new message start in the reference", async ({ page }) => {
+  const pushes: { owner: string; repo: string; message: string; files?: Record<string, string> }[] = [];
+  const en = { hello: "Hello", items: [{ declarations: ["input count", "local countPlural = count: plural"], selectors: ["countPlural"], match: { "countPlural=*": "{count} items" } }] };
+  await stubApi(page, { ...resources, "messages/en.json": JSON.stringify(en) }, {}, undefined, pushes);
+  await openRepository(page);
+  const items = page.locator('[data-bundle="items"] .message-row.reference');
+  await expect(referenceText(page, "items")).toHaveText("{count} items", { timeout: 90_000 });
+  // English needs a "one" form: "+ Add" works in the reference like in a translation.
+  await items.getByRole("button", { name: "+ Add one form" }).click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("One item");
+  await expect(items.locator(".form-label")).toHaveText(["one1", "other0, 2, 3…"]);
+  await expect(referenceText(page, "items", 0)).toHaveText("One item");
+  // The reference can be split by a number it uses.
+  const hello = referenceText(page, "hello");
+  await hello.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" {count}");
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.getByRole("button", { name: "More actions for hello" }).click();
+  await page.getByRole("button", { name: "Split English by {count}" }).click();
+  await expect(page.locator('[data-bundle="hello"] .message-row.reference .form-label')).toHaveText(["one1", "other0, 2, 3…"]);
+  await referenceText(page, "hello", 0).fill("Hello, one");
+  await referenceText(page, "hello", 0).press("Tab");
+  // The structure dialog shows the reference too.
+  const dialog = await editStructure(page, "hello");
+  await expect(dialog.locator("inlang-message").first()).toContainText("en");
+  await dialog.getByRole("button", { name: "Done" }).click();
+  // A new message starts with the cursor in its reference text.
+  await page.getByRole("button", { name: "Add message" }).click();
+  await page.getByLabel("New message ID").fill("greeting");
+  await page.getByRole("button", { name: "Add message" }).last().click();
+  await expect(referenceText(page, "greeting")).toBeFocused();
+  await page.keyboard.type("Good morning");
+  await expect(page.locator('[data-bundle="greeting"]').getByRole("button", { name: "Translate to German…" })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
+  expect(Object.keys(pushes[0]!.files!)).toEqual(["messages/en.json"]);
+  const pushed = JSON.parse(pushes[0]!.files!["messages/en.json"]!);
+  expect(pushed.greeting).toBe("Good morning");
+  expect(pushed.items[0].match).toEqual({ "countPlural=one": "One item", "countPlural=*": "{count} items" });
+  expect(pushed.hello[0].declarations).toContain("input count");
+  expect(pushed.hello[0].match["countPlural=one"]).toBe("Hello, one");
+});
+
+test("recent projects show above the community projects and reopen the project", async ({ page }) => {
+  await stubApi(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Explore community projects" })).toBeVisible();
+  // Nothing opened yet: no section, no empty state.
+  await expect(page.getByRole("heading", { name: "Recent projects" })).toHaveCount(0);
+  await openRepository(page);
+  await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Fink", exact: true }).click();
+  await page.getByRole("button", { name: "Open another repository…" }).click();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["How Fink works", "Recent projects", "Explore community projects"]);
+  const recent = page.getByRole("button", { name: "Open example/repo" });
+  await expect(recent).toContainText("main");
+  await expect(recent).toContainText("project.inlang");
+  await recent.click();
+  await expect(translation(page, "hello")).toHaveText("Hallo", { timeout: 90_000 });
+  expect(new URL(page.url()).searchParams.get("project")).toBe("project.inlang");
+  // Removing the entry removes the section.
+  await page.goto("/");
+  await page.getByRole("button", { name: "Remove example/repo and its local draft" }).click();
+  await expect(page.getByRole("heading", { name: "Recent projects" })).toHaveCount(0);
 });
