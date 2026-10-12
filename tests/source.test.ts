@@ -121,3 +121,19 @@ test("messages in a shared package: the apps that use it are analyzed, others ar
   expect(Object.keys(result.files)).toEqual(["packages/i18n/src/index.ts", "apps/shop/src/page.tsx"]);
   expect(result.outside).toEqual(["apps/blog/src/page.tsx"]);
 });
+
+test("Paraglide: in a related package, `m` through an alias is analyzed; in an unrelated one only an import from paraglide counts", async () => {
+  const alias = "<script>\n\timport { m } from '$lib/i18n/messages';\n</script>\n<button>{m.save()}</button>\n";
+  const result = await extractSource(archive(
+    entry("repo-sha/apps/web/package.json", '{"name":"web","dependencies":{"@repo/ui":"*"}}'),
+    entry("repo-sha/apps/web/project.inlang/settings.json", "{}"),
+    entry("repo-sha/apps/web/src/routes/+page.svelte", "{m.hello()}"),
+    entry("repo-sha/packages/ui/package.json", '{"name":"@repo/ui"}'),
+    entry("repo-sha/packages/ui/src/Save.svelte", alias),
+    entry("repo-sha/apps/blog/package.json", '{"name":"blog"}'),
+    entry("repo-sha/apps/blog/src/Save.svelte", alias),
+    entry("repo-sha/apps/blog/src/Page.svelte", "<script>import { m } from '$lib/paraglide/messages.js';</script>{m.title()}"),
+  ), { keep: path => isSourcePath(path, "apps/web"), source: USAGE_SOURCES["plugin.inlang.messageFormat"]!, scope: "apps/web" });
+  expect(Object.keys(result.files)).toEqual(["apps/web/src/routes/+page.svelte", "packages/ui/src/Save.svelte"]);
+  expect(result.outside).toEqual(["apps/blog/src/Page.svelte"]);
+});

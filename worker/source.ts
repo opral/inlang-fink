@@ -91,8 +91,8 @@ const within = (path: string, directory: string) => !directory || path.startsWit
 export async function extractSource(archive: ReadableStream<Uint8Array>, options: ExtractOptions): Promise<Extracted> {
   const { keep, source, scope = "" } = options;
   const bytes = new Bytes(archive.pipeThrough(new DecompressionStream("gzip")).getReader());
-  const files: Record<string, string> = {}, skipped: string[] = [], elsewhere = new Map<string, string | undefined>(), packages = new Map<string, { name?: string; dependencies: string[] }>(), projects: string[] = [];
-  let kept = 0, longPath: string | undefined;
+  const files: Record<string, string> = {}, skipped: string[] = [], elsewhere = new Map<string, { content?: string; imports: boolean }>(), packages = new Map<string, { name?: string; dependencies: string[] }>(), projects: string[] = [];
+  let kept = 0, keptElsewhere = 0, longPath: string | undefined;
   for (;;) {
     const header = await bytes.take(512);
     if (!header || header.every(byte => byte === 0)) break;
@@ -137,27 +137,29 @@ export async function extractSource(archive: ReadableStream<Uint8Array>, options
       // decided once all package.json files are known
       const data = await bytes.take(padded);
       if (!data) throw new HttpError(502, "The repository archive ended early.");
-      const content = text(data.subarray(0, size));
-      if (!source!.imports.test(content)) continue;
-      kept += size;
-      if (kept > MAX_KEPT) throw new HttpError(413, "The project's source is too large to scan for message usage.");
-      elsewhere.set(path, content);
+      const content = text(data.subarray(0, size)), imports = source!.imports.test(content);
+      // `mentions` only counts in related packages (Paraglide's `m` through an alias), `imports` everywhere
+      if (!imports && !source!.mentions.test(content)) continue;
+      // Until relations are known, contents are held within their own budget; beyond it only
+      // the path is kept, and a related file is then reported as not analyzed.
+      keptElsewhere += size;
+      elsewhere.set(path, { content: keptElsewhere <= MAX_KEPT ? content : undefined, imports });
     } else if ((wanted && source) || other) {
       const found = await bytes.scan(size, wanted ? source!.mentions : source!.imports);
       if (found === undefined || !(await bytes.skip(padded - size))) throw new HttpError(502, "The repository archive ended early.");
       if (found && wanted) skipped.push(path);
-      else if (found) elsewhere.set(path, undefined);
+      else if (found) elsewhere.set(path, { imports: true });
     } else if (!(await bytes.skip(padded))) throw new HttpError(502, "The repository archive ended early.");
   }
   const outside: string[] = [];
   if (elsewhere.size) {
     const reach = relatedPackages(scope, packages);
-    for (const [path, content] of elsewhere) {
+    for (const [path, { content, imports }] of elsewhere) {
       const directory = packageOf(packages, path);
       const isRelated = directory === scope || within(scope, directory) || reach.has(directory);
       // another app's own inlang project: it calls its own messages
       if (!isRelated && projects.some(project => project === directory || within(project, directory))) continue;
-      if (!isRelated) outside.push(path);
+      if (!isRelated) { if (imports) outside.push(path); }
       else if (content === undefined) skipped.push(path);
       else files[path] = content;
     }

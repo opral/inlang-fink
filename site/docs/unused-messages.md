@@ -51,7 +51,7 @@ Fink can't analyze i18next calls yet. i18next projects show no usages and no unu
 
 ## Limits
 
-- **In other packages,** only files that import next-intl or from a `paraglide` folder are analyzed. If no message is called in the analyzed code at all, the result is incomplete.
+- **In other packages,** only files that use next-intl or Paraglide's `m` are analyzed. If no message is called in the analyzed code at all, the result is incomplete.
 - Messages you add in your draft are never labelled unused.
 - Source files over 512 KB aren't analyzed. If one of them mentions messages, the result is incomplete. Very large repositories can't be scanned.
 

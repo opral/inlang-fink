@@ -149,7 +149,7 @@ test("next-intl: files Fink didn't analyze, or code that calls no message, make 
   await status.click();
   const issues = page.getByRole("list", { name: "Unresolved usage" }).getByRole("listitem");
   await expect(issues).toHaveCount(2);
-  await expect(issues.nth(0)).toContainText("Larger than 512 KB");
+  await expect(issues.nth(0)).toContainText("over 512 KB");
   await expect(issues.nth(1)).toContainText("outside the scanned package");
   await expect(issues.nth(1).getByRole("link")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/packages/ui/src/Card.tsx`);
 });

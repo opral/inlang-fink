@@ -34,7 +34,7 @@ export type UnanalyzedSource = { skipped?: readonly string[]; outside?: readonly
 export function usageState(result: Pick<FindUsagesResult, "status" | "reason" | "issues" | "references">, source: UnanalyzedSource, scope: string, known: (bundleId: string) => boolean = () => true): UsageState {
   const where = scope ? `${scope}/` : "the whole repository";
   const own: UsageIssue[] = [
-    ...(source.skipped ?? []).map(path => ({ path, reason: "Larger than 512 KB, so Fink didn't analyze it. Its calls are unknown." })),
+    ...(source.skipped ?? []).map(path => ({ path, reason: "Too large for Fink to analyze (over 512 KB, or past the 25 MB limit), so its calls are unknown." })),
     ...(source.outside ?? []).map(path => ({ path, reason: `Can call messages, but it is outside the scanned package (${where}), so Fink didn't analyze it.` })),
   ];
   // The analysis is unavailable only without source files: the snapshot is empty.
