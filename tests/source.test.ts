@@ -74,7 +74,7 @@ test("files over the size limit that call messages are reported, not silently le
   expect(result).toEqual({ files: { "src/app/page.tsx": "t('x')" }, skipped: ["src/app/huge-page.tsx", "src/app/late.tsx", "src/app/split.tsx"], outside: [] });
 });
 
-test("only files the analysis gets are sent; code in related packages that imports the format is listed, other apps are not", async () => {
+test("only files the analysis gets are sent; related packages are analyzed, other code that imports the format is listed, other inlang projects are not", async () => {
   const uses = "import { useTranslations } from 'next-intl';\nexport const Card = () => useTranslations('Common')('title');\n";
   const result = await extractSource(archive(
     entry("repo-sha/package.json", '{"name":"monorepo","devDependencies":{"turbo":"2"}}'),
@@ -95,16 +95,19 @@ test("only files the analysis gets are sent; code in related packages that impor
     entry("repo-sha/apps/admin/src/page.tsx", uses),
     entry("repo-sha/apps/docs/package.json", '{"name":"docs","dependencies":{"@repo/ui":"*"}}'),
     entry("repo-sha/apps/docs/src/page.tsx", uses),
+    // a test fixture is not the package's own project
+    entry("repo-sha/apps/docs/tests/fixtures/project.inlang/settings.json", "{}"),
     entry("repo-sha/scripts/seed.ts", uses),
   ), { keep: path => isSourcePath(path, "apps/web"), source: nextIntl, scope: "apps/web" });
   expect(result).toEqual({
-    files: { "apps/web/src/app/page.tsx": "t('x')", "apps/web/docs/legal.md": "import { useTranslations } from 'next-intl';\n\n# Legal\n" },
+    files: { "apps/web/src/app/page.tsx": "t('x')", "apps/web/docs/legal.md": "import { useTranslations } from 'next-intl';\n\n# Legal\n", "packages/ui/src/Card.tsx": uses, "packages/icons/src/Label.tsx": uses, "scripts/seed.ts": uses },
     skipped: [],
-    outside: ["packages/ui/src/Card.tsx", "packages/icons/src/Label.tsx", "scripts/seed.ts"],
+    // apps/docs uses next-intl and isn't declared as related: it could import this project's messages through a path alias
+    outside: ["apps/docs/src/page.tsx"],
   });
 });
 
-test("messages in a shared package: the apps that use it are listed", async () => {
+test("messages in a shared package: the apps that use it are analyzed, others are listed", async () => {
   const uses = "import { useTranslations } from 'next-intl';\nexport const Page = () => useTranslations('Home')('title');\n";
   const result = await extractSource(archive(
     entry("repo-sha/packages/i18n/package.json", '{"name":"@repo/i18n"}'),
@@ -115,5 +118,6 @@ test("messages in a shared package: the apps that use it are listed", async () =
     entry("repo-sha/apps/blog/package.json", '{"name":"blog"}'),
     entry("repo-sha/apps/blog/src/page.tsx", uses),
   ), { keep: path => isSourcePath(path, "packages/i18n"), source: nextIntl, scope: "packages/i18n" });
-  expect(result.outside).toEqual(["apps/shop/src/page.tsx"]);
+  expect(Object.keys(result.files)).toEqual(["packages/i18n/src/index.ts", "apps/shop/src/page.tsx"]);
+  expect(result.outside).toEqual(["apps/blog/src/page.tsx"]);
 });

@@ -82,15 +82,16 @@ const within = (path: string, directory: string) => !directory || path.startsWit
 
 /**
  * Extracts matching UTF-8 files from a gzipped tar stream; the archive's top-level folder is removed
- * from paths. With a usage `source`, a file is only kept when the analysis gets it, and files whose
- * calls the analysis would miss are listed instead of dropped silently: `skipped` ones in scope are
- * over MAX_FILE, `outside` ones are app source outside the scanned package that imports the format,
- * unless they belong to a package with an inlang project of its own.
+ * from paths. With a usage `source`, a file is only kept when the analysis gets it, and no file that
+ * can call messages is dropped silently. App source outside the scanned package that imports the
+ * format is analyzed too when its package is related (above the scope, used by it or using it, per
+ * package.json); in other packages it is listed as `outside`, unless the package has an inlang project
+ * of its own. Files over MAX_FILE that call messages are listed as `skipped` (or `outside`).
  */
 export async function extractSource(archive: ReadableStream<Uint8Array>, options: ExtractOptions): Promise<Extracted> {
   const { keep, source, scope = "" } = options;
   const bytes = new Bytes(archive.pipeThrough(new DecompressionStream("gzip")).getReader());
-  const files: Record<string, string> = {}, skipped: string[] = [], outside: string[] = [], packages = new Map<string, { name?: string; dependencies: string[] }>(), projects: string[] = [];
+  const files: Record<string, string> = {}, skipped: string[] = [], elsewhere = new Map<string, string | undefined>(), packages = new Map<string, { name?: string; dependencies: string[] }>(), projects: string[] = [];
   let kept = 0, longPath: string | undefined;
   for (;;) {
     const header = await bytes.take(512);
@@ -122,8 +123,8 @@ export async function extractSource(archive: ReadableStream<Uint8Array>, options
         continue;
       }
     }
-    if (file && /(?:^|\/)[^/]+\.inlang\/settings\.json$/.test(path)) projects.push(parentDirectory(parentDirectory(path)));
-    const wanted = file && keep(path), elsewhere = file && !wanted && !!source && !!scope && !within(path, scope) && isSourcePath(path, "") && source.analyzes.test(path);
+    if (file && /(?:^|\/)[^/]+\.inlang\/settings\.json$/.test(path) && !isTestPath(path) && !isGeneratedPath(path)) projects.push(parentDirectory(parentDirectory(path)));
+    const wanted = file && keep(path), other = file && !wanted && !!source && !!scope && !within(path, scope) && isSourcePath(path, "") && source.analyzes.test(path);
     if (wanted && size <= MAX_FILE) {
       const data = await bytes.take(padded);
       if (!data) throw new HttpError(502, "The repository archive ended early.");
@@ -132,13 +133,36 @@ export async function extractSource(archive: ReadableStream<Uint8Array>, options
       kept += size;
       if (kept > MAX_KEPT) throw new HttpError(413, "The project's source is too large to scan for message usage.");
       files[path] = content;
-    } else if ((wanted && source) || elsewhere) {
+    } else if (other && size <= MAX_FILE) {
+      // decided once all package.json files are known
+      const data = await bytes.take(padded);
+      if (!data) throw new HttpError(502, "The repository archive ended early.");
+      const content = text(data.subarray(0, size));
+      if (!source!.imports.test(content)) continue;
+      kept += size;
+      if (kept > MAX_KEPT) throw new HttpError(413, "The project's source is too large to scan for message usage.");
+      elsewhere.set(path, content);
+    } else if ((wanted && source) || other) {
       const found = await bytes.scan(size, wanted ? source!.mentions : source!.imports);
       if (found === undefined || !(await bytes.skip(padded - size))) throw new HttpError(502, "The repository archive ended early.");
-      if (found) (wanted ? skipped : outside).push(path);
+      if (found && wanted) skipped.push(path);
+      else if (found) elsewhere.set(path, undefined);
     } else if (!(await bytes.skip(padded))) throw new HttpError(502, "The repository archive ended early.");
   }
-  return { files, skipped, outside: outside.filter(path => related(packageOf(packages, path), scope, packages, projects)) };
+  const outside: string[] = [];
+  if (elsewhere.size) {
+    const reach = relatedPackages(scope, packages);
+    for (const [path, content] of elsewhere) {
+      const directory = packageOf(packages, path);
+      const isRelated = directory === scope || within(scope, directory) || reach.has(directory);
+      // another app's own inlang project: it calls its own messages
+      if (!isRelated && projects.some(project => project === directory || within(project, directory))) continue;
+      if (!isRelated) outside.push(path);
+      else if (content === undefined) skipped.push(path);
+      else files[path] = content;
+    }
+  }
+  return { files, skipped, outside };
 }
 
 /** The package directory a file belongs to: its nearest folder with a package.json, or the repository root. */
@@ -146,24 +170,16 @@ function packageOf(packages: Map<string, unknown>, path: string): string {
   for (let directory = parentDirectory(path); ; directory = parentDirectory(directory)) if (packages.has(directory) || !directory) return directory;
 }
 
-/**
- * Whether code in package `directory` can call the messages of the project scanned in `scope`: it is
- * a package above the scope, one the scope's package uses (also indirectly), one that uses it, or
- * one used by those. Other apps, and packages with an inlang project of their own, call their own messages.
- */
-function related(directory: string, scope: string, packages: Map<string, { name?: string; dependencies: string[] }>, projects: string[]): boolean {
-  if (directory === scope || within(scope, directory)) return true;
-  if (projects.some(project => project === directory || within(project, directory))) return false;
+/** The scope's package, the packages that use it (also through others), and the packages those use, by package.json names. */
+function relatedPackages(scope: string, packages: Map<string, { name?: string; dependencies: string[] }>): Set<string> {
   const byName = new Map([...packages].flatMap(([path, info]) => info.name ? [[info.name, path] as const] : []));
-  // the scope's package and every package that uses it, directly or through others
   const users = new Set([packageOf(packages, `${scope}/package.json`)]), names = new Set<string>();
   for (let grew = true; grew;) {
     grew = false;
     for (const user of users) { const name = packages.get(user)?.name; if (name) names.add(name); }
     for (const [path, info] of packages) if (!users.has(path) && info.dependencies.some(dependency => names.has(dependency))) { users.add(path); grew = true; }
   }
-  // and every package those use
   const reach = new Set(users);
   for (const path of reach) for (const dependency of packages.get(path)?.dependencies ?? []) { const used = byName.get(dependency); if (used !== undefined) reach.add(used); }
-  return reach.has(directory);
+  return reach;
 }

@@ -11,7 +11,7 @@ In Paraglide JS and next-intl projects, Fink labels messages that your code neve
 
 When you open a project, Fink downloads the repository's source code at the commit your draft is based on and finds the calls of each message, such as `m.greeting()` in Paraglide JS or `t("greeting")` in next-intl. The analysis comes from the format's inlang plugin.
 
-Fink scans the package that contains your project: the nearest folder with a `package.json` at or above the project and its translation files, or the whole repository if there is none. Tests, stories, type declarations, `node_modules`, build output and minified files are skipped. Code in other packages of the repository that imports next-intl, or imports from a `paraglide` folder, makes the result incomplete, unless that package has its own inlang project.
+Fink scans the package that contains your project: the nearest folder with a `package.json` at or above the project and its translation files, or the whole repository if there is none. Tests, stories, type declarations, `node_modules`, build output and minified files are skipped. Code that imports next-intl, or imports from a `paraglide` folder, in other packages of the repository is analyzed too when the packages are related in their `package.json` files (one uses the other) or it sits above your package. In any other package it makes the result incomplete, unless that package has its own inlang project.
 
 If Fink can't be sure about every call, it labels no message unused rather than a wrong one. The project bar then shows **Usage in code incomplete**. Click it to see each call or file Fink couldn't analyze, with a link to it on GitHub. Usages it found are still shown.
 
@@ -51,7 +51,7 @@ Fink can't analyze i18next calls yet. i18next projects show no usages and no unu
 
 ## Limits
 
-- **Code outside the scanned package isn't analyzed.** If your messages live in a shared package, for example `packages/i18n`, and the app in `apps/web`, the app's files are listed as not analyzed and the result is incomplete. If no message is called in the scanned code at all, the result is incomplete too.
+- **In other packages,** only files that import next-intl or from a `paraglide` folder are analyzed. If no message is called in the analyzed code at all, the result is incomplete.
 - Messages you add in your draft are never labelled unused.
 - Source files over 512 KB aren't analyzed. If one of them mentions messages, the result is incomplete. Very large repositories can't be scanned.
 
