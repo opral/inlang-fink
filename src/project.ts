@@ -1,4 +1,3 @@
-import mFunctionMatcher from "@inlang/plugin-m-function-matcher";
 import { openProject, selectBundleNested, type InlangProject, type InlangPlugin, type ProjectSettings, type BundleNested } from "@inlang/sdk/browser";
 import { openLix } from "@lix-js/sdk";
 import { OpfsStorage } from "@lix-js/storage-opfs";
@@ -6,9 +5,10 @@ import { draftName } from "./drafts";
 import i18next from "@inlang/plugin-i18next";
 import messageFormat from "@inlang/plugin-message-format";
 import nextIntl from "@inlang/plugin-next-intl";
-import { api, outputPath, repoQuery, resolveResourcePath, type RepoContext, type Repo, type RepoTree } from "./repository";
+import { api, outputPath, projectScope, repoQuery, resolveResourcePath, sourceScope, type RepoContext, type Repo, type RepoTree } from "./repository";
 
 import { settingsSignature } from "./settingsData";
+import { usagePlugin } from "./sourcePaths";
 
 const supported: InlangPlugin<any>[] = [i18next, messageFormat, nextIntl as unknown as InlangPlugin<any>];
 /** The formats of the supported plugins, by plugin key, for messages. */
@@ -26,8 +26,17 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
 }
 /** i18next can express only the exact number 0 (`key_zero`) next to plural categories. */
 export const onlyExactZero = (settings: ProjectSettings) => pluginsFor(settings).some(plugin => plugin.key === i18next.key);
-/** The editor's project also loads the m-function matcher, whose usage analysis powers checks and usages. */
-const editorPlugins = (settings: ProjectSettings): InlangPlugin<any>[] => [...pluginsFor(settings), mFunctionMatcher as InlangPlugin<any>];
+/**
+ * The plugins with the usage analysis behind usages and unused messages: Paraglide JS calls are
+ * analyzed by the m-function matcher, next-intl calls by the next-intl plugin itself. i18next has
+ * no usage analysis, so it gets no analyzer (the SDK reports usage as unavailable, not as unused).
+ * The matcher bundles Babel and Svelte's compiler, so it is loaded only for Paraglide JS projects.
+ */
+export async function editorPlugins(settings: ProjectSettings): Promise<InlangPlugin<any>[]> {
+  const plugins = pluginsFor(settings);
+  if (usagePlugin(settings) !== messageFormat.key) return plugins;
+  return [...plugins, (await import("@inlang/plugin-m-function-matcher")).default as InlangPlugin<any>];
+}
 export const METADATA = "/fink-context.json";
 export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectPath: string, progress: (message: string) => void = () => {}): Promise<LocalProject> {
   const name = await draftName(repo.owner, repo.name, tree.branch, projectPath);
@@ -39,18 +48,20 @@ export async function openRepositoryProject(repo: Repo, tree: RepoTree, projectP
     if (stored.rows[0]) {
       progress("Restoring saved draft…");
       const context: RepoContext = JSON.parse(new TextDecoder().decode(stored.rows[0].content));
-      project = await openProject({ lix, providePlugins: editorPlugins(context.settings) });
+      context.sourceScope = sourceScope(projectScope(context), tree.paths);
+      project = await openProject({ lix, providePlugins: await editorPlugins(context.settings) });
       return { project, context, name, close: async () => { await project!.close(); await lix.close(); } };
     }
     progress("Reading project settings…");
     const rawSettings = await readRemoteFile(repo, tree, `${projectPath}/settings.json`);
     const settings: ProjectSettings = JSON.parse(rawSettings);
     // Plugins are bundled and pinned, never evaluated from an untrusted repository.
-    project = await openProject({ lix, settings: { ...settings, modules: [] }, providePlugins: editorPlugins(settings) });
+    project = await openProject({ lix, settings: { ...settings, modules: [] }, providePlugins: await editorPlugins(settings) });
     // Metadata is the completed-import marker. Reset incomplete imports before retrying.
     await clearMessages(project);
     const context: RepoContext = { ...repo, branch: tree.branch, projectPath, head: tree.head, tree: tree.tree, settings, original: { [`${projectPath}/settings.json`]: rawSettings }, baseline: {} };
     await importResources(project, repo, tree, context, progress);
+    context.sourceScope = sourceScope(projectScope(context), tree.paths);
     progress("Preparing editor…");
     context.bundleBaseline = bundleSignatures(await readBundles(project));
     context.shas = fileShas(tree, context);
@@ -170,7 +181,7 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
     const known = new Set(Object.keys(context.original));
     const added = (await resourcePlans(context.settings, context.projectPath, tree)).some(({ plans }) => plans.some(plan => !known.has(resolveResourcePath(context.projectPath, plan.path))));
     if (!added && tree.shas[settingsPath] === context.shas[settingsPath]) {
-      context.head = tree.head; context.tree = tree.tree;
+      context.head = tree.head; context.tree = tree.tree; context.sourceScope = sourceScope(projectScope(context), tree.paths);
       await saveContext(local);
       return { replaced: [] };
     }
@@ -208,6 +219,7 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
     await replaceBundles(local.project, changed, removedIds);
     progress("Preparing editor…");
     Object.assign(context, { head: tree.head, tree: tree.tree, settings, original: remote.original, baseline: {}, bundleBaseline: bundleSignatures(remoteBundles), shas: fileShas(tree, remote) });
+    context.sourceScope = sourceScope(projectScope(context), tree.paths);
     await saveContext(local);
     return { replaced };
   } finally { if (remoteProject) await remoteProject.close(); await lix.close(); }

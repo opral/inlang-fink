@@ -5,7 +5,7 @@ description: Edit next-intl message files in your GitHub repository with Fink: n
 order: 21
 ---
 
-Fink edits next-intl message files in your GitHub repository: the `messages/{locale}.json` files that `useTranslations` and `getTranslations` read. You see each message's translations side by side, Fink flags missing ones and broken plurals, variables or tags, and it commits only the lines you changed.
+Fink edits next-intl message files in your GitHub repository: the `messages/{locale}.json` files that `useTranslations` and `getTranslations` read. You see each message's translations side by side, Fink flags missing ones and broken plurals, variables or tags, shows where each message is used in your code, and commits only the lines you changed.
 
 ## Set up
 
@@ -60,7 +60,7 @@ Fink writes only the messages you changed. Every other line of the file, its key
 
 ## Limitations
 
-- **Unused messages** are not detected for next-intl projects. Fink's code analysis only understands Paraglide JS calls.
+- **Unused messages and usage in code** come from your `useTranslations`, `getTranslations` and `t()` calls. Dynamic keys, a `t` passed on or exported, wrappers, globbed message catalogs, key types and `t.raw()` or `t.has()` on a namespace make the result incomplete, and Fink labels no message unused. See [Unused messages](/docs/unused-messages#next-intl).
 - **Tags around a plural**, such as `<b>{count, plural, …}</b>`, are written into each form, `{count, plural, one {<b>…</b>} …}`, once you edit the message. next-intl renders both the same.
 - **Self-closing tags** like `<br/>` are text in next-intl. Use `<br></br>`.
 - A message next-intl can't parse is shown as text and written back as it was, unless you edit it.

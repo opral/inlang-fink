@@ -1,6 +1,7 @@
 import { cookie, HttpError, requireSameOrigin, seal, setCookie, tokenFor, unseal, type Session } from "./auth";
 import { boundedJson, fork, github, push, repoBase, validPath, type ForkInput, type PushInput } from "./github";
 import { extractSource, isSourcePath } from "./source";
+import { USAGE_SOURCES } from "../src/sourcePaths";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 type LoginState = { purpose: "oauth"; expires: number; nonce: string; origin: string; verifier: string };
 type Relay = { purpose: "relay"; expires: number; nonce: string; session: string; origin: string };
@@ -149,9 +150,12 @@ export default {
           await archive.body?.cancel();
           throw new HttpError(archive.status === 404 ? 404 : [401, 403, 429].includes(archive.status) ? archive.status : 502, archive.status === 404 ? "Repository or commit not found. Check GitHub App access." : `GitHub archive request failed (${archive.status}). Check permissions and rate limits.`);
         }
-        const files = await extractSource(archive.body, path => isSourcePath(path, scope));
+        // The format's usage analysis: only the files it gets are sent; oversized files and code outside
+        // the scope that call messages are listed, so the result is incomplete instead of wrong.
+        const plugin = url.searchParams.get("plugin") ?? "", source = Object.hasOwn(USAGE_SOURCES, plugin) ? USAGE_SOURCES[plugin] : undefined;
+        const { files, skipped, outside } = await extractSource(archive.body, { keep: path => isSourcePath(path, scope), source, scope });
         // Signed-in requests may include private code: never cache it. Public source is pinned to a commit.
-        return Response.json({ files }, { headers: { "Cache-Control": token ? "no-store" : "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+        return Response.json({ files, skipped, outside }, { headers: { "Cache-Control": token ? "no-store" : "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
       }
       if (url.pathname === "/api/github/commits") {
         const branch = url.searchParams.get("branch") ?? "", path = url.searchParams.get("path") ?? "";

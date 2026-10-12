@@ -317,6 +317,17 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .usage-pager button { width: 26px; height: 26px; padding: 0; box-shadow: none; border-color: var(--border); }
 .usage-status { color: var(--muted); }
 .usage-status.failed { color: #9a3412; }
+.usage-trigger { display: inline-flex; align-items: center; gap: 6px; border: 0; box-shadow: none; background: transparent; padding: 2px 6px; margin: -2px -6px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.usage-trigger:hover, .usage-trigger[aria-expanded="true"] { background: var(--hover); color: var(--text); }
+.usage-dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; }
+.usage-trigger.failed { color: #9a3412; }
+.usage-trigger.failed .usage-dot { background: var(--red); }
+.usage-panel { width: 380px; white-space: normal; }
+.usage-panel-text { margin: 0; padding: 8px 10px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.usage-issues { list-style: none; margin: 0; padding: 0 4px 4px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.usage-issues li { display: flex; flex-direction: column; gap: 2px; padding: 6px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.45; color: var(--text-2); }
+.usage-issues a { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.usage-issues a:hover { color: var(--text); }
 .dialog.wide { width: min(1100px, 100%); }
 .dialog-help { margin: -12px 0 16px; font-size: 13px; color: var(--muted); }
 .dialog .bundle { border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
@@ -451,6 +462,7 @@ body:has(.lixfloat) footer { padding-bottom: 72px; }
   .float-label { display: none; }
   .float-composer { flex-direction: column; }
   .usage-status { display: none; }
+  .usage-trigger { font-size: 0; gap: 0; padding: 6px; }
   .footer-grid { flex-direction: column; text-align: center; }
   .footer-links { flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
   .dialog-backdrop { padding: 12px; }

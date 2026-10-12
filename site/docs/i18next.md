@@ -87,7 +87,7 @@ Fink shows these keys as one message, `cart`, with a form for exactly 0 and the 
 - **Exact numbers:** i18next can only express exactly 0 (`key_zero`) next to the plural categories. Fink won't let you add a form for another exact number in an i18next project.
 - **Formatting with options**, such as `{{value, number, minimumFractionDigits: 2}}`, can't be exported.
 - **Nesting** (`$t(otherKey)`) is kept but can't be edited as a reference.
-- **Unused messages** are not detected for i18next projects. Fink's code analysis only understands Paraglide JS calls.
+- **Unused messages and usage in code** are not available for i18next projects: Fink can't analyze i18next calls yet. The project bar says **Usage in code unavailable**.
 
 ## Moving to Paraglide JS
 

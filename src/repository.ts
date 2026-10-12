@@ -2,7 +2,7 @@ import type { ExportFile, ProjectSettings } from "@inlang/sdk/browser";
 
 export type Repo = { owner: string; name: string; branch?: string; projectPath?: string };
 export type RepoTree = { head: string; tree: string; branch: string; paths: string[]; projects: string[]; shas?: Record<string, string> };
-export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string>; shas?: Record<string, string> };
+export type RepoContext = Repo & { branch: string; projectPath: string; head: string; tree: string; settings: ProjectSettings; original: Record<string, string>; baseline: Record<string, string>; bundleBaseline?: Record<string, string>; shas?: Record<string, string>; sourceScope?: string };
 export function parseRepository(input: string): Repo {
   input = input.trim();
   // "https://github.com/owner/repo", "github.com/owner/repo" (the landing page's example) or "owner/repo".
@@ -48,6 +48,17 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   return result as T;
 }
 export function repoQuery(repo: Repo): string { return new URLSearchParams({ owner: repo.owner, repo: repo.name, ...(repo.branch ? { branch: repo.branch } : {}) }).toString(); }
+/**
+ * The code that can call the project's messages: the package that holds the project, i.e. the
+ * nearest folder with a package.json at or above `scope`, else the whole repository. App code next
+ * to the project folder (`ui/src` for `ui/l10n/app.inlang`) is scanned, so its calls are found.
+ */
+export function sourceScope(scope: string, paths: readonly string[]): string {
+  const packages = new Set(paths.filter(path => path === "package.json" || path.endsWith("/package.json")).map(path => path.slice(0, -"/package.json".length)));
+  const parts = scope ? scope.split("/") : [];
+  for (let length = parts.length; length > 0; length--) if (packages.has(parts.slice(0, length).join("/"))) return parts.slice(0, length).join("/");
+  return "";
+}
 /** The deepest directory containing the project's settings and resource files. */
 export function projectScope(context: Pick<RepoContext, "original" | "projectPath">): string {
   const directories = [context.projectPath, ...Object.keys(context.original)].map(path => path.split("/").slice(0, -1));
