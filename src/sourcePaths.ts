@@ -45,11 +45,26 @@ export function isTestPath(path: string): boolean {
 /** A file whose type can call messages: code, or markup such as MDX. Type declarations can't call them. */
 export const mayCallMessages = (path: string) => (CODE.test(path) || MARKUP.test(path)) && !/\.d\.[cm]?ts$/i.test(path);
 
-/** Markdown code blocks (and in plain Markdown, code spans) are examples, not code that runs. MDX and mdsvex keep spans: a template literal in an expression looks like one. */
-const withoutMarkdownCode = (path: string, content: string) => {
-  const blocks = content.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm, "");
-  return /\.md$/i.test(path) ? blocks.replace(/`[^`\n]+`/g, "") : blocks;
-};
+/**
+ * The text of a file's lines that can run, line by line: Markdown code blocks (and in plain
+ * Markdown, code spans) are examples, not code. MDX and mdsvex keep spans: a template literal in
+ * an expression looks like one. Other files are kept as they are. Stateful: one per file.
+ */
+export function runnableLines(path: string): (line: string) => string {
+  if (!MARKDOWN.test(path)) return line => line;
+  const spans = /\.md$/i.test(path);
+  let fence: { char: string; length: number } | undefined;
+  return line => {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) {
+      if (marker && marker[0] === fence.char && marker.length >= fence.length && /^ {0,3}[`~]+[ \t\r]*$/.test(line)) fence = undefined;
+      return "";
+    }
+    if (marker) { fence = { char: marker[0]!, length: marker.length }; return ""; }
+    return spans ? line.replace(/`[^`]+`/g, "") : line;
+  };
+}
+const withoutMarkdownCode = (path: string, content: string) => content.split("\n").map(runnableLines(path)).join("\n");
 const MARKDOWN = /\.(?:mdx|svx|md)$/i;
 
 /**
@@ -74,7 +89,9 @@ export const USAGE_SOURCES: Record<string, UsageSource> = {
 };
 
 /** The settings key of the project's format plugin that has a usage analysis, if any. */
-export const usagePlugin = (settings: Record<string, unknown>): string | undefined => Object.keys(USAGE_SOURCES).find(key => key in settings);
+export const usagePlugin = (settings: Record<string, unknown>): string | undefined =>
+  // the resource plugin, as in pluginsFor: an entry without a pathPattern isn't one
+  Object.keys(USAGE_SOURCES).find(key => (settings[key] as { pathPattern?: unknown } | undefined)?.pathPattern);
 
 /** Whether a file that passed the path filters goes to `source`'s analysis. */
 export function analyzedFile(source: UsageSource, path: string, content: string): boolean {

@@ -62,6 +62,10 @@ async function analyze(files: Record<string, string>) {
 describe("next-intl usage in code", () => {
   it("uses the next-intl plugin's analysis, not the Paraglide matcher", async () => {
     expect(usagePlugin(settings)).toBe("plugin.inlang.nextIntl");
+    // a leftover message format entry without pathPattern isn't the project's format
+    const leftover = { ...settings, "plugin.inlang.messageFormat": { strict: true } } as ProjectSettings;
+    expect(usagePlugin(leftover)).toBe("plugin.inlang.nextIntl");
+    expect((await editorPlugins(leftover)).map(plugin => plugin.key)).toEqual(["plugin.inlang.nextIntl"]);
     expect((await editorPlugins(settings)).map(plugin => plugin.key)).toEqual(["plugin.inlang.nextIntl"]);
     expect((await editorPlugins({ ...settings, "plugin.inlang.nextIntl": undefined, "plugin.inlang.messageFormat": { pathPattern: "./messages/{locale}.json" } } as unknown as ProjectSettings)).map(plugin => plugin.key)).toEqual(["plugin.inlang.messageFormat", "plugin.inlang.mFunctionMatcher"]);
   });

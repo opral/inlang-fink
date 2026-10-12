@@ -137,3 +137,14 @@ test("Paraglide: in a related package, `m` through an alias is analyzed; in an u
   expect(Object.keys(result.files)).toEqual(["apps/web/src/routes/+page.svelte", "packages/ui/src/Save.svelte"]);
   expect(result.outside).toEqual(["apps/blog/src/Page.svelte"]);
 });
+
+test("an oversized Markdown file whose next-intl calls are only examples in code blocks is not reported", async () => {
+  const filler = "Some prose.\n".repeat(Math.ceil((MAX_FILE + 1) / 12));
+  const example = "# Docs\n\n```tsx\nimport { useTranslations } from 'next-intl';\n```\n\nCall `useTranslations` in components.\n" + filler;
+  const real = filler + "```js\nconst a = 1;\n```\n\nimport { useTranslations } from 'next-intl';\n";
+  const result = await extractSource(archive(
+    entry("repo-sha/docs/guide.md", example),
+    entry("repo-sha/docs/page.md", real),
+  ), { keep: path => isSourcePath(path, ""), source: nextIntl });
+  expect(result.skipped).toEqual(["docs/page.md"]);
+});

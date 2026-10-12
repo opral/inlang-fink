@@ -8,6 +8,7 @@ import nextIntl from "@inlang/plugin-next-intl";
 import { api, outputPath, projectScope, repoQuery, resolveResourcePath, sourceScope, type RepoContext, type Repo, type RepoTree } from "./repository";
 
 import { settingsSignature } from "./settingsData";
+import { usagePlugin } from "./sourcePaths";
 
 const supported: InlangPlugin<any>[] = [i18next, messageFormat, nextIntl as unknown as InlangPlugin<any>];
 /** The formats of the supported plugins, by plugin key, for messages. */
@@ -33,7 +34,7 @@ export const onlyExactZero = (settings: ProjectSettings) => pluginsFor(settings)
  */
 export async function editorPlugins(settings: ProjectSettings): Promise<InlangPlugin<any>[]> {
   const plugins = pluginsFor(settings);
-  if (!(messageFormat.key in settings)) return plugins;
+  if (usagePlugin(settings) !== messageFormat.key) return plugins;
   return [...plugins, (await import("@inlang/plugin-m-function-matcher")).default as InlangPlugin<any>];
 }
 export const METADATA = "/fink-context.json";

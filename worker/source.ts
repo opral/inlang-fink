@@ -1,5 +1,5 @@
 import { HttpError } from "./auth";
-import { analyzedFile, isGeneratedPath, isTestPath, mayCallMessages, type UsageSource } from "../src/sourcePaths";
+import { analyzedFile, isGeneratedPath, isTestPath, mayCallMessages, runnableLines, type UsageSource } from "../src/sourcePaths";
 
 /** App source and markup that can reference messages; generated, test and dependency files are skipped. */
 export function isSourcePath(path: string, scope: string): boolean {
@@ -47,15 +47,18 @@ class Bytes {
     }
     return true;
   }
-  /** Reads `size` bytes in chunks and tells whether their text matches `pattern`, without holding the whole file. */
-  async scan(size: number, pattern: RegExp): Promise<boolean | undefined> {
+  /** Reads `size` bytes in chunks and tells whether their text, line by line through `lines`, matches `pattern`, without holding the whole file. */
+  async scan(size: number, pattern: RegExp, lines: (line: string) => string = line => line): Promise<boolean | undefined> {
     const decoder = new TextDecoder();
-    let left = size, tail = "";
+    let left = size, tail = "", pending = "";
     while (left > 0) {
       const chunk = await this.take(Math.min(64 * 1024, left));
       if (!chunk) return;
       left -= chunk.byteLength;
-      const text = tail + decoder.decode(chunk, { stream: left > 0 });
+      const split = (pending + decoder.decode(chunk, { stream: left > 0 })).split("\n");
+      // an incomplete last line waits for the next chunk, unless it is very long
+      pending = left > 0 && split.at(-1)!.length < 256 * 1024 ? split.pop()! : "";
+      const text = tail + split.map(lines).join("\n") + "\n";
       if (pattern.test(text)) return (await this.skip(left)) ? true : undefined;
       tail = text.slice(-256);
     }
@@ -145,7 +148,7 @@ export async function extractSource(archive: ReadableStream<Uint8Array>, options
       keptElsewhere += size;
       elsewhere.set(path, { content: keptElsewhere <= MAX_KEPT ? content : undefined, imports });
     } else if ((wanted && source) || other) {
-      const found = await bytes.scan(size, wanted ? source!.mentions : source!.imports);
+      const found = await bytes.scan(size, wanted ? source!.mentions : source!.imports, runnableLines(path));
       if (found === undefined || !(await bytes.skip(padded - size))) throw new HttpError(502, "The repository archive ended early.");
       if (found && wanted) skipped.push(path);
       else if (found) elsewhere.set(path, { imports: true });
