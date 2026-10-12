@@ -1,112 +1,55 @@
 # Fink
 
-Fink is free and open source under the [MIT license](./LICENSE). User documentation: [fink.inlang.com/docs](https://fink.inlang.com/docs). The docs and comparison pages are Markdown in `site/`, rendered to static HTML by `scripts/build-site.mjs` during `pnpm build`.
+**The translation editor for your GitHub repo.**
 
-A standalone browser editor for inlang SDK v3 projects. Open a GitHub repository, select a branch and `.inlang` project, edit messages, review the generated resources, and commit directly to that branch.
+Fink is a free, open source editor for the translation files in a GitHub repository. Open a repo in your browser, edit every language of a message side by side, check your work, and commit the changes straight to your branch. Your repository stays the only copy of your translations: nothing to import, export or sync.
 
-## Architecture
+**[fink.inlang.com](https://fink.inlang.com)** · [Documentation](https://fink.inlang.com/docs) · [For teams](https://fink.inlang.com/teams) · [Compared with Crowdin, Lokalise, Weblate and Tolgee](https://fink.inlang.com/compare)
 
-The interface adapts the Fink v2 prototype’s compact project menu, Edit/Changes/Settings navigation, language filters, connected bundle table, and floating changes/download bar. The counter shows changed bundles; review restores the prototype’s rich side-by-side bundle, message, variable, selector, and variant UI. Changed patterns are highlighted and unchanged variants are dimmed. Downloading exports a Lix snapshot. Selectors show their resolver type and offer locale-aware plural categories with examples, plus custom text matches. See [selector match guidance](docs/selector-matches.md).
+## Features
 
-Edits update one bundle and compare persisted semantic baselines in memory; unchanged editors retain their properties. Review opens directly from the changed bundles already loaded from Lix, with no worker queries or file exports. A single full catalog export runs when pushing to serialize GitHub files. See [design and performance QA](docs/design-qa.md) for measurements and verification.
+- **Every language side by side.** One message with all its translations, plural forms and selects. No switching between `en.json` and `de.json`.
+- **Checks before you push.** Missing and empty translations, missing or unknown variables and missing plural forms, with one-click fixes.
+- **Unused messages.** Find messages that nothing in your code uses (Paraglide JS and next-intl).
+- **Commits only what you changed.** Fink writes to your branch and leaves the rest of each file byte for byte as it was. It never force-pushes.
+- **Local drafts.** Unpushed work is kept in your browser, and Fink merges remote changes into your draft if the branch moved.
+- **No account of its own.** Sign in with GitHub. Fink can push only where you have write access and the Inlang GitHub App is installed.
 
-The React SPA runs the inlang SDK and the prototype's published message editor components in the browser. Lix stores each repository/branch/project draft in OPFS. Browser reloads restore the draft; editing needs no server database. Clearing browser storage deletes drafts. OPFS requires a supported browser and a secure origin (or localhost).
+## Supported formats
 
-One Cloudflare Worker serves static assets, handles GitHub App OAuth, and calls GitHub's REST API. There is no git client, git proxy or Render service. Anonymous usage counts go to PostHog through the Worker's `/ingest` proxy (see `src/telemetry.ts` and [/docs/privacy](https://fink.inlang.com/docs/privacy)). Tokens stay in encrypted HttpOnly cookies. Login uses PKCE and encrypted state; sessions expire after at most eight hours. The existing **Inlang** GitHub App is reused. Install the App on repositories you want to push to.
+| Format | Used by |
+| --- | --- |
+| i18next JSON | i18next, react-i18next, next-i18next |
+| next-intl | next-intl (`messages/{locale}.json`) |
+| inlang message format | Paraglide JS |
 
-Commits preserve the existing Git tree and update the branch without force. If the branch moved since the draft was opened, Fink merges the remote changes into the draft first (the remote wins when both sides changed the same message in the same locale) and retries the push. Drafts remain local.
+A repository needs a `project.inlang` folder that tells Fink which format it uses. See [Set up a project](https://fink.inlang.com/docs/set-up-a-project) (for Paraglide JS: `npx @inlang/paraglide-js init`) and [Supported formats](https://fink.inlang.com/docs/formats) for details and limits.
 
-## Supported projects
+## Get started
 
-- SDK v3 `baseLocale` / `locales` settings in unpacked `*.inlang/settings.json` files. No legacy SDK compatibility.
-- Bundled, pinned inlang message-format and i18next plugins, including i18next namespaces. Configure one resource plugin per project. Arbitrary remote plugin code is not executed.
-- Message variables, expressions, selectors, plural variants, match conditions, missing translations, and adding/deleting messages and variants through the published editor components.
-- JSON resources up to 1 MiB per file; up to 100 changed resource files and 5 MiB per push. GitHub truncated repository trees are rejected.
+1. Go to [fink.inlang.com](https://fink.inlang.com) and paste a GitHub repository URL.
+2. Pick a branch and project, then edit the messages.
+3. Review the changes and push.
 
-File formatting follows the resource plugin on changed files. Untouched files are excluded from commits. The shared settings form edits reference locale, locales, and experimental flags. Settings are saved in the OPFS draft, reviewed, and pushed alongside translations. Plugin configuration remains defined in the repository. The read API uses GitHub's anonymous quota until sign-in.
+The [getting started guide](https://fink.inlang.com/docs/getting-started) walks through it. Not sure where to start? [Community projects](https://fink.inlang.com/) lists repositories that use Fink.
 
-## Development
+## Privacy
 
-Use Node 22+ and the pnpm version in `package.json`.
+Drafts stay in your browser until you push. Fink's server only forwards requests to GitHub and stores nothing. Fink counts usage with a few anonymous events and never sends message texts, keys or file names. See [Privacy and telemetry](https://fink.inlang.com/docs/privacy).
+
+## Contributing
+
+Fink is part of [inlang](https://inlang.com). Issues and pull requests are welcome. You need Node 22+ and the pnpm version in `package.json`.
 
 ```sh
 pnpm install --frozen-lockfile
 cp .dev.vars.example .dev.vars
 pnpm build
 pnpm dev:worker
-# Optional: Vite with hot reload in a second terminal
-pnpm dev
 ```
 
-Configure `.dev.vars` for local GitHub sign-in; an empty secret still permits public repository reads. Local OAuth needs an App callback pointing to your local Worker. `GITHUB_CALLBACK_ORIGIN` must match that callback origin.
+An empty secret in `.dev.vars` still allows reading public repositories. Run `pnpm check` for typecheck, unit tests and build, and `pnpm test:e2e` for the browser test. Maintainers: see [deployment notes](docs/deployment.md).
 
-```sh
-pnpm check
-pnpm exec playwright install chromium
-pnpm test:e2e
-```
+## License
 
-The browser test runs the production build through Wrangler. It edits plain and plural translations, checks OPFS reload persistence and unchanged plural matches, and verifies that only edited files are submitted. GitHub requests are mocked; it does not prove live OAuth credentials or GitHub permissions.
-
-## Cloudflare deployment
-
-Workers Static Assets serves the SPA. The Worker needs no paid storage service. Hosting remains subject to Cloudflare's free-plan quotas. The SDK's 81 MiB Lix engine exceeds the per-asset limit: the Vite adapter emits a roughly 19 MiB gzip asset and decompresses it in the browser before WebAssembly compilation. The build rejects an incompatible upstream loader change. SDK and Lix versions are pinned.
-
-Deployment credentials come from **Infisical**, using GitHub Actions OIDC. No long-lived Infisical credential is stored in GitHub. Create a Fink folder in your Infisical project containing:
-
-| Infisical secret | Value |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Token with Workers Scripts edit access for the Opral account |
-| `GITHUB_CLIENT_SECRET` | Existing Inlang App's OAuth client secret |
-| `SESSION_SECRET` | Random secret with at least 32 characters, shared across Workers |
-| `GITHUB_CLIENT_ID` (optional) | Override the public Inlang App client ID in `wrangler.jsonc` |
-
-Create separate Infisical OIDC identities for preview and production, with read access to this folder. Use issuer `https://token.actions.githubusercontent.com`, audience `https://github.com/opral`, and bind the `repository` claim to `opral/inlang-fink`. Bind `sub` to `repo:opral/inlang-fink:environment:preview` or `repo:opral/inlang-fink:environment:production`, respectively.
-
-Set these **GitHub repository variables**:
-
-| Variable | Value |
-| --- | --- |
-| `INFISICAL_PROJECT_SLUG` | Infisical project slug |
-| `INFISICAL_PREVIEW_IDENTITY_ID` | Preview OIDC identity UUID |
-| `INFISICAL_PRODUCTION_IDENTITY_ID` | Production OIDC identity UUID |
-| `INFISICAL_ENVIRONMENT` (optional) | Secret environment slug; defaults to `prod` |
-| `INFISICAL_SECRET_PATH` (optional) | Secret folder; defaults to `/fink` |
-| `INFISICAL_DOMAIN` (optional) | Infisical origin; defaults to `https://app.infisical.com` |
-
-The deploy script supplies only the GitHub client secret and session secret to Worker bindings through a private temporary file, then deletes the file. The Cloudflare API token is used only to authorize deployment. CI fetches secrets after building and testing the SPA.
-
-The existing App needs these callback URLs, next to its live (Render) callback:
-
-- `https://fink-migration-preview.opral.workers.dev/api/auth/callback`: the stable callback Worker, set as `GITHUB_CALLBACK_ORIGIN` in `wrangler.jsonc`. Login on any workers.dev origin (`fink.opral.workers.dev`, PR previews) goes through it. It relays the sealed session to the origin that started the login. Credentials are never sent in browser-readable JSON. Only `fink.inlang.com`, `fink.opral.workers.dev`, `fink-pr-<number>.opral.workers.dev` and the `GITHUB_CALLBACK_ORIGIN` origin itself (e.g. `http://localhost:8787` locally) are accepted. Keep the `fink-migration-preview` Worker: workers.dev logins and PR previews depend on it.
-- `https://fink.inlang.com/api/auth/callback`: login on `fink.inlang.com` completes on that domain. Add it before DNS points at the Worker.
-
-Every Worker shares `SESSION_SECRET`, so a session sealed by the callback Worker opens on the others.
-
-The workflow builds, tests, and deploys same-repository PRs to `fink-pr-<number>.opral.workers.dev`, registers a GitHub environment URL, and deletes the Worker when the PR closes. Fork PRs run checks without receiving secrets. Merges to `main` deploy both the `fink` Worker and the stable callback Worker. A workflow dispatch also deploys production. Deployment fails with a setup message when required secrets are missing. This repository is configured to read the Inlang project (`inlang-mzyi`), production environment, `/fink` folder.
-
-For manual deployment, sign in to Infisical and inject the same folder's secrets (replace the project ID, environment and path with your configured values):
-
-```sh
-infisical login
-infisical run --projectId <project-id> --env prod --path /fink -- pnpm deploy:preview
-```
-
-`pnpm deploy:preview` updates the stable preview Worker. `pnpm deploy:production` updates both production and the stable callback Worker. Both commands require Infisical's three deployment secrets in the environment and build before deploying.
-
-Switching `fink.inlang.com` and retiring Render are separate rollout steps after live sign-in/push validation. `wrangler.jsonc` attaches no route or custom domain, and a test keeps it that way: every Worker deploys with it, and Wrangler in CI replaces existing domains and DNS records without asking. To switch, add the `fink.inlang.com` callback URL above, delete the `fink` CNAME to Render in the `inlang.com` zone, and add `fink.inlang.com` as a Custom Domain of the `fink` Worker (Workers & Pages → fink → Settings → Domains & Routes). Do the last two steps back to back: resolvers that look the name up in between can cache "no such name" for up to 30 minutes (the zone's negative-cache TTL). Deploys leave Custom Domains that the config doesn't declare in place. Afterwards, remove `fink.inlang.com` from the Render service. To declare it in code instead, pass `--domain fink.inlang.com` in `scripts/deploy.mjs` for the `fink` target only.
-
-## Extracted history
-
-The extraction starts at `opral/inlang` commit `494db8fe8f4923ce5c5f68f6f0934d9054e288f3`. `git-filter-repo` retained 240 commits affecting historical Fink paths and moved their contents to the repository root. The destination repository's history was merged rather than replaced.
-
-```sh
-git filter-repo --force \
-  --path packages/fink/ --path packages/fink2/ \
-  --path inlang/packages/fink/ --path inlang/source-code/fink2/ \
-  --path-rename packages/fink/: --path-rename packages/fink2/: \
-  --path-rename inlang/packages/fink/: --path-rename inlang/source-code/fink2/: \
-  --refs main
-```
-
-Hashes change during filtering. The extraction merge precedes the standalone implementation so the original prototype history remains inspectable.
+[MIT](./LICENSE)
