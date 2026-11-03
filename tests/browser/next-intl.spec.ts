@@ -95,25 +95,84 @@ test("next-intl: unused messages, where each message is used (also in MDX), with
   await stubApi(page, { sourceRequests });
   await openRepository(page);
   const title = page.locator('[data-bundle="Home.title"]');
-  await expect(title.locator(".message-where")).toHaveText("A heading on Home · code", { timeout: 90_000 });
+  const disclosure = title.getByRole("button", { name: "Used in src/app/[locale]/page.tsx:5", exact: true });
+  const source = title.getByRole("region", { name: "Source usage of Home.title", includeHidden: true });
+  await expect(disclosure).toBeVisible({ timeout: 90_000 });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(source).toBeHidden();
+  await expect(disclosure).toHaveAttribute("aria-controls", (await source.getAttribute("id"))!);
   expect(sourceRequests[0]!.searchParams.get("plugin")).toBe("plugin.inlang.nextIntl");
-  await title.getByRole("button", { name: "code" }).click();
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await expect(source).toBeVisible();
   await expect(title.locator(".usage-code mark")).toHaveText('t("title", { appName: "Shop" })');
   await expect(title.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/app/%5Blocale%5D/page.tsx#L5`);
   // only called in MDX
   const summary = page.locator('[data-bundle="Checkout.Summary.title"]');
-  await expect(summary.locator(".message-where")).toHaveText("A heading on Checkout · code");
+  await summary.getByRole("button", { name: "Used in src/app/[locale]/checkout/page.mdx:5", exact: true }).click();
+  await expect(summary.getByRole("region", { name: "Source usage of Checkout.Summary.title" })).toBeVisible();
+  await expect(summary.locator(".usage-code mark")).toHaveText('t("title")');
+  await expect(summary.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/app/%5Blocale%5D/checkout/page.mdx#L5`);
   await expect(summary.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);
   await expect(page.locator('[data-bundle="Home.cart"] .message-status')).toHaveText("Not used in code");
   await expect(page.locator('[data-bundle="Home.terms"] .message-status')).toHaveText("Not used in code");
   await expect(page.getByRole("button", { name: /Usage in code/ })).toHaveCount(0);
 });
 
+test("shared descriptions cancel, persist edits and clearing across reloads, and push only companion metadata", async ({ page }) => {
+  const pushes: { files: Record<string, string> }[] = [];
+  const original = "Main screen heading.";
+  const edited = "Main screen heading.\nKeep the {appName} placeholder.";
+  const descriptionPath = "project.inlang/descriptions.json";
+  await stubApi(page, { pushes, files: {
+    ...files,
+    [descriptionPath]: JSON.stringify({ version: 1, descriptions: { "Home.title": original } }),
+  } });
+  await openRepository(page);
+  const description = page.locator('[data-bundle="Home.title"] inlang-bundle-description');
+  const input = description.getByRole("textbox", { name: "Description", exact: true });
+  await expect(description.getByRole("button", { name: `Edit description: ${original}`, exact: true })).toBeVisible({ timeout: 90_000 });
+
+  // Typing and leaving the textarea do not commit a draft; Cancel discards it.
+  await description.getByRole("button", { name: `Edit description: ${original}`, exact: true }).click();
+  await input.fill("Discard this draft");
+  await input.press("Tab");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toBeHidden();
+  await description.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(description.getByRole("button", { name: `Edit description: ${original}`, exact: true })).toBeVisible();
+
+  await description.getByRole("button", { name: `Edit description: ${original}`, exact: true }).click();
+  await input.fill(edited);
+  await description.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await expect(page.getByRole("complementary", { name: "Pending changes" })).toContainText("1 change");
+  await page.reload();
+  await expect(description.getByRole("button", { name: /^Edit description:/ })).toHaveText(edited, { timeout: 60_000 });
+
+  await description.getByRole("button", { name: /^Edit description:/ }).click();
+  await description.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.reload();
+  await expect(description.getByRole("button", { name: "Add description", exact: true })).toBeVisible({ timeout: 60_000 });
+
+  // Saving through the keyboard follows the same bundle change and Git path.
+  await description.getByRole("button", { name: "Add description", exact: true }).click();
+  await input.fill(edited);
+  await input.press("Control+Enter");
+  await expect(page.locator(".save-status")).toHaveText("Draft saved locally");
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await page.getByRole("button", { name: "Push", exact: true }).click();
+  await expect.poll(() => pushes.length).toBe(1);
+  expect(Object.keys(pushes[0]!.files)).toEqual([descriptionPath]);
+  expect(JSON.parse(pushes[0]!.files[descriptionPath]!)).toEqual({ version: 1, descriptions: { "Home.title": edited } });
+  await expect(page.getByRole("complementary", { name: "Changes" })).toContainText("Pushed to main");
+});
+
 test("next-intl: a dynamic t(key) makes usage incomplete, says where, and labels no message unused", async ({ page }) => {
   const field = `import { useTranslations } from "next-intl";\n\nexport function Field({ name }: { name: string }) {\n  const t = useTranslations("Home");\n  return <label>{t(name)}</label>;\n}\n`;
   await stubApi(page, { code: { ...app, "src/components/Field.tsx": field } });
   await openRepository(page);
-  await expect(page.locator('[data-bundle="Home.title"] .message-where')).toHaveText("A heading on Home · code", { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="Home.title"]').getByRole("button", { name: "Used in src/app/[locale]/page.tsx:5", exact: true })).toBeVisible({ timeout: 90_000 });
   const status = page.getByRole("button", { name: "Usage in code incomplete" });
   await expect(status).toBeVisible();
   await expect(page.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);
@@ -142,7 +201,7 @@ test("i18next: Fink says usage in code is unavailable instead of hiding it", asy
 test("next-intl: files Fink didn't analyze, or code that calls no message, make usage incomplete instead of labelling messages unused", async ({ page }) => {
   await stubApi(page, { unanalyzed: { skipped: ["src/app/[locale]/huge.tsx"], outside: ["packages/ui/src/Card.tsx"] } });
   await openRepository(page);
-  await expect(page.locator('[data-bundle="Home.title"] .message-where')).toHaveText("A heading on Home · code", { timeout: 90_000 });
+  await expect(page.locator('[data-bundle="Home.title"]').getByRole("button", { name: "Used in src/app/[locale]/page.tsx:5", exact: true })).toBeVisible({ timeout: 90_000 });
   const status = page.getByRole("button", { name: "Usage in code incomplete" });
   await expect(status).toBeVisible();
   await expect(page.locator(".message-status", { hasText: "Not used in code" })).toHaveCount(0);

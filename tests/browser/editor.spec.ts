@@ -536,23 +536,39 @@ test("branch menu keeps a separate draft per branch and history marks the draft 
   await expect(page.getByRole("button", { name: "Open example/repo" }).first()).toContainText("1 unpushed");
 });
 
-test("says where each message is used, with the code one click away", async ({ page }) => {
+test("source disclosures name the file and line, expose accessible code, and page through usages", async ({ page }) => {
   await stubApi(page, { ...resources, "messages/en.json": JSON.stringify({ ...JSON.parse(resources["messages/en.json"]!), legacy_banner: "Old banner" }), "messages/de.json": JSON.stringify({ hello: "Hallo", legacy_banner: "Altes Banner" }) });
   await openRepository(page);
   const hello = page.locator('[data-bundle="hello"]');
-  await expect(hello.locator(".message-where")).toHaveText("A button on Home · code", { timeout: 90_000 });
-  await hello.getByRole("button", { name: "code" }).click();
+  const disclosure = hello.getByRole("button", { name: "Used in src/routes/+page.svelte:6", exact: true });
+  const source = hello.getByRole("region", { name: "Source usage of hello", includeHidden: true });
+  await expect(disclosure).toBeVisible({ timeout: 90_000 });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(source).toBeHidden();
+  await expect(disclosure).toHaveAttribute("aria-controls", (await source.getAttribute("id"))!);
+  await disclosure.focus();
+  await disclosure.press("Enter");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await expect(source).toBeVisible();
   await expect(hello.locator(".usage-code .hit")).toContainText("{m.hello()}");
   await expect(hello.locator(".usage-code mark")).toHaveText("m.hello()");
+  await expect(hello.locator(".usage-code")).toHaveAttribute("data-source-path", "src/routes/+page.svelte");
+  await expect(hello.locator(".usage-code")).toHaveAttribute("data-source-line", "6");
   await expect(hello.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/routes/+page.svelte#L6`);
-  await hello.getByRole("button", { name: "hide code" }).click();
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(source).toBeHidden();
   await expect(hello.locator(".usage-code")).toHaveCount(0);
   const items = page.locator('[data-bundle="items"]');
-  await expect(items.locator(".message-where")).toContainText("used in 2 places");
-  await items.getByRole("button", { name: "code" }).click();
+  const itemsDisclosure = items.getByRole("button", { name: "Used in src/lib/cart.ts:2 and 1 other place", exact: true });
+  await itemsDisclosure.click();
   await expect(items).toContainText("1 of 2");
+  await expect(items.locator("a.usage-path")).toHaveText("src/lib/cart.ts:2");
+  await expect(items.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/lib/cart.ts#L2`);
   await items.getByRole("button", { name: "Next usage" }).click();
   await expect(items).toContainText("2 of 2");
+  await expect(items.locator("a.usage-path")).toHaveText("src/routes/+page.svelte:8");
+  await expect(items.locator("a.usage-path")).toHaveAttribute("href", `https://github.com/example/repo/blob/${"a".repeat(40)}/src/routes/+page.svelte#L8`);
   await expect(page.locator('[data-bundle="legacy_banner"] .message-status')).toHaveText("Not used in code");
 });
 
