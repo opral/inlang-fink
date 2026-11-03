@@ -423,5 +423,8 @@ export async function preparePush(local: LocalProject): Promise<{ files: Record<
   const companion = await syncBundleDescriptions(local.project);
   if (companion) files[`${local.context.projectPath}/descriptions.json`] = new TextDecoder().decode(companion.content);
   if (settingsChanges(local)) files[`${local.context.projectPath}/settings.json`] = JSON.stringify(local.context.settings, null, 2) + "\n";
+  // Description edits can ask every locale to export; only changed native or
+  // companion files belong in the commit, not byte-identical runtime catalogs.
+  for (const [path, content] of Object.entries(files)) if (content === (local.context.baseline?.[path] ?? local.context.original[path])) delete files[path];
   return { files, pruned: blankIds.length > 0 };
 }
