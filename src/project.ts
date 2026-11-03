@@ -28,8 +28,8 @@ export function pluginsFor(settings: ProjectSettings): InlangPlugin<any>[] {
 export const onlyExactZero = (settings: ProjectSettings) => pluginsFor(settings).some(plugin => plugin.key === i18next.key);
 /**
  * The plugins with the usage analysis behind usages and unused messages: Paraglide JS calls are
- * analyzed by the m-function matcher, next-intl calls by the next-intl plugin itself. i18next has
- * no usage analysis, so it gets no analyzer (the SDK reports usage as unavailable, not as unused).
+ * analyzed by the m-function matcher, next-intl calls by the next-intl plugin itself. Fink does
+ * not enable i18next source scans yet, so its usage remains explicitly unavailable.
  * The matcher bundles Babel and Svelte's compiler, so it is loaded only for Paraglide JS projects.
  */
 export async function editorPlugins(settings: ProjectSettings): Promise<InlangPlugin<any>[]> {
