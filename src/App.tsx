@@ -347,7 +347,7 @@ export default function App() {
     // Strip nested UI data; the SDK stores three separate tables.
     if (detail.entity === "bundle") {
       const value = data as BundleNested;
-      await db.insertInto("inlang_bundle").values({ id: value.id, declarations: value.declarations }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations })).execute();
+      await db.insertInto("inlang_bundle").values({ id: value.id, declarations: value.declarations, description: value.description }).onConflict(oc => oc.column("id").doUpdateSet({ declarations: value.declarations, ...(value.description !== undefined ? { description: value.description } : {}) })).execute();
     } else if (detail.entity === "message") {
       const value = data as BundleNested["messages"][number];
       await db.insertInto("inlang_message").values({ id: value.id, bundle_id: value.bundle_id, locale: value.locale, selectors: value.selectors }).onConflict(oc => oc.column("id").doUpdateSet({ selectors: value.selectors })).execute();

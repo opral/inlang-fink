@@ -209,10 +209,16 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .message-title .dropdown { margin-left: auto; }
 .message-menu { border: 0; box-shadow: none; background: transparent; width: 36px; height: 30px; padding: 0; color: var(--text-2); letter-spacing: 1px; }
 .message-menu:hover { background: #e4e4e7; }
-.message-where { margin: 0 0 1px; font-size: 13px; color: var(--text-2); }
-.message-where .inline-link { color: var(--text-2); }
+.message-context { margin: 2px 0 1px; font-size: 13px; color: var(--text-2); --inlang-text: var(--text); --inlang-text-muted: var(--text-2); --inlang-text-subtle: var(--muted); --inlang-border: var(--border); --inlang-border-strong: var(--border-strong); --inlang-surface: var(--surface); --inlang-hover: var(--hover); --inlang-accent: var(--focus); --inlang-radius-small: var(--radius); }
+.message-context .inline-link { color: var(--text-2); }
+.usage-reference { align-self: flex-start; display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; margin-top: 3px; padding: 2px 0; border: 0; box-shadow: none; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 400; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.usage-reference:hover { background: transparent; color: var(--text); }
+.usage-reference svg { flex: none; align-self: center; transition: transform .12s; }
+.usage-reference[aria-expanded="true"] svg { transform: rotate(90deg); }
+.usage-reference-path { font-family: var(--mono); }
+.usage-reference-count { color: var(--muted); }
 .message-row { display: grid; grid-template-columns: 148px minmax(0, 1fr); border-top: 1px solid #efeff1; }
-.message-head + .message-row, .usage-code-block + .message-row { border-top: 0; }
+.message-head + .message-row, .message-source + .message-row, .usage-code-block + .message-row { border-top: 0; }
 .message-locale { background: #fafafa; border-right: 1px solid #efeff1; padding: 12px 14px 12px 16px; display: flex; align-items: baseline; gap: 7px; font-size: 13px; color: var(--text-2); min-width: 0; }
 .message-locale b { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
 .locale-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -266,11 +272,12 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .others-state::before { content: "· "; }
 .others-state.todo { color: var(--text-2); }
 .message-note { margin: 0; padding: 8px 16px; border-top: 1px solid #efeff1; font-size: 13px; color: var(--text-2); }
-.message-card > .usage-code-block { background: var(--bg); border-bottom: 1px solid var(--border); padding: 6px 0 8px; gap: 2px; }
-.message-card > .usage-code-block .usage-code { border-radius: 0; background: transparent; }
-.message-card > .usage-code-block .usage-code > code > span { background: var(--bg); }
-.message-card > .usage-code-block .usage-code > code > .hit { background: var(--subtle); }
-.message-card > .usage-code-block .usage-code .ln { box-sizing: content-box; width: var(--ln-width, 3ch); padding: 0 14px 0 16px; }
+.message-source { padding: 14px 16px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.message-source .usage-code-block { gap: 8px; }
+.message-source .usage-code { padding: 12px 14px; background: var(--subtle); }
+.message-source .usage-code > code > span, .message-source .usage-code > code > .hit { background: transparent; }
+.message-source .usage-code .ln { display: none; }
+.message-source .usage-code mark { color: var(--blue); background: var(--blue-bg); border-radius: 3px; font-weight: 500; }
 /* Code peek syntax colours, kept quiet so the marked call stands out. */
 .usage-code .tk-comment { color: #a1a1aa; font-style: italic; }
 .usage-code .tk-string { color: #15803d; }
@@ -281,7 +288,8 @@ main { flex: 1; padding-top: 24px; padding-bottom: 120px; }
 .usage-code .tk-call { color: #1e40af; }
 .usage-code .tk-punct { color: #71717a; }
 .usage-code > code > span { color: #3f3f46; }
-.message-card > .usage-code-block .usage-code-foot { padding: 0 16px; }
+.message-source .usage-path { font-family: var(--font); }
+@media (prefers-reduced-motion: reduce) { .usage-reference svg { transition: none; } }
 .inline-link { border: 0; background: transparent; box-shadow: none; padding: 4px 2px; margin: -4px 0; font: inherit; font-size: inherit; font-weight: 400; color: inherit; text-decoration: underline; text-decoration-color: #a1a1aa; text-underline-offset: 2px; }
 .inline-link:hover { background: transparent; color: var(--text); }
 .form-count, .muted { color: var(--muted); font-size: 13px; }

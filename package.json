@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "demo:descriptions": "vite preview --config scripts/descriptions-demo.config.ts",
     "dev:worker": "wrangler dev",
     "build": "vite build && node scripts/prepare-assets.mjs && node scripts/build-site.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
@@ -28,8 +29,8 @@
     "@inlang/sdk": "4.0.3",
     "@inlang/settings-component": "5.0.0",
     "@lit/react": "^1.0.8",
-    "@lix-js/sdk": "0.19.0",
-    "@lix-js/storage-opfs": "0.19.0",
+    "@lix-js/sdk": "0.20.1",
+    "@lix-js/storage-opfs": "0.20.1",
     "@shoelace-style/shoelace": "2.20.1",
     "posthog-js": "^1.438.3",
     "react": "^19.2.0",

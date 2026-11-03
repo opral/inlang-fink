@@ -33,11 +33,11 @@ importers:
         specifier: ^1.0.8
         version: 1.0.8(@types/react@19.3.0)
       '@lix-js/sdk':
-        specifier: 0.19.0
-        version: 0.19.0
+        specifier: 0.20.1
+        version: 0.20.1
       '@lix-js/storage-opfs':
-        specifier: 0.19.0
-        version: 0.19.0(@lix-js/sdk@0.19.0)
+        specifier: 0.20.1
+        version: 0.20.1(@lix-js/sdk@0.20.1)
       '@shoelace-style/shoelace':
         specifier: 2.20.1
         version: 2.20.1(@floating-ui/utils@0.2.12)(@types/react@19.3.0)
@@ -688,10 +688,13 @@ packages:
   '@lix-js/sdk@0.19.0':
     resolution: {integrity: sha512-ks7hKZdJGH0APlSLWtFYCXDO3yIoleoPqzLgkZYtMbaiWRN2Ih772tNGGBZFLKbutq6DuNRwcjNkG94KqWRbBA==}
 
-  '@lix-js/storage-opfs@0.19.0':
-    resolution: {integrity: sha512-NsuSepJKYqAfrU4vE8xHe3BtzjBNcKNIYIcQsdOObX2UqOq8OW/whwTBi2NyDZBBbHWPmPr6Q7tpaRs/a1W36w==}
+  '@lix-js/sdk@0.20.1':
+    resolution: {integrity: sha512-oscOFP8Cr1My6Wh2KVYC9+aJ1mHs+d7vnD+7PPJaA4L+Y1FR37Sm99SrFGfvUizaj/XtRi2GlDF2IOFt9iXMNQ==}
+
+  '@lix-js/storage-opfs@0.20.1':
+    resolution: {integrity: sha512-0vmdK26v9VWC8XW2/sFsXqusUzFbfmmI2m0Xrn3jOxt5Ilg3r7mYduTfWKBySObbmEUyk4adr6r2aUV6rVo6vg==}
     peerDependencies:
-      '@lix-js/sdk': 0.19.0
+      '@lix-js/sdk': 0.20.1
 
   '@napi-rs/wasm-runtime@1.2.5':
     resolution: {integrity: sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA==}
@@ -2339,9 +2342,15 @@ snapshots:
       binaryen: 130.0.0
       fflate: 0.8.3
 
-  '@lix-js/storage-opfs@0.19.0(@lix-js/sdk@0.19.0)':
+  '@lix-js/sdk@0.20.1':
     dependencies:
-      '@lix-js/sdk': 0.19.0
+      '@bytecodealliance/jco-transpile': 0.13.0
+      binaryen: 130.0.0
+      fflate: 0.8.3
+
+  '@lix-js/storage-opfs@0.20.1(@lix-js/sdk@0.20.1)':
+    dependencies:
+      '@lix-js/sdk': 0.20.1
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
 
   '@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':

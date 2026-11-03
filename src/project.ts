@@ -1,4 +1,4 @@
-import { openProject, selectBundleNested, type InlangProject, type InlangPlugin, type ProjectSettings, type BundleNested } from "@inlang/sdk/browser";
+import { syncBundleDescriptions, openProject, selectBundleNested, type InlangProject, type InlangPlugin, type ProjectSettings, type BundleNested } from "@inlang/sdk/browser";
 import { openLix } from "@lix-js/sdk";
 import { OpfsStorage } from "@lix-js/storage-opfs";
 import { draftName } from "./drafts";
@@ -89,6 +89,9 @@ async function resourcePlans(settings: ProjectSettings, projectPath: string, tre
 }
 /** Downloads the project's resource files at `tree.head` and imports them; records raw files in `context.original`. */
 async function importResources(project: InlangProject, repo: Repo, tree: RepoTree, context: RepoContext, progress: (message: string) => void) {
+  const descriptionPath = `${context.projectPath}/descriptions.json`;
+  const description = tree.paths.includes(descriptionPath) ? await readRemoteFile(repo, tree, descriptionPath) : undefined;
+  if (description !== undefined) context.original[descriptionPath] = description;
   for (const { plugin, plans: available } of await resourcePlans(context.settings, context.projectPath, tree)) {
     const files = new Array<{ locale: string; content: Uint8Array; toBeImportedFilesMetadata: (typeof available)[number]["metadata"] }>(available.length);
     // Keep requests bounded while avoiding one network round-trip per language.
@@ -107,7 +110,7 @@ async function importResources(project: InlangProject, repo: Repo, tree: RepoTre
       }
     }));
     progress(`Importing ${files.length} language files…`);
-    await project.importFiles({ pluginKey: plugin.key, files });
+    await project.importFiles({ pluginKey: plugin.key, files: [...files, ...(description === undefined ? [] : [{ locale: "", content: new TextEncoder().encode(description), toBeImportedFilesMetadata: { inlangDescriptions: true } }])] });
   }
 }
 
@@ -130,11 +133,13 @@ export function mergeBundles(base: Record<string, string>, local: BundleNested[]
     // Both changed. A deletion on either side against an edit on the other: the remote decides.
     if (!ours || !theirs) { replaced.push(id); if (theirs) bundles.push(theirs); continue; }
     // Both edited: merge declarations and each locale separately.
-    const before = original ? JSON.parse(original) as { declarations: unknown; messages: MessageShape[] } : { declarations: [], messages: [] };
+    const before = original ? JSON.parse(original) as { declarations: unknown; description?: string | null; messages: MessageShape[] } : { declarations: [], messages: [] };
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     const declarations = same(theirs.declarations, before.declarations) ? ours.declarations : theirs.declarations;
     let lost = !same(ours.declarations, before.declarations) && !same(declarations, ours.declarations);
-    const merged: BundleNested = { ...theirs, declarations, messages: [] };
+    const description = (theirs.description ?? null) === (before.description ?? null) ? ours.description : theirs.description;
+    lost ||= (ours.description ?? null) !== (before.description ?? null) && (description ?? null) !== (ours.description ?? null);
+    const merged: BundleNested = { ...theirs, declarations, description, messages: [] };
     for (const locale of new Set([...theirs.messages, ...ours.messages].map(message => message.locale))) {
       const a = ours.messages.find(message => message.locale === locale), b = theirs.messages.find(message => message.locale === locale);
       const o = before.messages.find(message => message.locale === locale);
@@ -180,7 +185,9 @@ export async function syncWithRemote(local: LocalProject, repo: Repo, tree: Repo
   if (tree.shas && context.shas && Object.keys(context.original).every(path => context.shas![path] && context.shas![path] === tree.shas![path])) {
     const known = new Set(Object.keys(context.original));
     const added = (await resourcePlans(context.settings, context.projectPath, tree)).some(({ plans }) => plans.some(plan => !known.has(resolveResourcePath(context.projectPath, plan.path))));
-    if (!added && tree.shas[settingsPath] === context.shas[settingsPath]) {
+    const descriptionPath = `${context.projectPath}/descriptions.json`;
+    const addedDescriptions = tree.paths.includes(descriptionPath) && !known.has(descriptionPath);
+    if (!added && !addedDescriptions && tree.shas[settingsPath] === context.shas[settingsPath]) {
       context.head = tree.head; context.tree = tree.tree; context.sourceScope = sourceScope(projectScope(context), tree.paths);
       await saveContext(local);
       return { replaced: [] };
@@ -260,14 +267,14 @@ export async function replaceBundles(project: InlangProject, changed: BundleNest
       await tx.deleteFrom("inlang_message").where("bundle_id", "in", ids).execute();
       await tx.deleteFrom("inlang_bundle").where("id", "in", ids).execute();
     }
-    for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations })), 500)) await tx.insertInto("inlang_bundle").values(rows).execute();
+    for (const rows of chunks(changed.map(bundle => ({ id: bundle.id, declarations: bundle.declarations, description: bundle.description ?? null })), 500)) await tx.insertInto("inlang_bundle").values(rows).execute();
     for (const rows of chunks(messages, 500)) await tx.insertInto("inlang_message").values(rows).execute();
     for (const rows of chunks(variants, 500)) await tx.insertInto("inlang_variant").values(rows).execute();
   });
 }
 /** Compare editable content, excluding IDs regenerated by resource imports. */
 export function bundleSignature(bundle: BundleNested): string {
-  return JSON.stringify({ declarations: bundle.declarations, messages: bundle.messages.filter(message => !isBlankMessage(message)).map(message => ({
+  return JSON.stringify({ declarations: bundle.declarations, description: bundle.description ?? null, messages: bundle.messages.filter(message => !isBlankMessage(message)).map(message => ({
     locale: message.locale, selectors: message.selectors,
     variants: message.variants.map(variant => ({ matches: variant.matches, pattern: variant.pattern })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   })).sort((a, b) => a.locale.localeCompare(b.locale)) });
@@ -277,7 +284,13 @@ export function bundleSignatures(bundles: BundleNested[]): Record<string, string
 }
 /** Upgrade old persisted drafts without replacing their edited OPFS database. */
 export async function getBaselineSignatures(local: LocalProject): Promise<Record<string, string>> {
-  if (local.context.bundleBaseline) return local.context.bundleBaseline;
+  if (local.context.bundleBaseline) {
+    // Baselines written before descriptions existed remain semantically equivalent.
+    return Object.fromEntries(Object.entries(local.context.bundleBaseline).map(([id, signature]) => {
+      const row = JSON.parse(signature);
+      return [id, JSON.stringify({ declarations: row.declarations, description: row.description ?? null, messages: row.messages })];
+    }));
+  }
   const lix = await openLix();
   let baseline: InlangProject | undefined;
   try {
@@ -291,7 +304,9 @@ export async function getBaselineSignatures(local: LocalProject): Promise<Record
         const content = local.context.baseline?.[path] ?? local.context.original[path];
         return content === undefined ? [] : [{ locale: plan.locale, content: new TextEncoder().encode(content), toBeImportedFilesMetadata: plan.metadata }];
       });
-      await baseline.importFiles({ pluginKey: plugin.key, files });
+      const descriptionPath = `${local.context.projectPath}/descriptions.json`;
+      const description = local.context.baseline?.[descriptionPath] ?? local.context.original[descriptionPath];
+      await baseline.importFiles({ pluginKey: plugin.key, files: [...files, ...(description === undefined ? [] : [{ locale: "", content: new TextEncoder().encode(description), toBeImportedFilesMetadata: { inlangDescriptions: true } }])] });
     }
     local.context.bundleBaseline = bundleSignatures(await readBundles(baseline));
     await saveContext(local);
@@ -304,7 +319,7 @@ export function changedLocales(base: Record<string, string>, current: BundleNest
   for (const id of new Set([...Object.keys(base), ...byId.keys()])) {
     const bundle = byId.get(id), original = base[id];
     if (bundle && bundleSignature(bundle) === original) continue;
-    const before = original ? JSON.parse(original) as { declarations: unknown; messages: MessageShape[] } : undefined;
+    const before = original ? JSON.parse(original) as { declarations: unknown; description?: string | null; messages: MessageShape[] } : undefined;
     const after = (bundle?.messages ?? []).filter(message => !isBlankMessage(message)), all = new Set([...(before?.messages ?? []).map(message => message.locale), ...after.map(message => message.locale)]);
     // Added or deleted bundles touch every locale they have messages in.
     if (!before || !bundle) { for (const locale of all) locales.add(locale); continue; }
@@ -318,6 +333,7 @@ export function changedLocales(base: Record<string, string>, current: BundleNest
     const names = (declarations: unknown) => (declarations as { name: string }[]).map(declaration => JSON.stringify(declaration));
     const kept = new Set(names(bundle.declarations));
     const removed = names(before.declarations).some(declaration => !kept.has(declaration));
+    if ((before.description ?? null) !== (bundle.description ?? null)) for (const locale of all) locales.add(locale);
     if (removed || (!changed.length && JSON.stringify(before.declarations) !== JSON.stringify(bundle.declarations))) for (const locale of all) locales.add(locale);
   }
   return locales;
@@ -376,6 +392,10 @@ export async function exportResources(local: Pick<LocalProject, "project" | "con
       throw new Error(`Couldn't write the ${format} files: ${error instanceof Error ? error.message : String(error)} Nothing was pushed.`, { cause: error });
     }
     for (const file of exported) {
+      if (file.metadata?.inlangDescriptions) {
+        files[`${local.context.projectPath}/descriptions.json`] = new TextDecoder().decode(file.content);
+        continue;
+      }
       if (!locales.has(file.locale)) continue;
       const path = resolveResourcePath(local.context.projectPath, outputPath(local.context.settings, plugin.key, file));
       const content = new TextDecoder().decode(file.content);
@@ -399,6 +419,9 @@ export async function preparePush(local: LocalProject): Promise<{ files: Record<
   });
   const locales = changedLocales(await getBaselineSignatures(local), await readBundles(local.project));
   const files = locales.size ? await exportResources(local, locales) : {};
+  // A bundle can have guidance before any nonblank locale message exists.
+  const companion = await syncBundleDescriptions(local.project);
+  if (companion) files[`${local.context.projectPath}/descriptions.json`] = new TextDecoder().decode(companion.content);
   if (settingsChanges(local)) files[`${local.context.projectPath}/settings.json`] = JSON.stringify(local.context.settings, null, 2) + "\n";
   return { files, pruned: blankIds.length > 0 };
 }

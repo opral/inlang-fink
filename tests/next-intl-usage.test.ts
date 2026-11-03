@@ -130,11 +130,14 @@ describe("usage state", () => {
     expect(usageState({ status: "unavailable", reason: "The source snapshot is empty.", references: [] }, { skipped: ["src/app/huge.tsx"] }, "")).toEqual({ state: "ready", issues: [{ path: "src/app/huge.tsx", reason: expect.any(String) }] });
   });
 
-  it("i18next has no usage analysis: the SDK reports it unavailable, never unused", async () => {
+  it("formats without a usage analysis are unavailable, never unused", async () => {
     const i18next = { baseLocale: "en", locales: ["en"], modules: [], "plugin.inlang.i18next": { pathPattern: "./locales/{locale}.json" } } as ProjectSettings;
+    // Fink does not scan i18next yet. Use an explicit older-plugin fixture for the
+    // SDK fallback: newer i18next versions can provide their own analysis.
     expect(usagePlugin(i18next)).toBeUndefined();
-    const project = await load(i18next);
-    expect((await editorPlugins(i18next)).map(plugin => plugin.key)).toEqual(["plugin.inlang.i18next"]);
+    const plugins = (await editorPlugins(i18next)).map(plugin => ({ ...plugin, analyzeUsage: undefined }));
+    expect(plugins.map(plugin => plugin.key)).toEqual(["plugin.inlang.i18next"]);
+    const project = await loadProjectInMemory({ blob: await newProject({ settings: i18next }), providePlugins: plugins });
     const result = await findUsages({ project, files: [{ path: "src/a.ts", content: "i18next.t('greeting')" }] });
     expect(result.status).toBe("unavailable");
     await project.close();

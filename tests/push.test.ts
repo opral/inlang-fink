@@ -51,3 +51,24 @@ it("deleting a locale's last message keeps the rest of its file", async () => {
   expect(files).toEqual({ "messages/fr.json": '{\r\n\t"$schema": "https://inlang.com/schema/inlang-message-format"\r\n}\r\n' });
   await project.close();
 });
+
+
+it("exports companion descriptions beside the project and can read them back without runtime keys", async () => {
+ const settings = { baseLocale: "en", locales: ["en"], modules: [], "plugin.inlang.i18next": { pathPattern: "./messages/{locale}.json" } };
+ const make = async () => loadProjectInMemory({ blob: await newProject({ settings }), providePlugins: pluginsFor(settings) });
+ const project = await make();
+ const runtime = '{"save":"Save"}';
+ await project.importFiles({ pluginKey: "plugin.inlang.i18next", files: [{ locale: "en", content: new TextEncoder().encode(runtime) }] });
+ await project.db.updateTable("inlang_bundle").set({ description: "Save money, shopping CTA" }).where("id", "=", "save").execute();
+ const context = { projectPath: "project.inlang", settings, baseline: {}, original: { "project.inlang/settings.json": JSON.stringify(settings), "messages/en.json": runtime } } as unknown as RepoContext;
+ const files = await exportResources({ project, context }, new Set(["en"]));
+ expect(JSON.parse(files["messages/en.json"]!)).toEqual({ save: "Save" });
+ expect(JSON.parse(files["project.inlang/descriptions.json"]!)).toEqual({ version: 1, descriptions: { save: "Save money, shopping CTA" } });
+ const restored = await make();
+ await restored.importFiles({ pluginKey: "plugin.inlang.i18next", files: [{ locale: "en", content: new TextEncoder().encode(files["messages/en.json"]!) }, { locale: "", content: new TextEncoder().encode(files["project.inlang/descriptions.json"]!), toBeImportedFilesMetadata: { inlangDescriptions: true } }] });
+ expect((await restored.db.selectFrom("inlang_bundle").select("description").where("id", "=", "save").executeTakeFirstOrThrow()).description).toBe("Save money, shopping CTA");
+ await restored.db.updateTable("inlang_bundle").set({ description: null }).where("id", "=", "save").execute();
+ const cleared = await exportResources({ project: restored, context: { ...context, original: { ...context.original, ...files } } }, new Set(["en"]));
+ expect(JSON.parse(cleared["project.inlang/descriptions.json"]!).descriptions).toEqual({});
+ await restored.close(); await project.close();
+});

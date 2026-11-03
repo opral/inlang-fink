@@ -72,3 +72,21 @@ test("a declaration added for one language only exports that language; a removed
   const withDeclaration = bundleSignatures([{ ...before, declarations: [plural] }]);
   expect(changedLocales(withDeclaration, [before])).toEqual(new Set(["en", "ru"]));
 });
+
+test("description-only edits are dirty and survive independent remote translation edits", () => {
+  const original = { ...bundle("save", { en: "Save", de: "Sparen" }), description: "Shopping" };
+  const base = bundleSignatures([original]);
+  const local = { ...structuredClone(original), description: "Save money" };
+  const remote = structuredClone(original);
+  remote.messages[1]!.variants[0]!.pattern = [{ type: "text", value: "Jetzt sparen" }];
+  expect(bundleSignatures([local])).not.toEqual(base);
+  expect(changedLocales(base, [local])).toEqual(new Set(["en", "de"]));
+  const merged = mergeBundles(base, [local], [remote]);
+  expect(merged.bundles[0]!.description).toBe("Save money");
+  expect(text(merged.bundles, "save", "de")).toBe("Jetzt sparen");
+  expect(merged.replaced).toEqual([]);
+  const conflicting = { ...remote, description: "Remote guidance" };
+  const conflict = mergeBundles(base, [local], [conflicting]);
+  expect(conflict.bundles[0]!.description).toBe("Remote guidance");
+  expect(conflict.replaced).toEqual(["save"]);
+});
