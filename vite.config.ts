@@ -26,7 +26,7 @@ const appVersion = `${JSON.parse(readFileSync(new URL("./package.json", import.m
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [react(), compressedLixWasm()],
-  resolve: { alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
+  resolve: { dedupe: ["@inlang/sdk", "@lix-js/sdk", "@lix-js/storage-opfs", "@sinclair/typebox", "kysely"], alias: [{ find: /^@inlang\/sdk$/, replacement: "@inlang/sdk/browser" }] },
   worker: { format: "es", plugins: () => [compressedLixWasm()] },
   build: { target: "es2022" },
   // The SDK isn't pre-bundled (its Lix WASM loader), so its CommonJS dependency is, for the dev server.

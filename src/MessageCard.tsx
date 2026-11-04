@@ -1,19 +1,20 @@
-import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createComponent } from "@lit/react";
-import { InlangPatternEditor, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
+import { InlangBundleDescription, InlangPatternEditor, InlangMessageForms, InlangMessagePreview, pluralExamples, type ChangeEventDetail, type Match } from "@inlang/editor-component";
 import { isNumericKey, isPluralSelector, missingVariants, resolveInputVariable, selectorGroups, variableNames, type BundleNested, type CheckDiagnostic, type Declaration, type MessageNested, type Pattern, type ProjectSettings, type SelectorGroup } from "@inlang/sdk/browser";
 import { Editor } from "./Editor";
 import { Dropdown } from "./Menu";
 import { Modal } from "./Modal";
-import { UsageCode } from "./UsagePeek";
-import { describeUsage, type Usage } from "./usage";
+import { UsageCode, UsageReference } from "./UsagePeek";
+import { type Usage } from "./usage";
 import { languageName, type LanguageFocus } from "./languages";
 import { SparkleIcon, type MachineTranslationRequest } from "./MachineTranslate";
 import { joinMessage, markupLabel, markupVariable, wrapVariable, messageFromSource, numberInputs, pluralCategories, referenceMarkup, renameVariable, splitMessage, untranslatedWords, variableSuggestions, words, type Restructure } from "./flows";
 import { seeded } from "./seeded";
 import { isMissing, missingNumbers, missingSelector, type Issue } from "./issues";
 
+const Description = createComponent({ react: React, tagName: "inlang-bundle-description", elementClass: InlangBundleDescription });
 const PatternEditor = createComponent({ react: React, tagName: "inlang-pattern-editor", elementClass: InlangPatternEditor });
 const Forms = createComponent({ react: React, tagName: "inlang-message-forms", elementClass: InlangMessageForms, events: { onSelectVariant: "select-variant", onAddVariant: "add-variant" } });
 const Preview = createComponent({ react: React, tagName: "inlang-message-preview", elementClass: InlangMessagePreview, events: { onVariantMatch: "variant-match" } });
@@ -165,6 +166,7 @@ function ComplexTranslation({ bundle, message, source, referenceVariants, issues
 
 export const MessageCard = memo(function MessageCard({ bundle: stored, settings, focus, diagnostics, usages, code, replaced, edited, unused, change, addLocale, removeBundle, addVariant, removeVariant, addMessage, restructure, machineTranslate }: Props) {
   const [showCode, setShowCode] = useState(false);
+  const sourceRegionId = useId();
   const [showOthers, setShowOthers] = useState(false);
   const [structure, setStructure] = useState(false);
   const [preview, setPreview] = useState<string>();
@@ -346,9 +348,12 @@ export const MessageCard = memo(function MessageCard({ bundle: stored, settings,
           </>}
         </Dropdown>
       </div>
-      {usage && code && <p className="message-where">{describeUsage(usage)}{usages!.length > 1 && <> · used in {usages!.length} places</>} · <button type="button" className="inline-link" aria-expanded={showCode} onClick={() => setShowCode(!showCode)}>{showCode ? "hide code" : "code"}</button></p>}
+      <Description bundle={bundle} className="message-context" />
+      {usage && code && <UsageReference usages={usages!} scope={code.scope} expanded={showCode} controls={sourceRegionId} toggle={() => setShowCode(!showCode)} />}
     </header>
-    {showCode && usages && code && <UsageCode usages={usages} codeUrl={code.url} scope={code.scope} />}
+    {usage && code && <div className="message-source" id={sourceRegionId} role="region" aria-label={`Source usage of ${bundle.id}`} hidden={!showCode}>
+      {showCode && <UsageCode usages={usages!} codeUrl={code.url} scope={code.scope} />}
+    </div>}
     {!focus.all && row(focus.source)}
     {targets.map(row)}
     {replaced && <p className="message-note">Replaced your edit with a newer version from GitHub.</p>}

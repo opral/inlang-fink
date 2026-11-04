@@ -1,0 +1,9 @@
+# Bundle descriptions release integration
+
+The shared Description control edits `bundle.description`, one piece of translator guidance across locales. Fink retains description-only edits in draft signatures, independent Git merges, database replacement and save/export paths. SDK companion files are read and written at `<project.inlang>/descriptions.json`, never through a locale's runtime catalog path.
+
+The bundle header shows authored guidance and a separate, explicit source disclosure: `Used in src/Checkout.tsx:2`. Expanding it reveals the highlighted usage and a GitHub link pinned to the source revision. Multiple usages retain the existing pager. Browser agents can find the labeled button and source region; the snippet exposes its path, relevant line, snippet start and per-line numbers as DOM data attributes. These source snippets remain derived repository context rather than text persisted in `bundle.description`. A structured agent context API and automatic source-code forwarding to translation providers are not part of this UI change.
+
+This release uses published SDK 4.2.0, editor-component 15.0.0 and description-capable message-format 4.6.0, with i18next 6.5.3, next-intl 2.4.7 and the stable source matcher 2.4.2. Lix and OPFS storage use 0.20.1. The manifest and lockfile resolve registry artifacts, with no temporary local dependency links.
+
+Initial validation used local packages; release validation uses a clean frozen registry installation. The committed package manifest contains no local paths. The focused tests cover description-only dirty state, three-way merges and companion export/import/clear. The local demo verified editing, cancellation, keyboard save, source disclosure and OPFS persistence across reload. Browser integration coverage also checks description companion edits and clearing, reload, source accessibility and metadata-only Git pushes; CI runs these before deployment.
